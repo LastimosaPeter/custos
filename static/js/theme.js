@@ -1,19 +1,11 @@
 (() => {
   'use strict';
   const root = document.documentElement;
-  const key = 'custos-theme';
 
-  function resolvedTheme() {
-    const saved = localStorage.getItem(key);
-    if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-
-  function applyTheme(theme, persist = false) {
-    root.dataset.theme = theme;
-    if (persist) localStorage.setItem(key, theme);
+  function applyTheme(theme) {
+    root.dataset.theme = theme === 'dark' ? 'dark' : 'light';
     document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
-      const dark = theme === 'dark';
+      const dark = root.dataset.theme === 'dark';
       btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
       btn.setAttribute('title', dark ? 'Switch to light mode' : 'Switch to dark mode');
       const icon = btn.querySelector('[data-theme-icon]');
@@ -21,13 +13,33 @@
     });
   }
 
-  applyTheme(root.dataset.theme || resolvedTheme());
+  async function saveTheme(theme) {
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+    const response = await fetch('/api/preferences/theme', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-CSRFToken': csrf,
+      },
+      body: JSON.stringify({ theme }),
+      credentials: 'same-origin',
+    });
+    if (!response.ok) throw new Error(`Theme save failed (${response.status})`);
+  }
+
+  applyTheme(root.dataset.theme || 'light');
 
   document.addEventListener('DOMContentLoaded', () => {
-    applyTheme(root.dataset.theme || resolvedTheme());
+    applyTheme(root.dataset.theme || 'light');
     document.querySelectorAll('[data-theme-toggle]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        applyTheme(root.dataset.theme === 'dark' ? 'light' : 'dark', true);
+      btn.addEventListener('click', async () => {
+        const next = root.dataset.theme === 'dark' ? 'light' : 'dark';
+        applyTheme(next);
+        try {
+          await saveTheme(next);
+        } catch (err) {
+          console.error(err);
+        }
       });
     });
   });

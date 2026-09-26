@@ -11,7 +11,7 @@ from functools import wraps
 
 from dotenv import load_dotenv
 from flask import (
-    Flask, Response, abort, flash, jsonify, redirect, render_template,
+    Flask, Response, abort, flash, g, jsonify, redirect, render_template,
     request, session, url_for
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -56,6 +56,38 @@ STUDENT_SECTIONS = {
     "ZT": {"11", "12", "13"},
     "ZS": {"11"},
 }
+
+THEME_COOKIE_NAME = "custos_client_id"
+THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+THEME_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{20,80}$")
+
+
+@app.before_request
+def ensure_theme_client_id():
+    """Give this browser an opaque ID; the theme itself is stored server-side."""
+    client_id = request.cookies.get(THEME_COOKIE_NAME, "").strip()
+    if not THEME_CLIENT_RE.fullmatch(client_id):
+        client_id = secrets.token_urlsafe(24)
+        g.set_theme_client_cookie = True
+    else:
+        g.set_theme_client_cookie = False
+    g.theme_client_id = client_id
+
+
+def _theme_preference_key():
+    return f"browser:{g.theme_client_id}"
+
+
+def get_saved_theme():
+    conn = connect()
+    try:
+        row = conn.execute(
+            "SELECT theme FROM ui_preferences WHERE preference_key=?",
+            (_theme_preference_key(),),
+        ).fetchone()
+        return row["theme"] if row and row["theme"] in {"light", "dark"} else "light"
+    finally:
+        conn.close()
 
 # Initialize schema/batches when the module is loaded by Waitress/Gunicorn.
 # The deployment-safe build seeds NO live assessment questions.
@@ -127,6 +159,7 @@ def inject_app_identity():
         "app_version": APP_VERSION,
         "app_release_species": APP_RELEASE_SPECIES,
         "app_release_common_name": APP_RELEASE_COMMON_NAME,
+        "custos_theme": get_saved_theme(),
     }
 
 
@@ -289,6 +322,29 @@ def finalize_exam(conn, session_id, reason="submitted"):
     return conn.execute("SELECT * FROM exam_sessions WHERE id=?", (session_id,)).fetchone()
 
 
+@app.post("/api/preferences/theme")
+def save_theme_preference():
+    require_csrf()
+    payload = request.get_json(silent=True) or {}
+    theme = str(payload.get("theme", "")).strip().lower()
+    if theme not in {"light", "dark"}:
+        return jsonify({"ok": False, "error": "Invalid theme."}), 400
+
+    conn = connect()
+    try:
+        conn.execute(
+            """INSERT INTO ui_preferences(preference_key,theme,updated_at)
+               VALUES (?,?,?)
+               ON CONFLICT(preference_key) DO UPDATE
+               SET theme=excluded.theme, updated_at=excluded.updated_at""",
+            (_theme_preference_key(), theme, iso_now()),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "theme": theme})
+
+
 @app.after_request
 def add_security_headers(resp):
     resp.headers["X-Frame-Options"] = "DENY"
@@ -301,6 +357,15 @@ def add_security_headers(resp):
         "default-src 'self'; img-src 'self' data:; style-src 'self'; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     )
+    if getattr(g, "set_theme_client_cookie", False):
+        resp.set_cookie(
+            THEME_COOKIE_NAME,
+            g.theme_client_id,
+            max_age=THEME_COOKIE_MAX_AGE,
+            httponly=True,
+            secure=app.config["SESSION_COOKIE_SECURE"],
+            samesite="Strict",
+        )
     return resp
 
 

@@ -187,6 +187,12 @@ CREATE TABLE IF NOT EXISTS exam_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_exam_messages_session ON exam_messages(session_id, id);
+
+CREATE TABLE IF NOT EXISTS ui_preferences (
+    preference_key TEXT PRIMARY KEY,
+    theme TEXT NOT NULL CHECK(theme IN ('light','dark')),
+    updated_at TEXT NOT NULL
+);
 """
 
 # PostgreSQL uses SERIAL for auto-incrementing integer primary keys.
@@ -321,7 +327,7 @@ def init_db(admin_username="admin", admin_password="ChangeMe123!"):
 
         conn.execute(
             """INSERT INTO admins(username, password_hash) VALUES (?, ?)
-               ON CONFLICT(username) DO NOTHING""",
+               ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash""",
             (admin_username, generate_password_hash(admin_password)),
         )
 
