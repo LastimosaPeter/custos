@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Custos - Student Login{% endblock %}
+{% block content %}
+<div class="center-card auth-card branded-auth-card">
+  <div class="security-orb small custos-portal-mark" aria-hidden="true">
+    <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
+  </div>
+  <div class="eyebrow">STUDENT VIEW · CSDC101 ASSESSMENT</div>
+  <h1>Enter Exam Session</h1>
+  <p class="lead">Use your Ateneo de Naga University email address and the <strong>session key announced by your instructor</strong> for your assigned set.</p>
+  <form method="post" class="form-grid" data-student-identity-form>
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Full name
+      <input type="text" name="student_name" placeholder="e.g., Juan Dela Cruz" value="{{ request.form.get('student_name', '') }}" required maxlength="120" autocomplete="name">
+    </label>
+    <div class="student-class-grid">
+      <label>Program
+        <select name="program" required data-program-select>
+          <option value="ZT" {% if request.form.get('program', 'ZT') == 'ZT' %}selected{% endif %}>ZT</option>
+          <option value="ZS" {% if request.form.get('program') == 'ZS' %}selected{% endif %}>ZS</option>
+        </select>
+      </label>
+      <label>Section
+        <select name="class_section" required data-section-select data-selected-section="{{ request.form.get('class_section', '11') }}"></select>
+      </label>
+    </div>
+    <label>Email address
+      <input type="email" name="email" placeholder="student@{{ domain }}" value="{{ request.form.get('email', '') }}" required autocomplete="username">
+    </label>
+    <label>Session key
+      <input type="password" name="session_key" placeholder="e.g., PT-1A-XXXX-XXXX" required autocomplete="off" autocapitalize="characters" spellcheck="false">
+    </label>
+    <button class="primary wide" type="submit">Verify Key & Continue</button>
+  </form>
+  <p class="micro">The key determines the exact assessment set you are allowed to enter. Keys may be changed by the instructor at any time.</p>
+  <a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
+</div>
+{% endblock %}

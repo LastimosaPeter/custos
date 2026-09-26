@@ -1,0 +1,21 @@
+{% extends "base.html" %}
+{% block title %}Custos - Edit Question{% endblock %}
+{% block header_right %}<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a class="active" href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a></nav>{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('admin_questions', assessment=assessment, batch_slot=q.batch_slot, part=q.part) }}">◂ Back to Question Banks</a>
+<div class="content-card narrow-card">
+  <div class="eyebrow">QUESTION #{{ q.id }}</div><h1>Edit Question</h1><p class="subtle">{{ q.batch_name }} · {{ 'Built-in' if q.created_by == 'builtin' else 'Instructor-added' }}</p>
+  <form method="post" class="question-editor-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Bank<select name="batch_slot" required>{% for b in batches %}<option value="{{ b.slot }}" {% if b.slot == q.batch_slot %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label>
+    <label>Part<select name="part" required><option value="1" {% if q.part == 1 %}selected{% endif %}>Part I</option><option value="2" {% if q.part == 2 %}selected{% endif %}>Part II</option></select></label>
+    <label class="wide-field">Topic<input name="topic" value="{{ q.topic }}" required></label>
+    <label class="wide-field">Prompt<textarea name="prompt" rows="3" required>{{ q.prompt }}</textarea></label>
+    <label class="wide-field">C++ code snippet<textarea name="code" rows="9" class="code-editor" spellcheck="false">{{ q.code }}</textarea></label>
+    <div class="option-editor-grid"><label>A<input name="option_a" value="{{ q.option_a }}" required></label><label>B<input name="option_b" value="{{ q.option_b }}" required></label><label>C<input name="option_c" value="{{ q.option_c }}" required></label><label>D<input name="option_d" value="{{ q.option_d }}" required></label></div>
+    <label>Correct answer<select name="correct_option"><option {% if q.correct_option=='A' %}selected{% endif %}>A</option><option {% if q.correct_option=='B' %}selected{% endif %}>B</option><option {% if q.correct_option=='C' %}selected{% endif %}>C</option><option {% if q.correct_option=='D' %}selected{% endif %}>D</option></select></label>
+    <label class="wide-field">Explanation<textarea name="explanation" rows="3">{{ q.explanation }}</textarea></label>
+    <button class="primary" type="submit">Save Changes</button>
+  </form>
+</div>
+{% endblock %}

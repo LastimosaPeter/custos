@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Custos - Exam Instructions{% endblock %}
+{% block content %}
+<div class="content-card instructions-card">
+  <div class="eyebrow">{{ batch.name }}</div>
+  <h1>Before You Begin</h1>
+  <p>Signed in as <strong>{{ student_name }}</strong> · <strong>{{ program }} {{ class_section }}</strong><br><span class="subtle">{{ email }}</span></p>
+
+  <div class="instruction-grid">
+    <section>
+      <h2>Exam Structure</h2>
+      <p><strong>Part I:</strong> 40 Code Tracing / Inspection questions. Raw correct answers are recorded, but this part is capped at <strong>30 points</strong>.</p>
+      <p><strong>Part II:</strong> 20 Programming Logic / Code Selection questions worth <strong>20 points</strong>.</p>
+      {% if batch.assessment_type == 'midterm' %}<p><strong>Part III · Bonus:</strong> 5 short-answer general-knowledge questions worth up to <strong>+5 points</strong>.</p><p><strong>Base score:</strong> 50 points · <strong>Maximum with bonus:</strong> 55 points.</p>{% else %}<p><strong>Total:</strong> 50 points.</p>{% endif %}
+    </section>
+    <section>
+      <h2>Time & Security</h2>
+      <p>You have <strong>{{ batch.duration_minutes }} minutes</strong> once the exam starts. The server timer continues during refreshes and security locks.</p>
+      <p>The exam must remain in fullscreen. Custos records security-relevant browser activity for instructor review.</p>
+    </section>
+  </div>
+
+  <section class="integrity-notice" aria-labelledby="integrity-title">
+    <div class="integrity-notice-heading">
+      <div class="integrity-icon" aria-hidden="true">◆</div>
+      <div>
+        <div class="eyebrow">ASSESSMENT INTEGRITY NOTICE</div>
+        <h2 id="integrity-title">Monitoring, Recording & Security Terms</h2>
+      </div>
+    </div>
+
+    <p>This assessment is conducted in a monitored environment. <strong>Custos records exam activity</strong>, including your answers and answer changes, timestamps, autosave activity, timer state, fullscreen/focus events, blocked shortcuts, right-click attempts, inactivity events, security violations, and messages sent through the instructor chat.</p>
+
+    <p>During the examination, your laboratory workstation will also be monitored by the instructor through <strong>Veyon</strong> from the teacher's computer. Custos itself does not request access to your camera or microphone.</p>
+
+    <div class="security-rules-grid">
+      <div class="security-rule-card">
+        <strong>Leaving the Exam</strong>
+        <span>Alt+Tab, changing tabs/windows, or leaving fullscreen is treated as a major security violation when detected.</span>
+      </div>
+      <div class="security-rule-card">
+        <strong>Violations 1–2</strong>
+        <span>The exam interface is blacked out and locked for <strong>15 seconds</strong>. The exam timer continues.</span>
+      </div>
+      <div class="security-rule-card danger-rule">
+        <strong>Violation 3</strong>
+        <span>Your attempt is <strong>permanently locked</strong>. You cannot continue answering until the instructor manually unlocks it.</span>
+      </div>
+      <div class="security-rule-card">
+        <strong>Other Security Events</strong>
+        <span>Blocked shortcuts, right-click attempts, navigation/reload attempts, and prolonged inactivity are logged and may be reviewed by the instructor.</span>
+      </div>
+    </div>
+
+    <p class="micro integrity-accuracy-note">Browser-based monitoring cannot detect or prevent every operating-system action. Custos uses the security signals browsers expose and preserves them as an audit trail; Veyon provides the instructor with additional workstation supervision.</p>
+  </section>
+
+  <form method="post" action="{{ url_for('start_exam') }}" class="terms-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label class="check-row terms-accept-row">
+      <input type="checkbox" name="terms_accept" value="yes" required>
+      <span>I have read and understand the assessment integrity notice. I agree to remain in the authorized exam environment and acknowledge the monitoring, activity recording, temporary lock, and instructor-lock rules described above.</span>
+    </label>
+    <button class="primary" type="submit">Accept Terms & Start Exam</button>
+  </form>
+</div>
+{% endblock %}

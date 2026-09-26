@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Item Analysis{% endblock %}
+{% block header_right %}
+<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a class="active" href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a><a href="{{ url_for('admin_logout') }}">Sign out</a></nav>
+{% endblock %}
+{% block content %}
+<div class="dashboard-heading analysis-placeholder-heading">
+  <div>
+    <div class="eyebrow">INSTRUCTOR VIEW · ASSESSMENT ANALYTICS</div>
+    <h1>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Item Analysis</h1>
+    <p class="subtle">Performance statistics will become available after students submit this assessment.</p>
+  </div>
+</div>
+
+<div class="assessment-tabs">
+  <a class="{% if assessment == 'posttest' %}active{% endif %}" href="{{ url_for('admin_analysis', assessment='posttest') }}">Monday Post-test</a>
+  <a class="{% if assessment == 'midterm' %}active{% endif %}" href="{{ url_for('admin_analysis', assessment='midterm') }}">Midterm</a>
+</div>
+
+<section class="analysis-placeholder-card" aria-labelledby="analysis-empty-title">
+  <div class="analysis-placeholder-mark" aria-hidden="true">
+    <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
+  </div>
+  <div class="analysis-placeholder-copy">
+    <div class="placeholder-kicker">ITEM ANALYSIS</div>
+    <h2 id="analysis-empty-title">Waiting for submitted student responses</h2>
+    <p>There is no analyzable student data for this assessment yet. Instructor test and untimed trial sessions are intentionally excluded.</p>
+    <p>Once real submissions arrive, Custos will automatically populate item difficulty, response distribution, distractor behavior, topic performance, discrimination estimates, and review flags.</p>
+    <div class="placeholder-actions">
+      <a class="primary button-link" href="{{ url_for('admin_dashboard', assessment=assessment) }}">View Dashboard</a>
+      <a class="secondary button-link" href="{{ url_for('admin_testing', assessment=assessment) }}">Open Testing</a>
+    </div>
+  </div>
+</section>
+
+<div class="analysis-placeholder-preview" aria-hidden="true">
+  <div class="placeholder-stat"><span>Submitted Students</span><strong>—</strong><small>waiting for submissions</small></div>
+  <div class="placeholder-stat"><span>Mean Score</span><strong>—</strong><small>out of {{ 55 if assessment == 'midterm' else 50 }}</small></div>
+  <div class="placeholder-stat"><span>Analyzed Items</span><strong>—</strong><small>Part I + Part II</small></div>
+  <div class="placeholder-stat"><span>Review Flags</span><strong>—</strong><small>generated automatically</small></div>
+</div>
+{% endblock %}

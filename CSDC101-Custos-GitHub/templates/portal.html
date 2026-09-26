@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% block title %}Custos - Home{% endblock %}
+{% block content %}
+<div class="custos-home" aria-labelledby="custos-home-title">
+  <section class="custos-home-hero">
+    <div class="custos-home-mark" aria-hidden="true">
+      <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
+    </div>
+
+    <div class="eyebrow">CSDC101 · FUNDAMENTALS OF PROGRAMMING</div>
+    <h1 id="custos-home-title">Custos</h1>
+    <h2>The Official Assessment Portal of CSDC101</h2>
+    <p class="custos-home-lead">A secure, proctored environment for CSDC101 assessments.</p>
+
+    <div class="custos-why">
+      <strong>Why Custos?</strong>
+      <p><em>Custos</em> comes from the Latin word for <strong>guardian</strong> or <strong>keeper</strong>. The name reflects the portal's purpose: to safeguard assessment integrity, protect each student's work, and give the instructor a clear and accountable view of every examination session.</p>
+    </div>
+  </section>
+
+  <section class="custos-role-section" aria-labelledby="role-question">
+    <div class="custos-role-heading">
+      <span>CONTINUE TO CUSTOS</span>
+      <h2 id="role-question">Are you a Student or an Instructor?</h2>
+      <p>Choose your role to continue to the appropriate workspace.</p>
+    </div>
+
+    <div class="custos-role-grid">
+      <a class="custos-role-card student" href="{{ url_for('student_login') }}">
+        <div class="custos-role-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6.5 11.3v4.1c0 1.7 2.5 3.1 5.5 3.1s5.5-1.4 5.5-3.1v-4.1M21 9.5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <div class="custos-role-copy">
+          <div class="custos-role-kicker">STUDENT</div>
+          <h3>Take an Assessment</h3>
+          <p>Enter your student information, ADNU email, and instructor-issued session key to begin.</p>
+          <span class="custos-role-action">Go to Student View <b>→</b></span>
+        </div>
+      </a>
+
+      <a class="custos-role-card instructor" href="{{ url_for('admin_login') }}">
+        <div class="custos-role-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="9" cy="7.5" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 18.5v-1.6c0-2.5 2.2-4.5 5-4.5h1c2.8 0 5 2 5 4.5v1.6M16.5 8.5h4M18.5 6.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <div class="custos-role-copy">
+          <div class="custos-role-kicker">INSTRUCTOR</div>
+          <h3>Manage Custos</h3>
+          <p>Configure assessments, monitor active sessions, review security events, and analyze results.</p>
+          <span class="custos-role-action">Go to Instructor View <b>→</b></span>
+        </div>
+      </a>
+    </div>
+  </section>
+</div>
+{% endblock %}

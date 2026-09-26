@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }} Exam{% endblock %}
+{% block body_class %}exam-page{% endblock %}
+{% block body %}
+<div id="examApp" class="exam-app" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}">
+  <header class="exam-header">
+    <div class="exam-brand">
+      <div class="exam-brand-lockup" aria-label="CSDC101 Custos">
+        <img class="exam-brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="CSDC101">
+        <span class="exam-brand-divider" aria-hidden="true"></span>
+        <span class="exam-custos-wordmark"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""><span>Custos</span></span>
+      </div>
+      <div class="exam-brand-copy">
+        <strong>{{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }} {% if exam_session.is_test %}<em class="test-chip">TEST MODE</em>{% endif %}</strong>
+        <span>{{ batch.name }}{% if exam_session.is_test and exam_session.test_label %} · {{ exam_session.test_label }}{% endif %}</span>
+      </div>
+    </div>
+    <div class="exam-header-meta">
+      {% if exam_session.is_test and session.get('admin_id') %}<form method="post" action="{{ url_for('admin_testing_return') }}" class="inline-form test-return-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="test-return" type="submit">Return to Instructor</button></form>{% else %}<span>{{ exam_session.email }}</span>{% endif %}
+      <button class="theme-toggle exam-theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>☾</span></button>
+    </div>
+  </header>
+
+  <div class="exam-workspace">
+    <aside class="question-nav">
+      <div class="nav-title">Question Navigator</div>
+      <div class="nav-legend"><span class="dot answered"></span> Answered <span class="dot current"></span> Current</div>
+
+      <section class="question-part-block" aria-label="Part I questions">
+        <div class="question-part-heading">
+          <strong>Part I</strong>
+          <span>Code Tracing / Inspection · 40 items</span>
+        </div>
+        <div class="question-grid" id="questionGridPart1">
+          {% for q in questions if q.part == 1 %}
+            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="question-part-block part-two" aria-label="Part II questions">
+        <div class="question-part-heading">
+          <strong>Part II</strong>
+          <span>Programming Logic / Code Selection · 20 items</span>
+        </div>
+        <div class="question-grid" id="questionGridPart2">
+          {% for q in questions if q.part == 2 %}
+            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
+          {% endfor %}
+        </div>
+      </section>
+    </aside>
+
+    <main class="question-stage">
+      <div class="stage-topline">
+        <span id="questionPosition">Question 1 of {{ questions|length }}</span>
+        <strong id="currentPartIndicator" class="current-part-indicator">Part I · Code Tracing / Inspection</strong>
+        <span id="saveStatus" class="save-status">Ready</span>
+      </div>
+
+      {% for q in questions %}
+      <section class="question-panel {% if not loop.first %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}">
+        <div class="part-label">
+          <span>{{ 'Part I · Code Tracing / Inspection' if q.part == 1 else 'Part II · Programming Logic / Code Selection' }}</span>
+          <small>{{ q.topic }}</small>
+        </div>
+        <h1>{{ q.prompt }}</h1>
+        {% if q.code %}
+          <pre class="code-block"><code>{{ q.code }}</code></pre>
+        {% endif %}
+        <div class="answers">
+          {% for display_letter, origin, text in q.display_options %}
+          <label class="answer-choice">
+            <input type="radio" name="q_{{ q.question_id }}" value="{{ origin }}" {% if q.selected_option == origin %}checked{% endif %}>
+            <span class="choice-letter">{{ display_letter }}</span>
+            <span>{{ text }}</span>
+          </label>
+          {% endfor %}
+        </div>
+      </section>
+      {% endfor %}
+
+      <footer class="exam-footer">
+        <div class="exam-footer-status" aria-live="polite">
+          <span><strong>Answered</strong> <span id="answeredStatus">0/{{ questions|length }}</span></span>
+          <span class="footer-status-separator">·</span>
+          <span><strong>Unanswered</strong> <span id="unansweredStatus">{{ questions|length }}</span></span>
+          <span class="footer-status-separator">·</span>
+          <span><strong>Time</strong> <span id="timer" class="footer-timer">{{ 'Untimed' if exam_session.untimed else '--:--:--' }}</span></span>
+        </div>
+        <div class="exam-footer-controls">
+          <button type="button" id="chatToggle" class="secondary exam-chat-button icon-only" aria-label="Ask Instructor" title="Ask Instructor">
+            <span aria-hidden="true">💬</span><span id="chatUnreadBadge" class="chat-unread-badge hidden">0</span>
+          </button>
+          <span class="footer-control-divider" aria-hidden="true">|</span>
+          <div class="exam-nav-actions" aria-label="Question navigation">
+            <button type="button" id="prevBtn" class="secondary">Previous</button>
+            <button type="button" id="nextBtn" class="primary">Next</button>
+          </div>
+          <span class="footer-control-divider" aria-hidden="true">|</span>
+          <button type="button" id="submitBtn" class="danger-ghost">Submit Exam</button>
+        </div>
+      </footer>
+    </main>
+  </div>
+
+  <div id="secureOverlay" class="overlay active" role="dialog" aria-modal="true">
+    <div class="overlay-card">
+      <div class="lock-icon">▣</div>
+      <h2>Enter Secure Exam Mode</h2>
+      <p>The exam must remain in fullscreen mode. Leaving fullscreen or switching away from the exam can trigger a 15-second security lock. Three confirmed violations permanently lock the attempt until the instructor unlocks it.</p>
+      <button type="button" id="enterFullscreen" class="primary wide">Enter Fullscreen</button>
+      <p id="fullscreenError" class="error-text hidden">Fullscreen was not enabled. Please allow fullscreen and try again.</p>
+    </div>
+  </div>
+
+  <div id="securityLockOverlay" class="security-lock-overlay {% if security.permanent or security.pending or security.temp_remaining > 0 %}active{% endif %}" role="dialog" aria-modal="true" aria-live="assertive">
+    <div class="security-lock-content">
+      <img class="security-lock-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
+      <div class="security-lock-kicker">CUSTOS EXAM SECURITY</div>
+      <h2 id="securityLockTitle">{% if security.permanent %}Attempt Locked{% elif security.pending %}Security Event Detected{% else %}Security Lock{% endif %}</h2>
+      <div id="securityLockCountdown" class="security-lock-countdown">{% if security.permanent %}INSTRUCTOR REQUIRED{% elif security.pending %}…{% else %}{{ security.temp_remaining }}{% endif %}</div>
+      <p id="securityLockMessage">{% if security.permanent %}Three or more major security violations were recorded. Only the instructor can unlock this attempt.{% elif security.pending %}A focus/fullscreen violation was recorded. The 15-second blackout will begin as soon as this exam regains focus.{% else %}The exam is temporarily unavailable because a focus/fullscreen violation was detected. The timer continues to run.{% endif %}</p>
+      <p class="security-violation-counter">Recorded violations: <strong id="violationCount">{{ security.violation_count }}</strong> / 3</p>
+      <button type="button" id="securityChatBtn" class="security-chat-link" aria-label="Ask Instructor" title="Ask Instructor">💬</button>
+      <button type="button" id="resumeSecureBtn" class="primary security-resume-btn hidden">Return to Fullscreen</button>
+      {% if exam_session.is_test and session.get('admin_id') %}
+      <form method="post" action="{{ url_for('admin_testing_return') }}" class="security-admin-return"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="security-chat-link">Return to Instructor View</button></form>
+      {% endif %}
+    </div>
+  </div>
+
+  <aside id="chatPanel" class="exam-chat-panel" aria-label="Instructor chat" aria-hidden="true">
+    <div class="exam-chat-header">
+      <div><strong>Ask Instructor</strong><small>For clarifications during the exam</small></div>
+      <button type="button" id="chatClose" class="chat-close" aria-label="Close chat">×</button>
+    </div>
+    <div id="chatMessages" class="exam-chat-messages" aria-live="polite"><div class="chat-empty">No messages yet.</div></div>
+    <form id="chatForm" class="exam-chat-form">
+      <textarea id="chatInput" maxlength="1000" rows="3" placeholder="Type your question or clarification…" required></textarea>
+      <div class="exam-chat-form-row"><span id="chatStatus" class="micro"></span><button type="submit" class="primary">Send</button></div>
+    </form>
+  </aside>
+
+  <div id="inactiveOverlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="overlay-card">
+      <h2>Are you still there?</h2>
+      <p>No mouse, keyboard, or touch activity was detected for one minute. This event has been logged.</p>
+      <button type="button" id="stillHereBtn" class="primary wide">I’m still here</button>
+    </div>
+  </div>
+
+  <div id="submitOverlay" class="overlay" role="dialog" aria-modal="true">
+    <div class="overlay-card">
+      <h2>Submit your exam?</h2>
+      <p id="submitSummary">Unanswered questions will be marked incorrect. Submission cannot be undone.</p>
+      <div class="button-row">
+        <button type="button" id="cancelSubmit" class="secondary">Return to Exam</button>
+        <form method="post" action="{{ url_for('submit_exam') }}" id="submitForm">
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <button type="submit" class="danger">Submit Now</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+<img class="page-watermark exam-page-watermark theme-image theme-image-light" src="{{ url_for('static', filename='img/csdc101-watermark.png') }}" alt="" aria-hidden="true">
+<img class="page-watermark exam-page-watermark theme-image theme-image-dark" src="{{ url_for('static', filename='img/csdc101-watermark-dark.png') }}" alt="" aria-hidden="true">
+<div class="institution-logos institution-logos-light exam-institution-logos" aria-label="Department logos">
+  <img src="{{ url_for('static', filename='img/dcs-logo-1.png') }}" alt="Computer Studies">
+  <img src="{{ url_for('static', filename='img/dcs-logo-2.png') }}" alt="Department of Computer Science">
+  <img src="{{ url_for('static', filename='img/dcs-logo-3.png') }}" alt="Department of Informatics">
+</div>
+<img class="institution-logos-dark exam-institution-logos-dark theme-image theme-image-dark" src="{{ url_for('static', filename='img/institution-logos-dark.png') }}" alt="Computer Studies, Department of Computer Science, and Department of Informatics logos">
+<script src="{{ url_for('static', filename='js/exam.js') }}" defer></script>
+{% endblock %}

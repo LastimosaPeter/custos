@@ -1,0 +1,23 @@
+{% extends "base.html" %}
+{% block title %}Custos - Exam Result{% endblock %}
+{% block content %}
+<div class="center-card result-card">
+  <div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST · SUBMITTED{% else %}EXAM SUBMITTED{% endif %}</div>
+  <h1>Submission Received</h1>
+  <p>{{ ex.email }} · {{ ex.batch_name }}</p>
+  {% if ex.reveal_score or ex.is_test %}
+  <div class="score-total">{{ display_total }}<span>/{{ max_total }}</span></div>
+  <div class="score-grid {% if is_midterm %}three-score-grid{% endif %}">
+    <div><span>Part I</span><strong>{{ display_p1 }}/30</strong><small>{{ ex.part1_correct }}/40 raw correct</small></div>
+    <div><span>Part II</span><strong>{{ display_p2 }}/20</strong><small>{{ ex.part2_correct }}/20 raw correct</small></div>
+    {% if is_midterm %}<div><span>Bonus</span><strong>+{{ display_bonus }}/5</strong><small>{{ ex.bonus_correct }}/5 correct</small></div>{% endif %}
+  </div>
+  {% else %}
+  <div class="warning-box">Your exam has been scored. The instructor has disabled immediate score display for this batch.</div>
+  {% endif %}
+  <p class="micro">Proctoring flags recorded: {{ ex.flagged_count }}. Flags are audit events and do not automatically change your score.</p>
+  {% if ex.is_test and session.get('admin_id') %}
+    <form method="post" action="{{ url_for('admin_testing_return') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Return to Instructor Testing</button></form>
+  {% else %}<a href="{{ url_for('student_logout') }}" class="secondary button-link">Finish</a>{% endif %}
+</div>
+{% endblock %}

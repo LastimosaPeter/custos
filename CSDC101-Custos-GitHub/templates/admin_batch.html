@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Custos - Configure Set{% endblock %}
+{% block header_right %}<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=batch.assessment_type) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=batch.assessment_type) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=batch.assessment_type) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=batch.assessment_type) }}">Testing</a></nav>{% endblock %}
+{% block content %}
+<div class="content-card narrow-card">
+  <div class="eyebrow">{% if batch.assessment_type == 'posttest' %}POST-TEST · SET {{ batch.slot - 8 }}{% else %}MIDTERM · SET {{ batch.slot }}{% endif %}</div>
+  <h1>{{ batch.name }}</h1>
+
+  <div class="session-key-card">
+    <div>
+      <span>Current Student Session Key</span>
+      <code>{{ batch.access_code }}</code>
+      <small>Give this key only to the students assigned to this set.</small>
+    </div>
+    <form method="post" action="{{ url_for('admin_regenerate_key', batch_id=batch.id) }}" onsubmit="return confirm('Generate a new key? The current key will stop working immediately.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="secondary" type="submit">Regenerate Key</button>
+    </form>
+  </div>
+
+  <form method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <div class="two-col">
+      <label>Window opens
+        <input type="datetime-local" name="open_at" value="{{ batch.open_at or '' }}">
+      </label>
+      <label>Window closes
+        <input type="datetime-local" name="close_at" value="{{ batch.close_at or '' }}">
+      </label>
+    </div>
+    <label>Individual exam duration (minutes)
+      <input type="number" name="duration_minutes" min="1" max="240" value="{{ batch.duration_minutes }}" required>
+    </label>
+    <label class="check-row"><input type="checkbox" name="reveal_score" {% if batch.reveal_score %}checked{% endif %}> Show the score immediately after submission</label>
+    <label class="check-row"><input type="checkbox" name="active" {% if batch.active %}checked{% endif %}> Set is active and may be entered with its key</label>
+    <button class="primary" type="submit">Save Settings</button>
+  </form>
+  <p class="micro">Recommended: announce the key only when the session begins. If a key is shared outside the room, regenerate it here before allowing students to start.</p>
+</div>
+{% endblock %}

@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token() }}">
+  <title>{% block title %}Custos - Portal{% endblock %}</title>
+  <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script>
+    (function(){
+      try {
+        var saved = localStorage.getItem('custos-theme');
+        var dark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        document.documentElement.dataset.theme = saved || (dark ? 'dark' : 'light');
+      } catch (e) { document.documentElement.dataset.theme = 'light'; }
+    })();
+  </script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/code_highlight.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/student_form.js') }}" defer></script>
+</head>
+<body class="{% block body_class %}{% endblock %}">
+  {% block body %}
+  <header class="site-header">
+    <a class="brand-lockup" href="{{ url_for('index') }}" aria-label="CSDC101 Custos home">
+      <img class="brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="CSDC101">
+      <span class="brand-divider" aria-hidden="true"></span>
+      <span class="custos-wordmark">
+        <img class="custos-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
+        <span>Custos</span>
+      </span>
+    </a>
+    {% block header_right %}
+    <nav class="site-nav" aria-label="Primary navigation">
+      <a href="{{ url_for('student_login') }}">Student View</a>
+      <a href="{{ url_for('admin_login') }}">Instructor View</a>
+      <a href="{{ url_for('index') }}">Help</a>
+    </nav>
+    {% endblock %}
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>☾</span></button>
+  </header>
+  <main class="page-shell">
+    <div class="page-shell-inner">
+      {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+          <div class="flash-stack">
+            {% for category, message in messages %}
+              <div class="flash {{ category }}">{{ message }}</div>
+            {% endfor %}
+          </div>
+        {% endif %}
+      {% endwith %}
+      {% block content %}{% endblock %}
+    </div>
+  </main>
+  <img class="page-watermark theme-image theme-image-light" src="{{ url_for('static', filename='img/csdc101-watermark.png') }}" alt="" aria-hidden="true">
+  <img class="page-watermark theme-image theme-image-dark" src="{{ url_for('static', filename='img/csdc101-watermark-dark.png') }}" alt="" aria-hidden="true">
+  <div class="institution-logos institution-logos-light" aria-label="Department logos">
+    <img src="{{ url_for('static', filename='img/dcs-logo-1.png') }}" alt="Computer Studies">
+    <img src="{{ url_for('static', filename='img/dcs-logo-2.png') }}" alt="Department of Computer Science">
+    <img src="{{ url_for('static', filename='img/dcs-logo-3.png') }}" alt="Department of Informatics">
+  </div>
+  <img class="institution-logos-dark theme-image theme-image-dark" src="{{ url_for('static', filename='img/institution-logos-dark.png') }}" alt="Computer Studies, Department of Computer Science, and Department of Informatics logos">
+  <footer class="site-footer" aria-label="Application version">
+    <span class="footer-product">{{ app_name }}</span>
+    <span class="footer-separator">·</span>
+    <span>v{{ app_version }}</span>
+    <span class="footer-separator">·</span>
+    <span class="footer-species" title="{{ app_release_common_name }}"><em>{{ app_release_species }}</em></span>
+  </footer>
+  {% endblock %}
+</body>
+</html>

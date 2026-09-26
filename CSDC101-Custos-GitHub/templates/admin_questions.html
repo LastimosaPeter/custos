@@ -1,0 +1,117 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Question Banks{% endblock %}
+{% block header_right %}
+<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a class="active" href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a><a href="{{ url_for('admin_logout') }}">Sign out</a></nav>
+{% endblock %}
+{% block content %}
+<div class="dashboard-heading">
+  <div><div class="eyebrow">INSTRUCTOR VIEW · QUESTION BANKS</div><h1>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Question Banks</h1><p class="subtle">Review Part I and Part II separately, filter the bank, and edit items without leaving this page.</p></div>
+  <a class="secondary button-link" href="{{ url_for('export_questions', assessment=assessment) }}">Export Question Bank</a>
+</div>
+<div class="assessment-tabs" aria-label="Assessment selector">
+  <a class="{% if assessment == 'posttest' %}active{% endif %}" href="{{ url_for('admin_questions', assessment='posttest') }}">Monday Post-test</a>
+  <a class="{% if assessment == 'midterm' %}active{% endif %}" href="{{ url_for('admin_questions', assessment='midterm') }}">Midterm</a>
+</div>
+
+<div class="content-card private-bank-loader">
+  <div class="section-heading"><div><h2>Load Private Question Bank</h2><p class="subtle">This GitHub build contains no live exam questions. Upload your private UTF-8 CSV here after deployment. Custos processes it directly into the database and does not save the uploaded CSV file.</p></div></div>
+  <form method="post" action="{{ url_for('import_private_questions') }}" enctype="multipart/form-data" class="private-bank-import-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="assessment" value="{{ assessment }}">
+    <label>Private bank CSV<input type="file" name="bank_file" accept=".csv,text/csv" required></label>
+    <label class="check-row"><input type="checkbox" name="confirm_private_import" value="yes" required><span>I confirm this is my private assessment file and I want to load it into the deployed database.</span></label>
+    <button class="primary" type="submit">Import Private Bank</button>
+  </form>
+</div>
+
+<div class="content-card question-bank-toolbar">
+  <form method="get" class="bank-filter-bar">
+    <input type="hidden" name="assessment" value="{{ assessment }}">
+    <label>Question bank<select name="batch_slot" onchange="this.form.submit()">{% for b in batches %}<option value="{{ b.slot }}" {% if b.slot == selected_slot %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label>
+    <label>Search<input type="search" name="q" value="{{ search }}" placeholder="Topic, prompt, or code"></label>
+    <label>Status<select name="status"><option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option><option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option><option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>Disabled</option></select></label>
+    <label>Source<select name="source"><option value="all" {% if source_filter == 'all' %}selected{% endif %}>All</option><option value="builtin" {% if source_filter == 'builtin' %}selected{% endif %}>Built-in</option><option value="instructor" {% if source_filter == 'instructor' %}selected{% endif %}>Instructor-added</option></select></label>
+    <button class="secondary" type="submit">Filter</button>
+    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment=assessment, batch_slot=selected_slot) }}">Reset</a>
+  </form>
+  <div class="bank-health-row">
+    <div><span>Part I active pool</span><strong>{{ counts.get(1, {}).get('active_count', 0) }}</strong><small>40 required per attempt</small></div>
+    <div><span>Part II active pool</span><strong>{{ counts.get(2, {}).get('active_count', 0) }}</strong><small>20 required per attempt</small></div>
+  </div>
+</div>
+
+<div class="content-card add-question-card">
+  <div class="section-heading"><div><h2>Add a Question</h2><p class="subtle">New items enter the active pool immediately. Student attempts still draw exactly 40 Part I + 20 Part II items.</p></div></div>
+  <form method="post" action="{{ url_for('admin_question_add') }}" class="question-editor-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="assessment" value="{{ assessment }}">
+    <label>Bank<select name="batch_slot" required>{% for b in batches %}<option value="{{ b.slot }}" {% if b.slot == selected_slot %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label>
+    <label>Part<select name="part" required><option value="1">Part I · Code Tracing / Inspection</option><option value="2">Part II · Programming Logic / Code Selection</option></select></label>
+    <label class="wide-field">Topic<input name="topic" maxlength="120" placeholder="e.g., Spot the Error · while loop" required></label>
+    <label class="wide-field">Prompt<textarea name="prompt" rows="2" required></textarea></label>
+    <label class="wide-field">C++ code snippet (optional)<textarea name="code" rows="6" class="code-editor" spellcheck="false"></textarea></label>
+    <div class="option-editor-grid"><label>A<input name="option_a" required></label><label>B<input name="option_b" required></label><label>C<input name="option_c" required></label><label>D<input name="option_d" required></label></div>
+    <label>Correct answer<select name="correct_option" required><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+    <label class="wide-field">Explanation (instructor reference, optional)<textarea name="explanation" rows="2"></textarea></label>
+    <div class="add-question-submit"><button class="primary" type="submit">Add to Question Bank</button></div>
+  </form>
+</div>
+
+{% macro question_table(title, subtitle, items, part_no) -%}
+<div class="content-card bank-part-card">
+  <div class="section-heading"><div><h2>{{ title }}</h2><p class="subtle">{{ subtitle }}</p></div><span class="question-count-chip">{{ items|length }} shown</span></div>
+  <div class="table-wrap question-table-wrap"><table class="question-bank-table">
+    <colgroup><col class="qcol-id"><col class="qcol-topic"><col class="qcol-prompt"><col class="qcol-key"><col class="qcol-source"><col class="qcol-status"><col class="qcol-actions"></colgroup>
+    <thead><tr><th>ID</th><th>Topic</th><th>Question</th><th>Key</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead>
+    <tbody>
+    {% for q in items %}
+      <tr class="{% if not q.active %}disabled-row{% endif %}">
+        <td class="numeric-cell">{{ q.id }}</td>
+        <td>{{ q.topic }}</td>
+        <td class="question-prompt-cell"><strong>{{ q.prompt }}</strong>{% if q.code %}<small class="mono-small question-code-preview">{{ q.code.split('\n')[0] }}{% if '\n' in q.code %} …{% endif %}</small>{% endif %}</td>
+        <td class="numeric-cell"><strong>{{ q.correct_option }}</strong></td>
+        <td>{{ 'Instructor' if q.created_by == 'instructor' else 'Built-in' }}</td>
+        <td>{% if q.active %}<span class="ok-pill">Active</span>{% else %}<span class="review-pill">Disabled</span>{% endif %}</td>
+        <td class="question-actions-cell"><div class="table-actions compact-actions">
+          <button type="button" class="secondary table-action-btn js-edit-question" data-edit-url="{{ url_for('admin_question_edit', qid=q.id) }}" data-question="{{ q|tojson|forceescape }}">Edit</button>
+          <form method="post" action="{{ url_for('admin_question_toggle', qid=q.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button type="submit" class="{{ 'danger-ghost' if q.active else 'secondary' }} table-action-btn">{{ 'Disable' if q.active else 'Enable' }}</button></form>
+        </div></td>
+      </tr>
+    {% else %}<tr><td colspan="7" class="empty-cell">No Part {{ part_no }} questions match the current filters.</td></tr>{% endfor %}
+    </tbody>
+  </table></div>
+</div>
+{%- endmacro %}
+
+{{ question_table('Part I · Code Tracing / Inspection', '40 items are drawn per attempt. Spot-the-error and tracing items share this pool.', part1_questions, 'I') }}
+{{ question_table('Part II · Programming Logic / Code Selection', '20 items are drawn per attempt, including loop and nested-loop reasoning.', part2_questions, 'II') }}
+
+{% if assessment == 'midterm' %}
+<div class="content-card bonus-bank-card">
+  <div class="section-heading"><div><h2>Bonus Part · 5 points</h2><p class="subtle">Short-answer matching ignores capitalization, spaces, dashes, and punctuation. Use <code>|</code> for multiple accepted answers.</p></div><span class="bonus-chip">+5</span></div>
+  <div class="bonus-editor-list">
+  {% for b in bonus %}
+    <form method="post" action="{{ url_for('admin_bonus_edit', qid=b.id) }}" class="bonus-editor-row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="bonus-position">{{ b.position }}</div>
+      <label>Topic<input name="topic" value="{{ b.topic }}" required></label><label class="bonus-prompt-field">Question<input name="prompt" value="{{ b.prompt }}" required></label><label>Accepted answer<input name="accepted_answer" value="{{ b.accepted_answer }}" required></label><button class="secondary" type="submit">Save</button>
+    </form>
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+
+<dialog id="questionEditDialog" class="question-edit-dialog">
+  <form method="post" id="questionEditForm" class="question-editor-form modal-editor-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="assessment" value="{{ assessment }}">
+    <div class="modal-heading"><div><div class="eyebrow">EDIT QUESTION</div><h2 id="editQuestionTitle">Question</h2></div><button type="button" class="modal-close-btn" data-close-edit aria-label="Close">×</button></div>
+    <label>Bank<select name="batch_slot" id="editBatchSlot" required>{% for b in batches %}<option value="{{ b.slot }}">{{ b.name }}</option>{% endfor %}</select></label>
+    <label>Part<select name="part" id="editPart" required><option value="1">Part I</option><option value="2">Part II</option></select></label>
+    <label class="wide-field">Topic<input name="topic" id="editTopic" required></label>
+    <label class="wide-field">Prompt<textarea name="prompt" id="editPrompt" rows="3" required></textarea></label>
+    <label class="wide-field">C++ code snippet<textarea name="code" id="editCode" rows="7" class="code-editor" spellcheck="false"></textarea></label>
+    <div class="option-editor-grid"><label>A<input name="option_a" id="editOptionA" required></label><label>B<input name="option_b" id="editOptionB" required></label><label>C<input name="option_c" id="editOptionC" required></label><label>D<input name="option_d" id="editOptionD" required></label></div>
+    <label>Correct answer<select name="correct_option" id="editCorrect" required><option>A</option><option>B</option><option>C</option><option>D</option></select></label>
+    <label class="wide-field">Explanation<textarea name="explanation" id="editExplanation" rows="2"></textarea></label>
+    <div class="modal-actions"><button type="button" class="secondary" data-close-edit>Cancel</button><button type="submit" class="primary">Save Changes</button></div>
+  </form>
+</dialog>
+<script src="{{ url_for('static', filename='js/admin_questions.js') }}" defer></script>
+{% endblock %}

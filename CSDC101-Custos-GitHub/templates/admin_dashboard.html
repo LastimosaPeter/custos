@@ -1,0 +1,74 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Dashboard{% endblock %}
+{% block header_right %}
+<nav class="admin-nav"><a class="active" href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a><a href="{{ url_for('admin_logout') }}">Sign out</a></nav>
+{% endblock %}
+{% block content %}
+<div class="dashboard-heading">
+  <div><div class="eyebrow">INSTRUCTOR VIEW</div><h1>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Dashboard</h1><p class="subtle">Monitor student sessions, configure batch windows, review scores, and keep analytics separated by assessment.</p></div>
+  <div class="button-row compact"><form method="post" action="{{ url_for('admin_student_preview') }}" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary" type="submit">Open Student View</button></form><a class="secondary button-link" href="{{ url_for('admin_monitor') }}">Live Monitor</a><a class="secondary button-link" href="{{ url_for('export_session_keys', assessment=assessment) }}">Export Session Keys</a><a class="secondary button-link" href="{{ url_for('export_questions', assessment=assessment) }}">Export Question Bank</a><a class="primary button-link" href="{{ url_for('admin_testing', assessment=assessment) }}">Run Testing Session</a></div>
+</div>
+<div class="assessment-tabs" aria-label="Assessment selector">
+  <a class="{% if assessment == 'posttest' %}active{% endif %}" href="{{ url_for('admin_dashboard', assessment='posttest') }}">Monday Post-test</a>
+  <a class="{% if assessment == 'midterm' %}active{% endif %}" href="{{ url_for('admin_dashboard', assessment='midterm') }}">Midterm</a>
+</div>
+<div class="stat-row four">
+  <div class="stat-card"><span>Part I Bank</span><strong>{{ counts.get(1, 0) }}</strong><small>minimum 8 × 40 active</small></div>
+  <div class="stat-card"><span>Part II Bank</span><strong>{{ counts.get(2, 0) }}</strong><small>minimum 8 × 20 active</small></div>
+  <div class="stat-card"><span>Submitted</span><strong>{{ summary.submitted or 0 }}</strong><small>of {{ summary.total_sessions or 0 }} real sessions</small></div>
+  <div class="stat-card"><span>Class Mean</span><strong>{{ '%.2f'|format(summary.avg_score) if summary.avg_score is not none else '—' }}</strong><small>out of {{ 55 if assessment == 'midterm' else 50 }}</small></div>
+</div>
+
+<div class="quick-tools three-tools">
+  <a href="{{ url_for('admin_analysis', assessment=assessment) }}" class="tool-card"><strong>Item Analysis</strong><span>Correct rate, discrimination, distractors, topic performance, and batch comparisons for this assessment only.</span><b>Open analytics →</b></a>
+  <a href="{{ url_for('admin_questions', assessment=assessment) }}" class="tool-card"><strong>Question Banks</strong><span>Browse, edit, add, and manage the active question pools{% if assessment == 'midterm' %}, including the 5-point bonus part{% endif %}.</span><b>Manage questions →</b></a>
+  <a href="{{ url_for('admin_testing', assessment=assessment) }}" class="tool-card"><strong>Testing Session</strong><span>Experience the exact student-side flow without affecting class data.</span><b>Launch test lab →</b></a>
+</div>
+
+<div class="content-card">
+  <div class="section-heading"><div><h2>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Sets & Session Keys</h2><p class="subtle">Each set has an instructor-generated key. Students cannot enter a set without the current key.</p></div>
+    <form method="post" action="{{ url_for('admin_regenerate_all_keys', assessment=assessment) }}" onsubmit="return confirm('Regenerate ALL 8 keys for this assessment? Every current key will become invalid.');">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="secondary" type="submit">Regenerate All 8 Keys</button>
+    </form>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Set</th><th>Session Key</th><th>Start Window</th><th>Duration</th><th>Sessions</th><th></th></tr></thead>
+    <tbody>
+      {% for b in batches %}
+      <tr>
+        <td><strong>{{ b.name }}</strong><br><small>{% if b.active %}Active{% else %}Disabled{% endif %}</small></td>
+        <td><code class="session-key-inline">{{ b.access_code }}</code><br><small>Instructor only</small></td>
+        <td>{{ b.open_at or 'Not set' }} → {{ b.close_at or 'Not set' }}</td>
+        <td>{{ b.duration_minutes }} min</td>
+        <td>{{ b.submitted_count or 0 }}/{{ b.session_count or 0 }} submitted</td>
+        <td><a class="secondary button-link table-action-btn" href="{{ url_for('admin_batch', batch_id=b.id) }}">Configure</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+
+<div class="content-card">
+  <div class="section-heading"><div><h2>Student Sessions</h2><p class="subtle">Showing only {{ 'post-test' if assessment == 'posttest' else 'midterm' }} student sessions. Instructor testing attempts remain excluded.</p></div></div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Student</th><th>Batch</th><th>Status</th><th>Auto Score</th><th>Security</th><th>Chat</th><th>Started</th><th></th></tr></thead>
+    <tbody>
+      {% for s in sessions %}
+      <tr>
+        <td><strong>{{ s.student_name or s.email }}</strong>{% if s.student_name %}<br><small>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.email }}</small>{% endif %}</td><td>{{ s.batch_name }}</td><td><span class="status {{ s.status }}">{{ s.status }}</span></td>
+        <td>{% if s.status == 'submitted' %}{{ s.auto_total }}/{{ 55 if assessment == 'midterm' else 50 }}{% else %}—{% endif %}</td>
+        <td>{% if s.security_locked %}<span class="security-state-badge locked">Locked</span>{% else %}<span class="security-mini">{{ s.violation_count or 0 }}/3 violations · {{ s.flagged_count }} flags</span>{% endif %}</td>
+        <td>{% if s.unread_messages %}<span class="chat-unread-dashboard">{{ s.unread_messages }} new</span>{% else %}<span class="subtle">—</span>{% endif %}</td>
+        <td>{{ s.started_at }}</td>
+        <td><a class="secondary button-link table-action-btn" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review{% if s.unread_messages %} & Reply{% endif %}</a></td>
+      </tr>
+      {% else %}<tr><td colspan="8" class="empty-cell">No real student sessions for this assessment yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</div>
+{% endblock %}

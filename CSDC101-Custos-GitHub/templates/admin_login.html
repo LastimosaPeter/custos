@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Custos - Instructor Login{% endblock %}
+{% block content %}
+<div class="center-card auth-card">
+  <div class="eyebrow">INSTRUCTOR VIEW · ADMINISTRATION</div>
+  <h1>Instructor Sign-In</h1>
+  <form method="post" class="form-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>Username <input name="username" required autocomplete="username"></label>
+    <label>Password <input type="password" name="password" required autocomplete="current-password"></label>
+    <button class="primary wide" type="submit">Sign In</button>
+  </form>
+  <a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
+</div>
+{% endblock %}
