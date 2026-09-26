@@ -1534,3 +1534,150 @@ body:not(.exam-page) .page-shell{
 :root[data-theme="dark"] .dryrun-card{
   border-left:1px solid #33445a !important;
 }
+
+/* =========================================================
+   Midterm Bonus Part editor · restored compact layout
+   ========================================================= */
+.bonus-bank-card{
+  overflow:hidden;
+}
+.bonus-bank-card .section-heading{
+  align-items:center;
+  margin-bottom:16px;
+}
+.bonus-bank-card .section-heading h2{
+  margin:0 0 5px;
+}
+.bonus-bank-card .section-heading .subtle{
+  margin:0;
+  max-width:820px;
+}
+.bonus-chip{
+  flex:0 0 auto;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:42px;
+  height:32px;
+  padding:0 11px;
+  border-radius:999px;
+  background:#eaf3ff;
+  color:var(--accent);
+  font-size:13px;
+  font-weight:900;
+}
+.bonus-editor-list{
+  display:grid;
+  gap:10px;
+}
+.bonus-editor-row{
+  display:grid;
+  grid-template-columns:38px minmax(135px,.75fr) minmax(300px,2.4fr) minmax(210px,1.15fr) auto;
+  gap:10px;
+  align-items:end;
+  margin:0;
+  padding:12px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:var(--soft);
+}
+.bonus-editor-row label{
+  min-width:0;
+  display:grid;
+  gap:5px;
+  margin:0;
+  color:var(--muted);
+  font-size:10px;
+  font-weight:850;
+  letter-spacing:.02em;
+}
+.bonus-editor-row input{
+  min-width:0;
+  height:38px;
+  padding:8px 10px;
+  background:var(--panel);
+  color:var(--ink);
+  font-size:12px;
+  font-weight:600;
+}
+.bonus-position{
+  width:30px;
+  height:30px;
+  align-self:center;
+  display:grid;
+  place-items:center;
+  border-radius:50%;
+  background:#eaf3ff;
+  color:var(--accent);
+  font-size:13px;
+  font-weight:900;
+}
+.bonus-prompt-field{
+  min-width:0;
+}
+.bonus-editor-row>button{
+  height:38px;
+  min-width:64px;
+  padding:0 14px;
+  align-self:end;
+}
+
+:root[data-theme="dark"] .bonus-chip,
+:root[data-theme="dark"] .bonus-position{
+  background:#17345a;
+  color:#8dc0ff;
+}
+:root[data-theme="dark"] .bonus-editor-row{
+  background:#151f2c;
+  border-color:#33445a;
+}
+:root[data-theme="dark"] .bonus-editor-row input{
+  background:#101925;
+  border-color:#41536b;
+  color:#eef4ff;
+}
+
+@media(max-width:1050px){
+  .bonus-editor-row{
+    grid-template-columns:38px minmax(130px,.8fr) minmax(260px,1.8fr) minmax(190px,1fr) auto;
+  }
+}
+@media(max-width:800px){
+  .bonus-editor-row{
+    grid-template-columns:34px 1fr 1fr;
+    align-items:end;
+  }
+  .bonus-position{
+    grid-row:1 / span 2;
+    align-self:start;
+    margin-top:19px;
+  }
+  .bonus-prompt-field{
+    grid-column:2 / -1;
+  }
+  .bonus-editor-row>button{
+    width:100%;
+  }
+}
+@media(max-width:560px){
+  .bonus-bank-card .section-heading{
+    align-items:flex-start;
+  }
+  .bonus-editor-row{
+    grid-template-columns:32px 1fr;
+    padding:11px;
+  }
+  .bonus-position{
+    grid-row:auto;
+    align-self:start;
+    margin-top:18px;
+  }
+  .bonus-editor-row label,
+  .bonus-prompt-field,
+  .bonus-editor-row>button{
+    grid-column:2;
+  }
+  .bonus-editor-row>button{
+    width:100%;
+  }
+}
