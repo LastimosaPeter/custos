@@ -1,32 +1,30 @@
 import os
-import sqlite3
 import secrets
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+
 from dotenv import load_dotenv
 from werkzeug.security import generate_password_hash
 
 load_dotenv()
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
 _db_setting = os.environ.get("EXAM_DB_PATH", "exam.db")
 DB_PATH = _db_setting if os.path.isabs(_db_setting) else os.path.join(BASE_DIR, _db_setting)
+DATABASE_ENGINE = "postgresql" if DATABASE_URL else "sqlite"
+
 _tz_name = os.environ.get("APP_TIMEZONE", "Asia/Manila")
 try:
     APP_TZ = ZoneInfo(_tz_name)
 except ZoneInfoNotFoundError:
-    # Windows installations may not include the IANA tz database.
-    # Asia/Manila is UTC+8 year-round, so this is a safe local fallback.
     if _tz_name == "Asia/Manila":
         APP_TZ = timezone(timedelta(hours=8), name="PHT")
     else:
         APP_TZ = timezone.utc
 
-
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-# Public GitHub builds intentionally contain no live assessment content.
-# These placeholders keep the Midterm bonus editor available until the
-# instructor configures the five private bonus questions after deployment.
 DEFAULT_BONUS_QUESTIONS = [
     (1, "Configure Before Use", "Configure Bonus Question 1 in Instructor → Question Banks.", "CHANGE_ME_1"),
     (2, "Configure Before Use", "Configure Bonus Question 2 in Instructor → Question Banks.", "CHANGE_ME_2"),
@@ -35,8 +33,8 @@ DEFAULT_BONUS_QUESTIONS = [
     (5, "Configure Before Use", "Configure Bonus Question 5 in Instructor → Question Banks.", "CHANGE_ME_5"),
 ]
 
+
 def generate_session_key(assessment_type, section, batch_label):
-    """Generate a human-readable, non-ambiguous session key."""
     prefix = "PT" if assessment_type == "posttest" else "MT"
     section_no = "".join(ch for ch in str(section) if ch.isdigit()) or str(section)
     secret = "".join(secrets.choice(SESSION_KEY_ALPHABET) for _ in range(8))
@@ -50,7 +48,8 @@ def unique_session_key(conn, assessment_type, section, batch_label):
             return key
     raise RuntimeError("Could not generate a unique session key")
 
-SCHEMA = """
+
+SQLITE_SCHEMA = """
 PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS app_meta (
@@ -190,142 +189,221 @@ CREATE TABLE IF NOT EXISTS exam_messages (
 CREATE INDEX IF NOT EXISTS idx_exam_messages_session ON exam_messages(session_id, id);
 """
 
+# PostgreSQL uses SERIAL for auto-incrementing integer primary keys.
+POSTGRES_SCHEMA = (
+    SQLITE_SCHEMA.replace("PRAGMA foreign_keys = ON;", "")
+    .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
+)
 
-def migrate_schema(conn):
-    session_cols = {row[1] for row in conn.execute("PRAGMA table_info(exam_sessions)").fetchall()}
-    if "is_test" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN is_test INTEGER NOT NULL DEFAULT 0")
-    if "test_label" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN test_label TEXT")
-    if "untimed" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN untimed INTEGER NOT NULL DEFAULT 0")
-    if "student_name" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN student_name TEXT")
-    if "program" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN program TEXT")
-    if "class_section" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN class_section TEXT")
-    if "terms_accepted_at" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN terms_accepted_at TEXT")
-    if "violation_count" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN violation_count INTEGER NOT NULL DEFAULT 0")
-    if "security_locked" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN security_locked INTEGER NOT NULL DEFAULT 0")
-    if "temp_locked_until" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN temp_locked_until TEXT")
-    if "pending_blackout" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN pending_blackout INTEGER NOT NULL DEFAULT 0")
-    if "bonus_correct" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN bonus_correct INTEGER NOT NULL DEFAULT 0")
-    if "bonus_score" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN bonus_score INTEGER NOT NULL DEFAULT 0")
-    if "admin_bonus_score" not in session_cols:
-        conn.execute("ALTER TABLE exam_sessions ADD COLUMN admin_bonus_score REAL")
 
-    question_cols = {row[1] for row in conn.execute("PRAGMA table_info(questions)").fetchall()}
-    if "active" not in question_cols:
-        conn.execute("ALTER TABLE questions ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
-    if "created_by" not in question_cols:
-        conn.execute("ALTER TABLE questions ADD COLUMN created_by TEXT NOT NULL DEFAULT 'builtin'")
+def _pg_sql(sql):
+    """Translate the SQLite-style parameter marker used by Custos to psycopg2."""
+    return sql.replace("?", "%s")
 
-    batch_cols = {row[1] for row in conn.execute("PRAGMA table_info(batches)").fetchall()}
-    if "assessment_type" not in batch_cols:
-        conn.execute("ALTER TABLE batches ADD COLUMN assessment_type TEXT NOT NULL DEFAULT 'midterm'")
-    # Existing slots 1-8 are the original midterm banks.
-    conn.execute("UPDATE batches SET assessment_type='midterm' WHERE slot BETWEEN 1 AND 8")
-    conn.commit()
+
+class PostgresConnection:
+    """Small compatibility wrapper so the existing Custos query layer works on Postgres."""
+
+    def __init__(self, raw_connection, dict_cursor_factory):
+        self._conn = raw_connection
+        self._dict_cursor_factory = dict_cursor_factory
+
+    def execute(self, sql, params=()):
+        cur = self._conn.cursor(cursor_factory=self._dict_cursor_factory)
+        cur.execute(_pg_sql(sql), tuple(params or ()))
+        return cur
+
+    def executemany(self, sql, seq_of_params):
+        cur = self._conn.cursor(cursor_factory=self._dict_cursor_factory)
+        cur.executemany(_pg_sql(sql), seq_of_params)
+        return cur
+
+    def commit(self):
+        self._conn.commit()
+
+    def rollback(self):
+        self._conn.rollback()
+
+    def close(self):
+        self._conn.close()
 
 
 def connect():
+    """Connect to PostgreSQL when DATABASE_URL is set; otherwise use local SQLite."""
+    if DATABASE_URL:
+        try:
+            import psycopg2
+            from psycopg2.extras import DictCursor
+        except ImportError as exc:
+            raise RuntimeError(
+                "DATABASE_URL is set but psycopg2 is not installed. Run: pip install -r requirements.txt"
+            ) from exc
+        url = DATABASE_URL
+        if url.startswith("postgres://"):
+            url = "postgresql://" + url[len("postgres://"):]
+        raw = psycopg2.connect(url, connect_timeout=10)
+        return PostgresConnection(raw, DictCursor)
+
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
 
 
+def _table_columns(conn, table_name):
+    if DATABASE_ENGINE == "postgresql":
+        rows = conn.execute(
+            """SELECT column_name FROM information_schema.columns
+               WHERE table_schema=current_schema() AND table_name=?""",
+            (table_name,),
+        ).fetchall()
+        return {row[0] for row in rows}
+    return {row[1] for row in conn.execute(f"PRAGMA table_info({table_name})").fetchall()}
+
+
+def _apply_schema(conn):
+    if DATABASE_ENGINE == "sqlite":
+        conn.executescript(SQLITE_SCHEMA)
+        return
+    for statement in POSTGRES_SCHEMA.split(";"):
+        statement = statement.strip()
+        if statement:
+            conn.execute(statement)
+    conn.commit()
+
+
+def migrate_schema(conn):
+    session_cols = _table_columns(conn, "exam_sessions")
+    session_additions = {
+        "is_test": "INTEGER NOT NULL DEFAULT 0",
+        "test_label": "TEXT",
+        "untimed": "INTEGER NOT NULL DEFAULT 0",
+        "student_name": "TEXT",
+        "program": "TEXT",
+        "class_section": "TEXT",
+        "terms_accepted_at": "TEXT",
+        "violation_count": "INTEGER NOT NULL DEFAULT 0",
+        "security_locked": "INTEGER NOT NULL DEFAULT 0",
+        "temp_locked_until": "TEXT",
+        "pending_blackout": "INTEGER NOT NULL DEFAULT 0",
+        "bonus_correct": "INTEGER NOT NULL DEFAULT 0",
+        "bonus_score": "INTEGER NOT NULL DEFAULT 0",
+        "admin_bonus_score": "REAL",
+    }
+    for name, definition in session_additions.items():
+        if name not in session_cols:
+            conn.execute(f"ALTER TABLE exam_sessions ADD COLUMN {name} {definition}")
+
+    question_cols = _table_columns(conn, "questions")
+    if "active" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
+    if "created_by" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN created_by TEXT NOT NULL DEFAULT 'builtin'")
+
+    batch_cols = _table_columns(conn, "batches")
+    if "assessment_type" not in batch_cols:
+        conn.execute("ALTER TABLE batches ADD COLUMN assessment_type TEXT NOT NULL DEFAULT 'midterm'")
+    conn.execute("UPDATE batches SET assessment_type='midterm' WHERE slot BETWEEN 1 AND 8")
+    conn.commit()
+
+
 def init_db(admin_username="admin", admin_password="ChangeMe123!"):
     conn = connect()
-    conn.executescript(SCHEMA)
-    migrate_schema(conn)
+    advisory_lock = False
+    try:
+        # Prevent concurrent Gunicorn workers from racing through first-time Postgres initialization.
+        if DATABASE_ENGINE == "postgresql":
+            conn.execute("SELECT pg_advisory_lock(2026092601)")
+            advisory_lock = True
 
-    if conn.execute("SELECT COUNT(*) FROM admins").fetchone()[0] == 0:
+        _apply_schema(conn)
+        migrate_schema(conn)
+
         conn.execute(
-            "INSERT INTO admins(username, password_hash) VALUES (?, ?)",
+            """INSERT INTO admins(username, password_hash) VALUES (?, ?)
+               ON CONFLICT(username) DO NOTHING""",
             (admin_username, generate_password_hash(admin_password)),
         )
 
-    # Ensure the original 8 midterm banks exist.
-    for section in range(1, 5):
-        for batch_index, batch_label in enumerate(("A", "B")):
-            slot = (section - 1) * 2 + batch_index + 1
-            exists = conn.execute("SELECT 1 FROM batches WHERE slot=?", (slot,)).fetchone()
-            if not exists:
+        for section in range(1, 5):
+            for batch_index, batch_label in enumerate(("A", "B")):
+                slot = (section - 1) * 2 + batch_index + 1
                 conn.execute(
                     """INSERT INTO batches(slot, section, batch_label, name, access_code, duration_minutes, assessment_type)
-                       VALUES (?, ?, ?, ?, ?, 90, 'midterm')""",
-                    (slot, f"Section {section}", batch_label, f"Midterm · Section {section} - Batch {batch_label}", unique_session_key(conn, "midterm", f"Section {section}", batch_label)),
+                       VALUES (?, ?, ?, ?, ?, 90, 'midterm')
+                       ON CONFLICT(slot) DO NOTHING""",
+                    (
+                        slot,
+                        f"Section {section}",
+                        batch_label,
+                        f"Midterm · Section {section} - Batch {batch_label}",
+                        unique_session_key(conn, "midterm", f"Section {section}", batch_label),
+                    ),
                 )
-            else:
                 conn.execute("UPDATE batches SET assessment_type='midterm' WHERE slot=?", (slot,))
 
-    # Ensure 8 separate post-test banks exist in slots 9-16.
-    for section in range(1, 5):
-        for batch_index, batch_label in enumerate(("A", "B")):
-            set_no = (section - 1) * 2 + batch_index + 1
-            slot = 8 + set_no
-            exists = conn.execute("SELECT 1 FROM batches WHERE slot=?", (slot,)).fetchone()
-            if not exists:
+        for section in range(1, 5):
+            for batch_index, batch_label in enumerate(("A", "B")):
+                set_no = (section - 1) * 2 + batch_index + 1
+                slot = 8 + set_no
                 conn.execute(
                     """INSERT INTO batches(slot, section, batch_label, name, access_code, duration_minutes, assessment_type)
-                       VALUES (?, ?, ?, ?, ?, 90, 'posttest')""",
-                    (slot, f"Section {section}", batch_label, f"Post-test · Section {section} - Batch {batch_label}", unique_session_key(conn, "posttest", f"Section {section}", batch_label)),
+                       VALUES (?, ?, ?, ?, ?, 90, 'posttest')
+                       ON CONFLICT(slot) DO NOTHING""",
+                    (
+                        slot,
+                        f"Section {section}",
+                        batch_label,
+                        f"Post-test · Section {section} - Batch {batch_label}",
+                        unique_session_key(conn, "posttest", f"Section {section}", batch_label),
+                    ),
                 )
-            else:
                 conn.execute("UPDATE batches SET assessment_type='posttest' WHERE slot=?", (slot,))
 
-    # Public deployment rehearsal. This bank is intentionally separate from
-    # Midterm/Post-test analytics and uses a stable instructor-shareable key.
-    dryrun = conn.execute("SELECT * FROM batches WHERE slot=17").fetchone()
-    if not dryrun:
         conn.execute(
             """INSERT INTO batches(slot,section,batch_label,name,access_code,duration_minutes,reveal_score,active,assessment_type)
-               VALUES(17,'DRY RUN','A','Custos Public Dry Run','CUSTOS-DRYRUN-SCARABS',90,1,1,'dryrun')"""
+               VALUES(17,'DRY RUN','A','Custos Public Dry Run','CUSTOS-DRYRUN-SCARABS',90,1,1,'dryrun')
+               ON CONFLICT(slot) DO NOTHING"""
         )
-    else:
         conn.execute(
             """UPDATE batches SET section='DRY RUN', batch_label='A', name='Custos Public Dry Run',
                assessment_type='dryrun', active=1 WHERE slot=17"""
         )
 
-    # Upgrade only the old built-in demo codes. Custom instructor keys are preserved.
-    legacy_rows = conn.execute(
-        "SELECT id, section, batch_label, assessment_type, access_code FROM batches"
-    ).fetchall()
-    for row in legacy_rows:
-        code = row["access_code"] or ""
-        if code.startswith("CSDC101-S") or code.startswith("CSDC101-PT-S"):
+        legacy_rows = conn.execute(
+            "SELECT id, section, batch_label, assessment_type, access_code FROM batches"
+        ).fetchall()
+        for row in legacy_rows:
+            code = row["access_code"] or ""
+            if code.startswith("CSDC101-S") or code.startswith("CSDC101-PT-S"):
+                conn.execute(
+                    "UPDATE batches SET access_code=? WHERE id=?",
+                    (
+                        unique_session_key(conn, row["assessment_type"], row["section"], row["batch_label"]),
+                        row["id"],
+                    ),
+                )
+
+        for position, topic, prompt, accepted_answer in DEFAULT_BONUS_QUESTIONS:
             conn.execute(
-                "UPDATE batches SET access_code=? WHERE id=?",
-                (unique_session_key(conn, row["assessment_type"], row["section"], row["batch_label"]), row["id"]),
+                """INSERT INTO bonus_questions(assessment_type,position,topic,prompt,accepted_answer,active)
+                   VALUES('midterm',?,?,?,?,1)
+                   ON CONFLICT(assessment_type,position) DO NOTHING""",
+                (position, topic, prompt, accepted_answer),
             )
-    conn.commit()
 
-    # SECURITY: the public GitHub build does not embed, generate, clone, or
-    # download assessment questions. The instructor imports the private CSV
-    # after deployment from Instructor → Question Banks.
-
-    # Midterm bonus placeholders contain no real questions or answers. They
-    # are deliberately editable from the Instructor Question Banks page.
-    for position, topic, prompt, accepted_answer in DEFAULT_BONUS_QUESTIONS:
-        conn.execute(
-            """INSERT INTO bonus_questions(assessment_type,position,topic,prompt,accepted_answer,active)
-               VALUES('midterm',?,?,?,?,1)
-               ON CONFLICT(assessment_type,position) DO NOTHING""",
-            (position, topic, prompt, accepted_answer),
-        )
-
-    conn.commit()
-    conn.close()
+        conn.commit()
+    except Exception:
+        conn.rollback()
+        raise
+    finally:
+        if advisory_lock:
+            try:
+                conn.execute("SELECT pg_advisory_unlock(2026092601)")
+                conn.commit()
+            except Exception:
+                pass
+        conn.close()
 
 
 def iso_now():

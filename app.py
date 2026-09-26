@@ -17,7 +17,7 @@ from flask import (
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from db import APP_TZ, connect, init_db, iso_now, unique_session_key
+from db import APP_TZ, DATABASE_ENGINE, connect, init_db, iso_now, unique_session_key
 from item_analysis import build_item_analysis
 
 load_dotenv()
@@ -239,8 +239,8 @@ def assign_questions_to_session(conn, sid, batch_slot):
             raise ValueError(f"Midterm requires exactly 5 active bonus questions; found {len(bonus)}.")
         for b in bonus:
             conn.execute(
-                """INSERT OR IGNORE INTO session_bonus_answers(session_id,bonus_question_id,q_order,answer_text)
-                   VALUES (?,?,?, '')""",
+                """INSERT INTO session_bonus_answers(session_id,bonus_question_id,q_order,answer_text)
+                   VALUES (?,?,?, '') ON CONFLICT(session_id,bonus_question_id) DO NOTHING""",
                 (sid, b["id"], b["position"]),
             )
 
@@ -302,6 +302,16 @@ def add_security_headers(resp):
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     )
     return resp
+
+
+@app.get("/health")
+def health():
+    conn = connect()
+    try:
+        conn.execute("SELECT 1").fetchone()
+        return jsonify({"status": "ok", "database": DATABASE_ENGINE}), 200
+    finally:
+        conn.close()
 
 
 @app.route("/")
@@ -444,10 +454,10 @@ def start_exam():
     else:
         cur = conn.execute(
             """INSERT INTO exam_sessions(email,student_name,program,class_section,batch_id,started_at,ip_address,user_agent,terms_accepted_at)
-               VALUES (?,?,?,?,?,?,?,?,?)""",
+               VALUES (?,?,?,?,?,?,?,?,?) RETURNING id""",
             (email, student_name, program, class_section, batch_id, accepted_at, request.remote_addr, request.headers.get("User-Agent", "")[:500], accepted_at),
         )
-        sid = cur.lastrowid
+        sid = cur.fetchone()[0]
         try:
             assign_questions_to_session(conn, sid, batch["slot"])
         except ValueError as exc:
@@ -1174,10 +1184,10 @@ def admin_student_preview():
     else:
         cur = conn.execute(
             """INSERT INTO exam_sessions(email,student_name,program,class_section,batch_id,started_at,ip_address,user_agent,is_test,test_label,untimed,terms_accepted_at)
-               VALUES(?,?,?,?,?,?,?,?,1,?,1,?)""",
+               VALUES(?,?,?,?,?,?,?,?,1,?,1,?) RETURNING id""",
             (preview_email, "Instructor Preview", "ZT", "11", batch["id"], iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], "Instructor Student View · Scarabs", iso_now()),
         )
-        sid = cur.lastrowid
+        sid = cur.fetchone()[0]
         assign_questions_to_session(conn, sid, batch["slot"])
         conn.execute(
             "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
@@ -1208,10 +1218,10 @@ def admin_testing_start():
     untimed = 1 if request.form.get("untimed") == "1" else 0
     cur = conn.execute(
         """INSERT INTO exam_sessions(email,batch_id,started_at,ip_address,user_agent,is_test,test_label,untimed)
-           VALUES (?,?,?,?,?,1,?,?)""",
+           VALUES (?,?,?,?,?,1,?,?) RETURNING id""",
         (email, batch_id, iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], label, untimed),
     )
-    sid = cur.lastrowid
+    sid = cur.fetchone()[0]
     try:
         assign_questions_to_session(conn, sid, batch["slot"])
     except ValueError as exc:
