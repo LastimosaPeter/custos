@@ -618,13 +618,45 @@ def exam():
         bonus_questions = [dict(r) for r in bonus_rows]
     security = get_security_state(exam_session)
     total_count = len(questions) + len(bonus_questions)
+    try:
+        stored_position = int(exam_session["last_question_index"] or 0)
+    except (KeyError, TypeError, ValueError):
+        stored_position = 0
+    resume_index = max(0, min(stored_position, max(total_count - 1, 0)))
     conn.close()
     return render_template(
         "exam.html", exam_session=exam_session, batch=batch, questions=questions,
-        bonus_questions=bonus_questions, total_count=total_count,
+        bonus_questions=bonus_questions, total_count=total_count, resume_index=resume_index,
         remaining=remaining, deadline=deadline.isoformat() if deadline else None,
         security=security
     )
+
+
+@app.route("/api/question-position", methods=["POST"])
+@student_session_required
+def save_question_position():
+    require_csrf()
+    sid = session["student_session_id"]
+    data = request.get_json(silent=True) or {}
+    try:
+        index = int(data.get("index", 0))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "invalid_index"}), 400
+    if index < 0 or index > 200:
+        return jsonify({"ok": False, "error": "invalid_index"}), 400
+
+    conn = connect()
+    ex = conn.execute("SELECT status FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    if not ex:
+        conn.close()
+        return jsonify({"ok": False, "error": "session_not_found"}), 404
+    if ex["status"] == "submitted":
+        conn.close()
+        return jsonify({"ok": False, "error": "submitted"}), 409
+    conn.execute("UPDATE exam_sessions SET last_question_index=? WHERE id=?", (index, sid))
+    conn.commit()
+    conn.close()
+    return jsonify({"ok": True, "index": index})
 
 
 @app.route("/api/answer", methods=["POST"])

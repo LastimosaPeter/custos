@@ -2,7 +2,7 @@
 {% block title %}Custos - {{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }} Exam{% endblock %}
 {% block body_class %}exam-page{% endblock %}
 {% block body %}
-<div id="examApp" class="exam-app" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}">
+<div id="examApp" class="exam-app" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}">
   <header class="exam-header">
     <div class="exam-brand">
       <div class="exam-brand-lockup" aria-label="CSDC101 Custos">
@@ -34,7 +34,7 @@
         </div>
         <div class="question-grid" id="questionGridPart1">
           {% for q in questions if q.part == 1 %}
-            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
+            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %} {% if (q.q_order - 1) == resume_index %}current{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
           {% endfor %}
         </div>
       </section>
@@ -46,7 +46,7 @@
         </div>
         <div class="question-grid" id="questionGridPart2">
           {% for q in questions if q.part == 2 %}
-            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
+            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %} {% if (q.q_order - 1) == resume_index %}current{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
           {% endfor %}
         </div>
       </section>
@@ -55,13 +55,13 @@
 
     <main class="question-stage">
       <div class="stage-topline">
-        <span id="questionPosition">Question 1 of {{ questions|length }}</span>
+        <span id="questionPosition">Question {{ resume_index + 1 }} of {{ total_count|default(questions|length) }}</span>
         <strong id="currentPartIndicator" class="current-part-indicator">Part I · Code Tracing / Inspection</strong>
         <span id="saveStatus" class="save-status">Ready</span>
       </div>
 
       {% for q in questions %}
-      <section class="question-panel {% if not loop.first %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}">
+      <section class="question-panel {% if loop.index0 != resume_index %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}">
         <div class="part-label">
           <span>{{ 'Part I · Code Tracing / Inspection' if q.part == 1 else 'Part II · Programming Logic / Code Selection' }}</span>
           <small>{{ q.topic }}</small>

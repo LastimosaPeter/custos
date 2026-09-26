@@ -52,7 +52,7 @@
     window.matchMedia('(display-mode: fullscreen)').matches ||
     window.navigator.standalone === true;
   const secureDisplayActive = () => isInstalledAppMode() || Boolean(document.fullscreenElement);
-  let current = 0;
+  let current = Math.max(0, Math.min(Number(app.dataset.resumeIndex || 0), Math.max(panels.length - 1, 0)));
   let remaining = untimed ? null : Number(app.dataset.remaining || 0);
   let lastActivity = Date.now();
   let inactivityPrompted = false;
@@ -84,7 +84,11 @@
     postJSON('/api/proctor-event', {type, detail}).catch(() => {});
   }
 
-  function showQuestion(index) {
+  function persistQuestionPosition(index) {
+    postJSON('/api/question-position', {index}).catch(() => {});
+  }
+
+  function showQuestion(index, persist = true) {
     current = Math.max(0, Math.min(index, panels.length - 1));
     panels.forEach((p, i) => p.classList.toggle('hidden', i !== current));
     navButtons.forEach((b, i) => b.classList.toggle('current', i === current));
@@ -98,6 +102,7 @@
     prevBtn.disabled = current === 0;
     nextBtn.textContent = current === panels.length - 1 ? 'Review' : 'Next';
     panels[current].scrollTop = 0;
+    if (persist) persistQuestionPosition(current);
     if (isInstalledAppMode() && window.matchMedia('(max-width: 1024px)').matches) setQuestionNavOpen(false);
   }
 
@@ -543,7 +548,7 @@
   }
 
   updateFooterStatus();
-  showQuestion(0);
+  showQuestion(current, false);
   renderSecurityOverlay();
   fetchChatMessages();
 })();

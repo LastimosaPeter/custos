@@ -128,6 +128,7 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     security_locked INTEGER NOT NULL DEFAULT 0,
     temp_locked_until TEXT,
     pending_blackout INTEGER NOT NULL DEFAULT 0,
+    last_question_index INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(batch_id) REFERENCES batches(id)
 );
 
@@ -295,6 +296,7 @@ def migrate_schema(conn):
         "bonus_correct": "INTEGER NOT NULL DEFAULT 0",
         "bonus_score": "INTEGER NOT NULL DEFAULT 0",
         "admin_bonus_score": "REAL",
+        "last_question_index": "INTEGER NOT NULL DEFAULT 0",
     }
     for name, definition in session_additions.items():
         if name not in session_cols:
