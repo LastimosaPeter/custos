@@ -142,3 +142,26 @@ Do not override those exclusions for a public repository.
 ## Security note
 
 Custos logs browser/exam events and implements server-backed temporary/permanent attempt locks, but normal web browsers cannot physically disable a monitor or guarantee interception of every operating-system action. Veyon remains the instructor-side workstation monitoring layer.
+
+## Mobile installed-app exam mode (PWA)
+
+Custos can be installed as a Progressive Web App (PWA) so mobile devices can run the exam without normal browser chrome.
+
+### iPhone / iPad
+1. Open the deployed Custos site in Safari.
+2. Tap **Share**.
+3. Choose **Add to Home Screen** and confirm **Add**.
+4. Launch Custos from the Home Screen icon.
+5. Enter the assessment normally. Custos recognizes iOS/iPadOS standalone app mode as a valid secure display mode.
+
+### Android
+1. Open the deployed Custos site in Chrome or Edge.
+2. Use **Install app** or **Add to Home screen** from the browser menu. On supported browsers Custos can also show a native install prompt.
+3. Launch Custos from its installed app icon.
+4. Enter the assessment normally. Custos recognizes installed standalone/fullscreen display mode as a valid secure display mode.
+
+On installed phones/tablets, the exam changes to a mobile app layout with an **Items** drawer for question navigation, safe-area-aware header/footer controls, responsive code and answer panels, and a mobile chat panel. Desktop browser fullscreen behavior is unchanged.
+
+Installed-app mode does **not** give a website operating-system control. Custos still cannot disable the Home gesture, app switcher, screenshots, notifications, Control Center/Quick Settings, or another physical device. Switching Custos to the background is instead detected through browser visibility/focus events and handled by the existing server-backed security-violation rules.
+
+The service worker deliberately does not cache exam pages, APIs, instructor pages, logins, or assessment data. An active exam therefore still requires a network connection to Custos/PostgreSQL.

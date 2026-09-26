@@ -12,7 +12,7 @@ from functools import wraps
 from dotenv import load_dotenv
 from flask import (
     Flask, Response, abort, flash, g, jsonify, redirect, render_template,
-    request, session, url_for
+    request, session, url_for, send_from_directory
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
@@ -366,6 +366,26 @@ def add_security_headers(resp):
             secure=app.config["SESSION_COOKIE_SECURE"],
             samesite="Strict",
         )
+    return resp
+
+
+@app.get("/manifest.webmanifest")
+def pwa_manifest():
+    return send_from_directory(
+        app.static_folder,
+        "manifest.webmanifest",
+        mimetype="application/manifest+json",
+    )
+
+
+@app.get("/sw.js")
+def pwa_service_worker():
+    resp = send_from_directory(
+        app.static_folder,
+        "sw.js",
+        mimetype="application/javascript",
+    )
+    resp.headers["Service-Worker-Allowed"] = "/"
     return resp
 
 

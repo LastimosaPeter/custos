@@ -23,6 +23,11 @@
   const timerEl = document.getElementById('timer');
   const answeredStatus = document.getElementById('answeredStatus');
   const unansweredStatus = document.getElementById('unansweredStatus');
+  const questionNav = document.getElementById('questionNavigator');
+  const questionNavToggle = document.getElementById('questionNavToggle');
+  const questionNavClose = document.getElementById('questionNavClose');
+  const questionNavBackdrop = document.getElementById('questionNavBackdrop');
+  const secureModeDescription = document.getElementById('secureModeDescription');
 
   const securityOverlay = document.getElementById('securityLockOverlay');
   const securityTitle = document.getElementById('securityLockTitle');
@@ -42,6 +47,11 @@
   const chatUnreadBadge = document.getElementById('chatUnreadBadge');
 
   const untimed = app.dataset.untimed === '1';
+  const isInstalledAppMode = () =>
+    window.matchMedia('(display-mode: standalone)').matches ||
+    window.matchMedia('(display-mode: fullscreen)').matches ||
+    window.navigator.standalone === true;
+  const secureDisplayActive = () => isInstalledAppMode() || Boolean(document.fullscreenElement);
   let current = 0;
   let remaining = untimed ? null : Number(app.dataset.remaining || 0);
   let lastActivity = Date.now();
@@ -88,7 +98,18 @@
     prevBtn.disabled = current === 0;
     nextBtn.textContent = current === panels.length - 1 ? 'Review' : 'Next';
     panels[current].scrollTop = 0;
+    if (isInstalledAppMode() && window.matchMedia('(max-width: 1024px)').matches) setQuestionNavOpen(false);
   }
+
+  function setQuestionNavOpen(open) {
+    if (!questionNav) return;
+    questionNav.classList.toggle('mobile-open', open);
+    questionNavBackdrop?.classList.toggle('active', open);
+    questionNavToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  questionNavToggle?.addEventListener('click', () => setQuestionNavOpen(!questionNav.classList.contains('mobile-open')));
+  questionNavClose?.addEventListener('click', () => setQuestionNavOpen(false));
+  questionNavBackdrop?.addEventListener('click', () => setQuestionNavOpen(false));
 
   navButtons.forEach(btn => btn.addEventListener('click', () => showQuestion(Number(btn.dataset.index))));
   prevBtn.addEventListener('click', () => showQuestion(current - 1));
@@ -189,6 +210,17 @@
   async function requestSecureMode() {
     fullscreenError.classList.add('hidden');
     if (securityState.permanent || securityState.pending || securityState.tempRemaining > 0) return;
+
+    if (isInstalledAppMode()) {
+      secureModeEntered = true;
+      secureOverlay.classList.remove('active');
+      securityOverlay.classList.remove('active');
+      document.documentElement.classList.add('pwa-standalone');
+      logEvent('standalone_secure_mode_enter', 'Installed Custos app secure mode entered');
+      registerActivity();
+      return;
+    }
+
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
       secureModeEntered = true;
@@ -198,6 +230,9 @@
       registerActivity();
     } catch (e) {
       fullscreenError.classList.remove('hidden');
+      if (secureModeDescription && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
+        secureModeDescription.textContent = 'On iPhone or iPad, install Custos from Safari using Share → Add to Home Screen, launch it from the Home Screen, then return to this exam. Installed app mode is accepted as secure display mode.';
+      }
       logEvent('fullscreen_denied', String(e));
     }
   }
@@ -233,7 +268,7 @@
       return;
     }
 
-    if (!document.fullscreenElement && secureModeEntered) {
+    if (!secureDisplayActive() && secureModeEntered) {
       securityOverlay.classList.add('active');
       securityTitle.textContent = 'Security Lock Complete';
       securityCountdown.textContent = 'READY';
@@ -297,7 +332,7 @@
   }
 
   document.addEventListener('fullscreenchange', () => {
-    if (!secureModeEntered || intentionalNavigation) return;
+    if (!secureModeEntered || intentionalNavigation || isInstalledAppMode()) return;
     if (!document.fullscreenElement) triggerViolation('fullscreen_exit');
     else if (!securityState.permanent && securityState.tempRemaining <= 0) {
       secureOverlay.classList.remove('active');
@@ -500,6 +535,12 @@
     if (securityState.permanent || securityState.pending || securityState.tempRemaining > 0) refreshSecurityStatus();
   }, 3000);
   setInterval(fetchChatMessages, 3000);
+
+  if (isInstalledAppMode()) {
+    document.documentElement.classList.add('pwa-standalone');
+    if (enterFullscreen) enterFullscreen.textContent = 'Begin Exam in App Mode';
+    if (secureModeDescription) secureModeDescription.textContent = 'Custos detected installed app mode. Keep Custos in the foreground throughout the exam. Switching to another app, opening another browser, or leaving the exam can trigger a security violation.';
+  }
 
   updateFooterStatus();
   showQuestion(0);

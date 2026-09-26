@@ -11,6 +11,10 @@
     <h1 id="custos-home-title">Custos</h1>
     <h2>The Official Assessment Portal of CSDC101</h2>
     <p class="custos-home-lead">A secure, proctored environment for CSDC101 assessments.</p>
+    <div class="pwa-home-actions">
+      <button type="button" class="secondary pwa-install-button" data-pwa-install hidden>Install Custos for Mobile Exam Mode</button>
+      <span class="pwa-installed-note" data-pwa-installed hidden>✓ Custos is running as an installed app.</span>
+    </div>
 
     <div class="custos-why">
       <strong>Why Custos?</strong>
@@ -52,4 +56,25 @@
     </div>
   </section>
 </div>
+
+<dialog id="pwaInstallDialog" class="pwa-install-dialog">
+  <div class="pwa-install-dialog-inner">
+    <div class="pwa-install-mark"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></div>
+    <h2>Install Custos</h2>
+    <p>Installed app mode gives Custos a cleaner, browser-chrome-free exam workspace on phones and tablets.</p>
+    <div data-install-ios hidden>
+      <strong>iPhone / iPad</strong>
+      <ol><li>Open Custos in Safari.</li><li>Tap the <strong>Share</strong> button.</li><li>Choose <strong>Add to Home Screen</strong>, then <strong>Add</strong>.</li><li>Launch Custos from the new Home Screen icon.</li></ol>
+    </div>
+    <div data-install-android hidden>
+      <strong>Android</strong>
+      <ol><li>Open Custos in Chrome or Edge.</li><li>Open the browser menu.</li><li>Choose <strong>Install app</strong> or <strong>Add to Home screen</strong>.</li><li>Launch Custos from the installed app icon.</li></ol>
+    </div>
+    <div data-install-generic hidden>
+      <strong>Install from your browser</strong>
+      <p>Use your browser's Install or Add to Home Screen command, then launch Custos from the installed app icon.</p>
+    </div>
+    <button type="button" class="primary wide" data-pwa-dialog-close>Close</button>
+  </div>
+</dialog>
 {% endblock %}

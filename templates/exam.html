@@ -17,13 +17,14 @@
     </div>
     <div class="exam-header-meta">
       {% if exam_session.is_test and session.get('admin_id') %}<form method="post" action="{{ url_for('admin_testing_return') }}" class="inline-form test-return-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="test-return" type="submit">Return to Instructor</button></form>{% else %}<span>{{ exam_session.email }}</span>{% endif %}
+      <button type="button" id="questionNavToggle" class="secondary exam-items-toggle" aria-controls="questionNavigator" aria-expanded="false">Items</button>
       <button class="theme-toggle exam-theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>☾</span></button>
     </div>
   </header>
 
   <div class="exam-workspace">
-    <aside class="question-nav">
-      <div class="nav-title">Question Navigator</div>
+    <aside class="question-nav" id="questionNavigator">
+      <div class="mobile-question-nav-header"><div class="nav-title">Question Navigator</div><button type="button" id="questionNavClose" class="question-nav-close" aria-label="Close question navigator">×</button></div>
       <div class="nav-legend"><span class="dot answered"></span> Answered <span class="dot current"></span> Current</div>
 
       <section class="question-part-block" aria-label="Part I questions">
@@ -50,6 +51,7 @@
         </div>
       </section>
     </aside>
+    <button type="button" id="questionNavBackdrop" class="question-nav-backdrop" aria-label="Close question navigator" tabindex="-1"></button>
 
     <main class="question-stage">
       <div class="stage-topline">
@@ -108,8 +110,8 @@
     <div class="overlay-card">
       <div class="lock-icon">▣</div>
       <h2>Enter Secure Exam Mode</h2>
-      <p>The exam must remain in fullscreen mode. Leaving fullscreen or switching away from the exam can trigger a 15-second security lock. Three confirmed violations permanently lock the attempt until the instructor unlocks it.</p>
-      <button type="button" id="enterFullscreen" class="primary wide">Enter Fullscreen</button>
+      <p id="secureModeDescription">The exam must remain in secure display mode. On desktop this uses fullscreen; on an installed iPhone, iPad, or Android app, Custos uses standalone app mode. Switching away can trigger a 15-second security lock. Three confirmed violations permanently lock the attempt until the instructor unlocks it.</p>
+      <button type="button" id="enterFullscreen" class="primary wide">Enter Secure Exam Mode</button>
       <p id="fullscreenError" class="error-text hidden">Fullscreen was not enabled. Please allow fullscreen and try again.</p>
     </div>
   </div>
