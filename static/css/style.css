@@ -2472,3 +2472,64 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
   body:not(.exam-page) .content-card{max-width:100%}
   body:not(.exam-page) .custos-home{max-width:1010px}
 }
+
+/* =========================================================
+   Installed-app safe frame · iPhone/iPad/Android PWA
+   Keeps interactive UI clear of camera/status and home-gesture areas.
+   Desktop/browser layouts are unchanged.
+   ========================================================= */
+@media (max-width:1024px){
+  /* Non-exam screens: white header/footer extend into the OS safe areas,
+     while the actual controls sit comfortably inside them. */
+  html.pwa-standalone body:not(.exam-page) .site-header{
+    box-sizing:border-box;
+    height:auto !important;
+    min-height:calc(76px + env(safe-area-inset-top, 0px) + 8px);
+    flex-basis:calc(76px + env(safe-area-inset-top, 0px) + 8px) !important;
+    padding-top:calc(env(safe-area-inset-top, 0px) + 8px) !important;
+    padding-left:max(14px, env(safe-area-inset-left, 0px)) !important;
+    padding-right:max(14px, env(safe-area-inset-right, 0px)) !important;
+  }
+
+  html.pwa-standalone body:not(.exam-page) .site-footer{
+    box-sizing:border-box;
+    height:auto !important;
+    min-height:calc(30px + env(safe-area-inset-bottom, 0px) + 8px) !important;
+    flex-basis:calc(30px + env(safe-area-inset-bottom, 0px) + 8px) !important;
+    padding-top:4px;
+    padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+    padding-left:max(18px, env(safe-area-inset-left, 0px)) !important;
+    padding-right:max(18px, env(safe-area-inset-right, 0px)) !important;
+  }
+
+  html.pwa-standalone body:not(.exam-page) .page-shell-inner{
+    padding-bottom:max(126px, calc(88px + env(safe-area-inset-bottom, 0px)));
+  }
+
+  html.pwa-standalone body:not(.exam-page) .page-watermark{
+    bottom:calc(50px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  html.pwa-standalone body:not(.exam-page) .institution-logos,
+  html.pwa-standalone body:not(.exam-page) .institution-logos-dark{
+    bottom:calc(48px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  /* Exam app: preserve the same safe frame around the compact exam shell. */
+  html.pwa-standalone body.exam-page .exam-app{
+    padding-top:calc(env(safe-area-inset-top, 0px) + 8px) !important;
+    padding-bottom:calc(env(safe-area-inset-bottom, 0px) + 8px) !important;
+  }
+}
+
+@media (max-width:700px){
+  html.pwa-standalone body:not(.exam-page) .site-header{
+    min-height:calc(64px + env(safe-area-inset-top, 0px) + 8px);
+    flex-basis:calc(64px + env(safe-area-inset-top, 0px) + 8px) !important;
+  }
+  html.pwa-standalone body:not(.exam-page) .site-footer{
+    min-height:calc(28px + env(safe-area-inset-bottom, 0px) + 8px) !important;
+    flex-basis:calc(28px + env(safe-area-inset-bottom, 0px) + 8px) !important;
+    padding-left:max(12px, env(safe-area-inset-left, 0px)) !important;
+    padding-right:max(12px, env(safe-area-inset-right, 0px)) !important;
+  }
+}
