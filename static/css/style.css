@@ -1497,3 +1497,40 @@ body:not(.exam-page) .page-shell{
 .private-bank-import-form input[type="file"]{padding:9px;background:var(--panel)}
 .private-bank-import-form .check-row{align-self:center;margin:0}
 @media(max-width:860px){.private-bank-import-form{grid-template-columns:1fr}.private-bank-import-form button{width:100%}}
+
+
+/* =========================================================
+   Refinement patch · exam cleanliness + private import sizing
+   ========================================================= */
+/* Remove decorative footer marks from the live exam workspace. */
+.exam-page .exam-page-watermark,
+.exam-page .exam-institution-logos,
+.exam-page .exam-institution-logos-dark{
+  display:none !important;
+}
+
+/* Keep the private-bank confirmation line visually subordinate. */
+.private-bank-import-form .check-row{
+  gap:8px !important;
+  align-self:center;
+}
+.private-bank-import-form .check-row input[type="checkbox"]{
+  margin-top:1px;
+  flex:0 0 auto;
+}
+.private-bank-import-form .check-row span{
+  display:block;
+  font-size:13px;
+  line-height:1.35;
+  font-weight:600;
+  color:var(--muted);
+}
+
+/* Remove the violet left accent from dry-run summary cards. */
+.dryrun-card{
+  border-left:1px solid var(--line) !important;
+}
+
+:root[data-theme="dark"] .dryrun-card{
+  border-left:1px solid #33445a !important;
+}
