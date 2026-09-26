@@ -1911,3 +1911,273 @@ body:not(.exam-page) .page-shell{
   .page-watermark{max-width:34vw!important}
   .institution-logos{max-width:34vw}
 }
+
+/* =========================================================
+   Site-wide responsive pass · non-exam pages only
+   Targets iPhone 16 Pro Max and iPad 10th generation.
+   IMPORTANT: Everything below is scoped away from .exam-page.
+   ========================================================= */
+
+/* Prevent any non-exam component from forcing the page wider than viewport. */
+body:not(.exam-page) .page-shell-inner,
+body:not(.exam-page) .page-shell-inner > *,
+body:not(.exam-page) .content-card,
+body:not(.exam-page) .center-card,
+body:not(.exam-page) form,
+body:not(.exam-page) fieldset,
+body:not(.exam-page) .table-wrap{
+  min-width:0;
+  max-width:100%;
+}
+body:not(.exam-page) img,
+body:not(.exam-page) svg{max-width:100%}
+body:not(.exam-page) pre,
+body:not(.exam-page) .code-block{max-width:100%;overflow-x:auto}
+body:not(.exam-page) .subtle,
+body:not(.exam-page) p,
+body:not(.exam-page) td,
+body:not(.exam-page) th{overflow-wrap:anywhere}
+
+@media(max-width:1050px){
+  /* Shared cards and headings */
+  body:not(.exam-page) .center-card{
+    width:min(680px,calc(100vw - 36px));
+    margin:18px auto;
+    padding:28px;
+  }
+  body:not(.exam-page) .instructions-card,
+  body:not(.exam-page) .narrow-card{width:100%;max-width:none}
+  body:not(.exam-page) .section-heading{
+    align-items:flex-start;
+    flex-wrap:wrap;
+  }
+  body:not(.exam-page) .section-heading > *{min-width:0}
+  body:not(.exam-page) .dashboard-heading > .button-link,
+  body:not(.exam-page) .section-heading > .button-link{flex:0 0 auto}
+
+  /* Forms */
+  body:not(.exam-page) .two-col,
+  body:not(.exam-page) .session-tools-grid{grid-template-columns:1fr}
+  body:not(.exam-page) .score-form{grid-template-columns:repeat(2,minmax(0,1fr))}
+  body:not(.exam-page) .score-form .wide-field{grid-column:1/-1}
+  body:not(.exam-page) .private-bank-import-form{grid-template-columns:1fr}
+  body:not(.exam-page) .private-bank-import-form button{justify-self:start}
+  body:not(.exam-page) .question-edit-dialog{
+    width:min(760px,calc(100vw - 30px));
+    max-height:min(88dvh,900px);
+  }
+  body:not(.exam-page) .modal-editor-form{max-height:86dvh}
+
+  /* Analysis/detail views */
+  body:not(.exam-page) .response-row{
+    grid-template-columns:64px minmax(0,1fr) 96px;
+    gap:10px;
+  }
+  body:not(.exam-page) .option-review > div{
+    grid-template-columns:34px minmax(0,1fr) auto;
+  }
+
+  /* Result */
+  body:not(.exam-page) .score-total{font-size:58px}
+  body:not(.exam-page) .score-grid.three-score-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+
+  /* Home on iPad: retain two role choices, but reduce desktop whitespace. */
+  body:not(.exam-page) .custos-home{
+    width:min(900px,100%);
+    margin:14px auto;
+    gap:14px;
+  }
+  body:not(.exam-page) .custos-home-hero{padding:26px 30px 24px}
+  body:not(.exam-page) .custos-role-section{padding:21px 22px 23px}
+}
+
+@media(max-width:900px){
+  /* Instructions / terms are much easier to scan in one column. */
+  body:not(.exam-page) .instruction-grid{grid-template-columns:1fr;gap:10px}
+  body:not(.exam-page) .instruction-grid section{
+    padding:14px 15px;
+    border:1px solid var(--line);
+    border-radius:11px;
+    background:var(--soft);
+  }
+  body:not(.exam-page) .instruction-grid section h2{margin-top:0;font-size:18px}
+  body:not(.exam-page) .security-rules-grid{grid-template-columns:1fr 1fr}
+  body:not(.exam-page) .integrity-notice{padding:19px}
+
+  /* Question-bank/editor controls */
+  body:not(.exam-page) .question-editor-form{grid-template-columns:1fr}
+  body:not(.exam-page) .question-editor-form .wide-field,
+  body:not(.exam-page) .modal-heading,
+  body:not(.exam-page) .modal-actions{grid-column:auto}
+  body:not(.exam-page) .option-editor-grid{grid-template-columns:1fr 1fr}
+  body:not(.exam-page) .bank-health-row{grid-template-columns:1fr 1fr}
+
+  /* Testing / dry run */
+  body:not(.exam-page) .dryrun-grid{grid-template-columns:1fr}
+  body:not(.exam-page) .testing-form{grid-template-columns:1fr}
+  body:not(.exam-page) .trial-launch-actions{align-items:stretch}
+  body:not(.exam-page) .trial-launch-actions button{flex:1 1 220px}
+}
+
+@media(max-width:700px){
+  /* iPhone-scale app shell */
+  body:not(.exam-page) .page-shell-inner{
+    padding:14px 11px max(142px,calc(104px + env(safe-area-inset-bottom)));
+  }
+  body:not(.exam-page) .center-card{
+    width:100%;
+    margin:10px auto;
+    padding:20px 17px;
+    border-radius:16px;
+  }
+  body:not(.exam-page) .content-card{
+    padding:15px 13px;
+    margin:10px 0;
+    border-radius:14px;
+  }
+  body:not(.exam-page) h1{font-size:clamp(25px,7vw,31px);line-height:1.08}
+  body:not(.exam-page) h2{line-height:1.18}
+  body:not(.exam-page) .lead{font-size:14px}
+
+  /* Home: genuinely different from desktop rather than merely squeezed. */
+  body:not(.exam-page) .custos-home{margin:6px auto 10px;gap:10px}
+  body:not(.exam-page) .custos-home-hero{
+    padding:20px 16px 18px;
+    border-radius:16px;
+  }
+  body:not(.exam-page) .custos-home-mark{
+    width:48px;height:48px;border-radius:13px;margin-bottom:7px;
+  }
+  body:not(.exam-page) .custos-home-mark img{width:32px;height:32px}
+  body:not(.exam-page) .custos-home-hero h1{font-size:34px}
+  body:not(.exam-page) .custos-home-hero h2{font-size:16px;line-height:1.25}
+  body:not(.exam-page) .custos-home-lead{font-size:12.5px;line-height:1.45}
+  body:not(.exam-page) .custos-why{
+    margin-top:13px;
+    padding:12px 13px;
+    grid-template-columns:1fr;
+    gap:4px;
+    border-radius:11px;
+  }
+  body:not(.exam-page) .custos-why strong,
+  body:not(.exam-page) .custos-why p{font-size:12px;white-space:normal}
+  body:not(.exam-page) .custos-role-section{padding:16px 13px;border-radius:16px}
+  body:not(.exam-page) .custos-role-heading{margin-bottom:11px}
+  body:not(.exam-page) .custos-role-heading h2{font-size:20px}
+  body:not(.exam-page) .custos-role-grid{grid-template-columns:1fr;gap:9px}
+  body:not(.exam-page) .custos-role-card{
+    min-height:0;
+    grid-template-columns:44px minmax(0,1fr);
+    gap:12px;
+    padding:15px;
+    border-radius:12px;
+  }
+  body:not(.exam-page) .custos-role-icon{width:42px;height:42px;border-radius:11px}
+  body:not(.exam-page) .custos-role-icon svg{width:24px;height:24px}
+  body:not(.exam-page) .custos-role-copy h3{font-size:16px}
+  body:not(.exam-page) .custos-role-copy p{font-size:12px}
+  body:not(.exam-page) .custos-role-action{margin-top:8px}
+
+  /* Student and instructor login */
+  body:not(.exam-page) .branded-auth-card .security-orb{margin-bottom:10px}
+  body:not(.exam-page) .form-grid{gap:14px;margin-top:18px}
+  body:not(.exam-page) .student-class-grid{grid-template-columns:1fr 1fr;gap:9px}
+  body:not(.exam-page) .form-grid label{font-size:12.5px}
+  body:not(.exam-page) input,
+  body:not(.exam-page) select,
+  body:not(.exam-page) textarea{min-height:44px}
+  body:not(.exam-page) .back-link{margin-top:14px;font-size:13px}
+
+  /* Instructions / disclaimer */
+  body:not(.exam-page) .instructions-card{padding:17px 14px}
+  body:not(.exam-page) .instructions-card > p{font-size:13px;line-height:1.5}
+  body:not(.exam-page) .instruction-grid section{padding:12px 13px}
+  body:not(.exam-page) .instruction-grid p{font-size:13px;margin:8px 0}
+  body:not(.exam-page) .integrity-notice{margin:16px 0 14px;padding:14px;border-left-width:3px}
+  body:not(.exam-page) .integrity-notice-heading{align-items:flex-start;gap:10px}
+  body:not(.exam-page) .integrity-icon{width:36px;height:36px;border-radius:10px}
+  body:not(.exam-page) .integrity-notice-heading h2{font-size:18px}
+  body:not(.exam-page) .integrity-notice p{font-size:12.5px;line-height:1.55}
+  body:not(.exam-page) .security-rules-grid{grid-template-columns:1fr;gap:8px;margin:12px 0}
+  body:not(.exam-page) .security-rule-card{padding:12px 13px}
+  body:not(.exam-page) .terms-accept-row{padding:12px!important;font-size:12px}
+  body:not(.exam-page) .terms-form .primary{width:100%;min-height:44px}
+
+  /* Results */
+  body:not(.exam-page) .result-card{text-align:left}
+  body:not(.exam-page) .score-total{text-align:center;font-size:48px;margin:18px 0 10px}
+  body:not(.exam-page) .score-total span{font-size:19px}
+  body:not(.exam-page) .score-grid,
+  body:not(.exam-page) .score-grid.three-score-grid{grid-template-columns:1fr;gap:8px}
+  body:not(.exam-page) .score-grid > div{padding:13px}
+  body:not(.exam-page) .score-grid strong{font-size:23px}
+  body:not(.exam-page) .result-card .button-link,
+  body:not(.exam-page) .result-card form button{width:100%}
+
+  /* Instructor controls and forms */
+  body:not(.exam-page) .dashboard-heading > .button-link,
+  body:not(.exam-page) .section-heading > .button-link{width:100%}
+  body:not(.exam-page) .section-heading{gap:8px}
+  body:not(.exam-page) .section-heading h2{font-size:18px}
+  body:not(.exam-page) .score-form{grid-template-columns:1fr}
+  body:not(.exam-page) .score-form .wide-field{grid-column:auto}
+  body:not(.exam-page) .score-form button{width:100%}
+  body:not(.exam-page) .session-key-card{padding:14px;gap:12px}
+  body:not(.exam-page) .session-key-card code{font-size:16px;overflow-wrap:anywhere}
+  body:not(.exam-page) .session-security-summary{justify-content:flex-start}
+  body:not(.exam-page) .security-detail-list > div{align-items:flex-start;flex-direction:column;gap:3px}
+  body:not(.exam-page) .security-detail-list strong{text-align:left}
+  body:not(.exam-page) .admin-chat-form{grid-template-columns:1fr}
+  body:not(.exam-page) .admin-chat-form button{width:100%}
+
+  /* Analysis */
+  body:not(.exam-page) .analysis-legend{gap:8px;padding:10px;font-size:11px}
+  body:not(.exam-page) .topic-row{grid-template-columns:1fr;gap:6px}
+  body:not(.exam-page) .response-row{grid-template-columns:48px minmax(0,1fr) 76px;gap:7px}
+  body:not(.exam-page) .option-review > div{
+    grid-template-columns:30px minmax(0,1fr);
+    gap:8px;
+    padding:10px;
+  }
+  body:not(.exam-page) .option-review > div > small{grid-column:2}
+
+  /* Question Banks */
+  body:not(.exam-page) .private-bank-import-form{gap:10px}
+  body:not(.exam-page) .private-bank-import-form button{width:100%}
+  body:not(.exam-page) .private-bank-import-form .check-row span{font-size:12px}
+  body:not(.exam-page) .bank-health-row{grid-template-columns:1fr;gap:8px}
+  body:not(.exam-page) .option-editor-grid{grid-template-columns:1fr;gap:8px}
+  body:not(.exam-page) .add-question-submit button{width:100%}
+  body:not(.exam-page) .question-count-chip{font-size:10px}
+  body:not(.exam-page) .modal-heading{gap:8px}
+  body:not(.exam-page) .modal-heading h2{font-size:19px}
+  body:not(.exam-page) .modal-actions{flex-direction:column-reverse}
+  body:not(.exam-page) .modal-actions button{width:100%}
+
+  /* Testing */
+  body:not(.exam-page) .dryrun-grid > div{padding:11px}
+  body:not(.exam-page) .dryrun-grid code{font-size:13px;overflow-wrap:anywhere}
+  body:not(.exam-page) .trial-launch-actions{display:grid;grid-template-columns:1fr}
+  body:not(.exam-page) .trial-launch-actions button{width:100%}
+  body:not(.exam-page) .preview-identity code{font-size:12px;overflow-wrap:anywhere}
+
+  /* Footer / fixed decoration clearance on Safari. */
+  body:not(.exam-page) .page-watermark{max-width:30vw!important}
+  body:not(.exam-page) .institution-logos,
+  body:not(.exam-page) .institution-logos-dark{max-width:30vw}
+}
+
+@media(max-width:440px){
+  /* iPhone 16 Pro Max logical width is about 430px. */
+  body:not(.exam-page) .student-class-grid{grid-template-columns:1fr}
+  body:not(.exam-page) .stat-row,
+  body:not(.exam-page) .stat-row.four{grid-template-columns:1fr 1fr!important}
+  body:not(.exam-page) .stat-card{padding:12px}
+  body:not(.exam-page) .stat-card strong{font-size:22px}
+  body:not(.exam-page) .monitor-summary{grid-template-columns:1fr 1fr 1fr}
+  body:not(.exam-page) .monitor-card-metrics{grid-template-columns:1fr 1fr}
+  body:not(.exam-page) .assessment-tabs a{padding:9px 11px;font-size:11px}
+  body:not(.exam-page) .filter-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}
+  body:not(.exam-page) .filter-actions > *{width:100%}
+  body:not(.exam-page) .site-footer{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+}
