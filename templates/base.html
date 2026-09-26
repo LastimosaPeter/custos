@@ -2,7 +2,7 @@
 <html lang="en" data-theme="{{ custos_theme }}">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="csrf-token" content="{{ csrf_token() }}">
   <title>{% block title %}Custos - Portal{% endblock %}</title>
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
@@ -13,6 +13,7 @@
   <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/code_highlight.js') }}" defer></script>
   <script src="{{ url_for('static', filename='js/student_form.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='js/mobile_ui.js') }}" defer></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% block body %}
@@ -25,6 +26,7 @@
         <span>Custos</span>
       </span>
     </a>
+    <button class="mobile-nav-toggle" type="button" aria-expanded="false" aria-label="Open navigation" title="Menu"><span aria-hidden="true">☰</span></button>
     {% block header_right %}
     <nav class="site-nav" aria-label="Primary navigation">
       <a href="{{ url_for('student_login') }}">Student View</a>

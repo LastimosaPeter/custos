@@ -1681,3 +1681,233 @@ body:not(.exam-page) .page-shell{
     width:100%;
   }
 }
+
+
+/* =========================================================
+   Instructor responsive pass · iPhone 16 Pro Max + iPad 10th
+   ========================================================= */
+.mobile-nav-toggle{display:none}
+
+/* Dynamic viewport units keep Safari's bottom chrome from covering Custos. */
+@supports (height:100dvh){
+  body:not(.exam-page){height:100dvh;min-height:100dvh}
+}
+.site-footer{
+  padding-left:max(18px, env(safe-area-inset-left));
+  padding-right:max(18px, env(safe-area-inset-right));
+  padding-bottom:env(safe-area-inset-bottom);
+  flex-basis:calc(30px + env(safe-area-inset-bottom));
+  min-height:calc(30px + env(safe-area-inset-bottom));
+}
+
+/* Give the final content rows room to clear fixed course/institution marks. */
+.page-shell-inner{
+  padding-bottom:max(110px, calc(74px + env(safe-area-inset-bottom)));
+}
+
+@media(max-width:1050px){
+  body:not(.exam-page) .site-header{
+    padding-left:max(14px, env(safe-area-inset-left));
+    padding-right:max(14px, env(safe-area-inset-right));
+  }
+  .site-header .brand-lockup{min-width:0;flex:0 1 auto}
+  .brand-lockup .brand-logo{width:154px;max-width:34vw}
+  .custos-wordmark{font-size:15px;gap:6px}
+  .custos-mark{width:25px;height:25px}
+  .brand-divider{height:29px}
+
+  .mobile-nav-toggle{
+    display:inline-grid;
+    place-items:center;
+    width:38px;height:38px;min-width:38px;
+    margin-left:auto;
+    padding:0;
+    border:1px solid #d7e0ec;
+    border-radius:10px;
+    background:#f7f9fc;
+    color:#27354d;
+    font-size:22px;
+    line-height:1;
+    z-index:82;
+  }
+  .mobile-nav-toggle:hover{background:#edf4fd;color:var(--accent)}
+  .theme-toggle{margin-left:6px;z-index:82}
+
+  .site-header .admin-nav,
+  .site-header .site-nav{
+    display:none!important;
+    position:absolute;
+    top:calc(100% + 8px);
+    right:max(12px, env(safe-area-inset-right));
+    left:auto;
+    width:min(320px, calc(100vw - 24px));
+    max-width:none;
+    max-height:min(70vh,520px);
+    overflow-y:auto;
+    overflow-x:hidden;
+    margin:0!important;
+    padding:9px;
+    gap:4px;
+    flex-direction:column;
+    align-items:stretch;
+    background:rgba(255,255,255,.985);
+    border:1px solid #d7e0ec;
+    border-radius:14px;
+    box-shadow:0 18px 45px rgba(22,40,68,.20);
+    backdrop-filter:blur(18px);
+    z-index:80;
+  }
+  body.mobile-nav-open .site-header .admin-nav,
+  body.mobile-nav-open .site-header .site-nav{display:flex!important}
+  .site-header .admin-nav a,
+  .site-header .admin-nav a:not(.active),
+  .site-header .site-nav a{
+    display:flex!important;
+    width:100%;
+    min-height:42px;
+    align-items:center;
+    padding:10px 12px!important;
+    border:0!important;
+    border-radius:9px;
+    font-size:13px!important;
+    white-space:normal;
+    color:#34415a;
+  }
+  .site-header .admin-nav a.active,
+  .site-header .site-nav a:hover,
+  .site-header .admin-nav a:hover{background:#edf5ff;color:var(--accent)}
+  :root[data-theme="dark"] .mobile-nav-toggle{background:#151f2c;border-color:#35465c;color:#eef4ff}
+  :root[data-theme="dark"] .site-header .admin-nav,
+  :root[data-theme="dark"] .site-header .site-nav{background:rgba(17,25,36,.985);border-color:#35465c}
+  :root[data-theme="dark"] .site-header .admin-nav a,
+  :root[data-theme="dark"] .site-header .site-nav a{color:#dce5f2}
+
+  .page-shell-inner{padding:24px 18px max(118px, calc(86px + env(safe-area-inset-bottom)))}
+  .dashboard-heading{gap:12px;margin-bottom:16px}
+  .dashboard-heading h1{font-size:clamp(25px,4.3vw,34px)}
+  .content-card{padding:18px;margin:14px 0}
+
+  /* iPad portrait and phones: render admin tables as labeled record cards. */
+  .table-wrap{overflow:visible!important;width:100%}
+  .table-wrap table,
+  .testing-history-table,
+  .question-bank-table,
+  .analysis-table{
+    display:block;
+    width:100%!important;
+    min-width:0!important;
+    table-layout:auto!important;
+  }
+  .table-wrap thead{display:none}
+  .table-wrap tbody{display:grid;gap:12px;width:100%}
+  .table-wrap tbody tr{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:0;
+    width:100%;
+    padding:8px 12px;
+    background:var(--panel);
+    border:1px solid var(--line);
+    border-radius:12px;
+    box-shadow:0 6px 18px rgba(23,38,61,.05);
+  }
+  .table-wrap tbody td{
+    display:grid;
+    grid-template-columns:minmax(92px,34%) minmax(0,1fr);
+    align-items:start;
+    gap:10px;
+    width:auto!important;
+    min-width:0;
+    padding:9px 6px;
+    border-bottom:1px solid var(--line);
+    overflow-wrap:anywhere;
+    white-space:normal!important;
+  }
+  .table-wrap tbody td::before{
+    content:attr(data-label);
+    color:var(--muted);
+    font-size:10px;
+    font-weight:850;
+    text-transform:uppercase;
+    letter-spacing:.05em;
+  }
+  .table-wrap tbody td[colspan]{grid-column:1/-1;display:block;text-align:center;border-bottom:0}
+  .table-wrap tbody td[colspan]::before{display:none}
+  .table-wrap tbody td:nth-last-child(1){border-bottom:0}
+  .table-wrap .table-actions,
+  .table-wrap .compact-actions{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-start}
+  .table-wrap .table-action-btn,
+  .table-wrap .button-link{min-height:34px}
+  .question-code-preview{white-space:normal}
+}
+
+@media(min-width:701px) and (max-width:1050px){
+  /* iPad portrait gets two fields per record where space permits. */
+  .table-wrap tbody tr{grid-template-columns:1fr 1fr}
+  .table-wrap tbody td{grid-template-columns:minmax(88px,32%) 1fr}
+  .monitor-page{max-width:none}
+  .monitor-student-list{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .monitor-student-card{height:100%}
+}
+
+@media(max-width:700px){
+  body:not(.exam-page) .site-header{flex-basis:64px;height:64px}
+  .brand-lockup .brand-logo{width:124px;max-width:35vw}
+  .brand-divider{height:25px}
+  .custos-wordmark span:last-child{display:none}
+  .custos-mark{width:24px;height:24px}
+  .mobile-nav-toggle,.theme-toggle{width:36px;height:36px;min-width:36px}
+
+  .page-shell-inner{
+    padding:18px 12px max(132px, calc(96px + env(safe-area-inset-bottom)));
+  }
+  .content-card{padding:15px;border-radius:14px}
+  .dashboard-heading{align-items:flex-start;flex-direction:column}
+  .dashboard-heading h1{font-size:27px;line-height:1.08}
+  .eyebrow{font-size:10px}
+  .subtle{font-size:13px;line-height:1.45}
+
+  .table-wrap tbody tr{grid-template-columns:1fr;padding:7px 11px}
+  .table-wrap tbody td{grid-template-columns:minmax(86px,32%) minmax(0,1fr);grid-column:1}
+  .table-wrap tbody td:last-child{border-bottom:0}
+
+  .stat-row,.stat-row.four{grid-template-columns:1fr 1fr!important;gap:8px}
+  .stat-card{padding:14px}
+  .stat-card strong{font-size:24px}
+  .filter-grid,.testing-form,.bank-filter-bar{grid-template-columns:1fr!important}
+  .filter-grid>* ,.testing-form>* ,.bank-filter-bar>*{grid-column:auto!important}
+  .assessment-tabs{overflow-x:auto;white-space:nowrap;scrollbar-width:none}
+  .assessment-tabs::-webkit-scrollbar{display:none}
+
+  .monitor-summary{grid-template-columns:repeat(3,1fr);gap:6px}
+  .monitor-summary>div{padding:10px 7px;text-align:center}
+  .monitor-summary strong{font-size:20px}
+  .monitor-summary span{font-size:9px}
+  .monitor-student-list{grid-template-columns:1fr}
+  .monitor-student-card{padding:14px}
+  .monitor-card-metrics{grid-template-columns:1fr 1fr}
+  .monitor-card-actions .button-link{width:100%;min-height:40px}
+
+  .page-watermark{bottom:calc(42px + env(safe-area-inset-bottom))!important}
+  .institution-logos,.institution-logos-dark{bottom:calc(40px + env(safe-area-inset-bottom))!important}
+  .site-footer{
+    font-size:9px;
+    flex-basis:calc(28px + env(safe-area-inset-bottom));
+    min-height:calc(28px + env(safe-area-inset-bottom));
+    padding-left:max(12px, env(safe-area-inset-left));
+    padding-right:max(12px, env(safe-area-inset-right));
+  }
+}
+
+/* iPhone 16 Pro Max logical width is ~430px; keep controls comfortably tappable. */
+@media(max-width:440px){
+  .site-header{padding-left:10px!important;padding-right:10px!important}
+  .brand-lockup{gap:8px}.brand-lockup .brand-logo{width:118px}.brand-divider{margin:0 1px}
+  .mobile-nav-toggle{margin-left:auto}
+  button,.button-link,input,select,textarea{font-size:16px} /* avoids iOS input zoom */
+  .table-wrap tbody td{grid-template-columns:82px minmax(0,1fr);gap:8px}
+  .question-edit-dialog{width:calc(100vw - 18px);max-height:calc(100dvh - 20px)}
+  .modal-editor-form{padding:15px}
+  .page-watermark{max-width:34vw!important}
+  .institution-logos{max-width:34vw}
+}
