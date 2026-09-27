@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-next6';
+const CACHE_NAME = 'custos-static-v098-next7';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',

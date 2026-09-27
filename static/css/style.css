@@ -3071,3 +3071,133 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
     margin-right:0;
   }
 }
+
+
+/* =========================================================
+   Custos mobile lockup + footer fade alignment pass
+   2026-09-27
+   ========================================================= */
+
+/* A soft fixed fade separates page content from the persistent course marks.
+   The marks themselves sit above this layer. */
+.footer-fade{
+  position:fixed;
+  left:0;
+  right:0;
+  bottom:28px;
+  height:118px;
+  z-index:1;
+  pointer-events:none;
+  user-select:none;
+  background:linear-gradient(
+    to bottom,
+    rgba(255,255,255,0) 0%,
+    rgba(255,255,255,.16) 22%,
+    rgba(255,255,255,.58) 58%,
+    rgba(255,255,255,.93) 100%
+  );
+}
+:root[data-theme="dark"] .footer-fade{
+  background:linear-gradient(
+    to bottom,
+    rgba(14,20,29,0) 0%,
+    rgba(14,20,29,.18) 22%,
+    rgba(14,20,29,.62) 58%,
+    rgba(14,20,29,.95) 100%
+  );
+}
+.ide-page .footer-fade{display:none!important}
+
+/* Home breadcrumb follows the exact same 1040px centered column as
+   the Custos hero and role-selection cards. */
+.home-page .breadcrumb-nav{
+  width:min(1040px,100%);
+  margin-left:auto;
+  margin-right:auto;
+}
+
+/* Phone header lockup: [Custos mark] Custos | Subject.
+   Keep every brand element on one horizontal baseline. */
+@media(max-width:700px){
+  .site-header .brand-lockup{
+    display:flex!important;
+    flex-direction:row!important;
+    align-items:center!important;
+    flex-wrap:nowrap!important;
+    gap:7px!important;
+    min-width:0!important;
+    max-width:calc(100% - 88px);
+    overflow:hidden!important;
+  }
+  .site-header .custos-wordmark,
+  html.pwa-standalone body:not(.exam-page) .site-header .custos-wordmark{
+    display:inline-flex!important;
+    flex-direction:row!important;
+    align-items:center!important;
+    flex-wrap:nowrap!important;
+    gap:5px!important;
+    flex:0 0 auto!important;
+    min-width:max-content!important;
+    white-space:nowrap!important;
+  }
+  .site-header .custos-header-orb,
+  html.pwa-standalone body:not(.exam-page) .site-header .custos-header-orb{
+    display:inline-grid!important;
+    place-items:center!important;
+    width:32px!important;
+    height:32px!important;
+    min-width:32px!important;
+    flex:0 0 32px!important;
+    border-radius:10px!important;
+  }
+  .site-header .custos-header-orb .custos-mark{
+    width:23px!important;
+    height:23px!important;
+    min-width:23px!important;
+  }
+  .site-header .custos-wordmark>span:last-child{
+    display:inline!important;
+    font-size:13px!important;
+    line-height:1!important;
+    white-space:nowrap!important;
+  }
+  .site-header .brand-divider{
+    display:block!important;
+    width:1px!important;
+    height:28px!important;
+    flex:0 0 1px!important;
+    margin:0 1px!important;
+  }
+  .site-header .subject-brand-logo{
+    display:block!important;
+    width:104px!important;
+    max-width:30vw!important;
+    height:auto!important;
+    flex:0 1 104px!important;
+    object-fit:contain;
+  }
+  .footer-fade{
+    bottom:26px;
+    height:112px;
+  }
+}
+
+@media(max-width:390px){
+  .site-header .brand-lockup{gap:6px!important;max-width:calc(100% - 84px)}
+  .site-header .custos-header-orb,
+  html.pwa-standalone body:not(.exam-page) .site-header .custos-header-orb{
+    width:30px!important;height:30px!important;min-width:30px!important;flex-basis:30px!important;
+  }
+  .site-header .custos-header-orb .custos-mark{width:21px!important;height:21px!important;min-width:21px!important}
+  .site-header .custos-wordmark>span:last-child{font-size:12px!important}
+  .site-header .subject-brand-logo{width:88px!important;max-width:27vw!important;flex-basis:88px!important}
+}
+
+/* Installed app: place the fade immediately above the compact footer plus
+   the platform's bottom safe area, without doubling that safe inset. */
+@media(max-width:1024px){
+  html.pwa-standalone body:not(.exam-page) .footer-fade{
+    bottom:calc(26px + env(safe-area-inset-bottom, 0px));
+    height:116px;
+  }
+}
