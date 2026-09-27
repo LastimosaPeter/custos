@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-next9-caudexcompact';
+const CACHE_NAME = 'custos-static-v098-next10-caudexwordmark';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -14,7 +14,9 @@ const STATIC_ASSETS = [
   '/static/img/pwa-icon-192.png',
   '/static/img/pwa-icon-512.png',
   '/static/img/csdc101-logo.png',
-  '/static/img/caudex-logo.png'
+  '/static/img/caudex-logo.png',
+  '/static/img/caudex-wordmark-light.png',
+  '/static/img/caudex-wordmark-dark.png'
 ];
 
 self.addEventListener('install', event => {
@@ -73,3 +75,5 @@ self.addEventListener('fetch', event => {
 // UI cache refresh: Caudex IDE reveal 2026-09-27
 
 // UI cache refresh: Caudex compact lockup 2026-09-27
+
+// UI cache refresh: theme-aware Caudex wordmark 2026-09-27

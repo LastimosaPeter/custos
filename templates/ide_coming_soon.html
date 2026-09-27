@@ -16,9 +16,18 @@
 
     <div class="caudex-introduction" aria-labelledby="caudex-brand-title">
       <p class="caudex-intro-label">Allow us to introduce you to</p>
-      <div class="caudex-brand-lockup">
-        <img class="caudex-logo" src="{{ url_for('static', filename='img/caudex-logo.png') }}" alt="Caudex IDE logo">
-        <h2 id="caudex-brand-title" class="caudex-wordmark"><em>Caudex</em> <span>IDE</span></h2>
+      <div class="caudex-brand-lockup" id="caudex-brand-title" aria-label="Caudex IDE">
+        <img
+          class="caudex-full-wordmark caudex-wordmark-light"
+          src="{{ url_for('static', filename='img/caudex-wordmark-light.png') }}"
+          alt="Caudex IDE"
+        >
+        <img
+          class="caudex-full-wordmark caudex-wordmark-dark"
+          src="{{ url_for('static', filename='img/caudex-wordmark-dark.png') }}"
+          alt=""
+          aria-hidden="true"
+        >
       </div>
     </div>
 

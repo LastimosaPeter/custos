@@ -3247,54 +3247,32 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
   letter-spacing:.02em;
   color:var(--muted)!important;
 }
-.caudex-brand-lockup{
+ .caudex-brand-lockup{
   display:flex;
   align-items:center;
   justify-content:center;
-  gap:12px;
-  width:max-content;
+  width:100%;
   max-width:100%;
   margin:0 auto;
 }
-.caudex-logo{
-  width:56px;
-  height:56px;
+.caudex-full-wordmark{
   display:block;
+  width:min(390px,78vw);
+  max-width:100%;
+  height:auto;
   object-fit:contain;
-  flex:0 0 56px;
 }
-.caudex-wordmark{
-  margin:0;
-  color:var(--ink);
-  font-family:"New York Extra Large","New York",ui-serif,Georgia,"Times New Roman",serif;
-  font-size:36px;
-  line-height:1;
-  font-weight:600;
-  letter-spacing:-.04em;
-  text-align:left;
-  white-space:nowrap;
-}
-.caudex-wordmark em{
-  font-family:inherit;
-  font-style:italic;
-  font-weight:500;
-}
-.caudex-wordmark span{
-  font-style:normal;
-  font-weight:600;
-  letter-spacing:-.03em;
-}
+.caudex-wordmark-dark{display:none}
+:root[data-theme="dark"] .caudex-wordmark-light{display:none}
+:root[data-theme="dark"] .caudex-wordmark-dark{display:block}
 :root[data-theme="dark"] .caudex-introduction{
   border-color:rgba(255,255,255,.13);
 }
 @media(max-width:620px){
   .caudex-coming-soon-card{padding:28px 20px 26px}
   .caudex-introduction{margin-top:22px;padding:20px 10px 18px}
-  .caudex-brand-lockup{gap:10px}
-  .caudex-logo{width:48px;height:48px;flex-basis:48px}
-  .caudex-wordmark{font-size:32px}
+  .caudex-full-wordmark{width:min(330px,82vw)}
 }
 @media(max-width:390px){
-  .caudex-logo{width:42px;height:42px;flex-basis:42px}
-  .caudex-wordmark{font-size:28px}
+  .caudex-full-wordmark{width:min(290px,84vw)}
 }
