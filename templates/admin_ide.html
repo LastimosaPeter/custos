@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Custos - Programming IDE{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(admin_assessment|default("posttest")) }}
+{% endblock %}
+{% block content %}
+<div class="dashboard-heading"><div><div class="eyebrow">CUSTOS PROGRAMMING LAB</div><h1>Secure C++ IDE</h1><p class="subtle">Create coding tasks, monitor attempts, and review submissions without weakening the exam-security model.</p></div><a class="secondary button-link" href="{{ url_for('nextgen.workspace') }}">Manage Workspace</a></div>
+<div class="ide-private-banner"><strong>Student access restricted</strong><span>The IDE is included in this build for instructor development and preview only. Public student entry remains behind <code>STUDENT_IDE_ENABLED=0</code>.</span></div>
+<div class="runner-banner {{ 'ready' if runner.ready else 'warning' }}"><strong>{{ 'Runner ready' if runner.ready else 'Runner not configured' }}</strong><span>{{ runner.detail }} · backend: <code>{{ runner.backend }}</code></span></div>
+
+<div class="ide-admin-grid">
+{% for lab in labs %}
+  <section class="content-card ide-lab-card"><div class="section-heading"><div><div class="eyebrow">{{ lab.subject_code }}</div><h2>{{ lab.title }}</h2><p class="subtle">{{ lab.task_count }} tasks · {{ lab.duration_minutes }} min · {{ lab.active_sessions }} active</p></div><span class="status {{ 'submitted' if lab.assessment_active else 'in_progress' }}">{{ 'Active' if lab.assessment_active else 'Disabled' }}</span></div>
+    <div class="ide-key-box"><span>Student session key</span><code>{{ lab.access_code }}</code></div>
+    <div class="button-row compact"><a class="primary button-link" href="{{ url_for('nextgen.admin_ide_lab', lab_id=lab.id) }}">Manage Lab</a><form method="post" action="{{ url_for('nextgen.admin_ide_preview', lab_id=lab.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary" type="submit">Open IDE Preview</button></form></div>
+  </section>
+{% else %}<div class="content-card"><p>No Programming Labs yet. Create one from Workspace.</p></div>{% endfor %}
+</div>
+
+<section class="content-card"><div class="section-heading"><div><h2>Recent Coding Sessions</h2><p class="subtle">Programming attempts are separate from objective-exam sessions.</p></div></div><div class="table-wrap"><table><thead><tr><th>Student</th><th>Lab</th><th>Status</th><th>Score</th><th>Security</th><th>Started</th><th></th></tr></thead><tbody>
+{% for s in sessions %}<tr><td><strong>{% if s.last_name or s.first_name %}{{ s.last_name or '' }}{% if s.last_name and s.first_name %}, {% endif %}{{ s.first_name or '' }}{% else %}{{ s.student_name }}{% endif %}</strong><br><small>{{ s.program }} {{ s.class_section }} · {{ s.email }}</small></td><td>{{ s.lab_title }}</td><td><span class="status {{ s.status }}">{{ s.status|replace('_',' ') }}</span></td><td>{{ '%.2f'|format(s.total_score or 0) }}</td><td>{% if s.security_locked %}<span class="security-state-badge locked">Locked</span>{% else %}{{ s.violation_count }}/3 violations · {{ s.flagged_count }} flags{% endif %}</td><td>{{ s.started_at }}</td><td><a class="secondary button-link table-action-btn" href="{{ url_for('nextgen.admin_ide_session', sid=s.id) }}">Review</a></td></tr>{% else %}<tr><td colspan="7" class="empty-cell">No coding sessions yet.</td></tr>{% endfor %}
+</tbody></table></div></section>
+{% endblock %}

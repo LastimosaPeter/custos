@@ -1,7 +1,7 @@
 {
-  "name": "Custos \u2014 The Official Assessment Portal of CSDC101",
+  "name": "Custos — Secure Assessment Platform",
   "short_name": "Custos",
-  "description": "The official secure assessment portal of CSDC101.",
+  "description": "Secure multi-subject assessment platform for proctored quizzes, examinations, and future programming labs.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
@@ -31,6 +31,19 @@
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Student Assessment",
+      "short_name": "Assessment",
+      "url": "/login",
+      "icons": [
+        {
+          "src": "/static/img/pwa-icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }

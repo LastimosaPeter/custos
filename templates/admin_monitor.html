@@ -1,13 +1,14 @@
 {% extends "base.html" %}
 {% block title %}Custos - Live Monitor{% endblock %}
 {% block header_right %}
-<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment='posttest') }}">Dashboard</a><a class="active" href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment='posttest') }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment='posttest') }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment='posttest') }}">Testing</a><a href="{{ url_for('admin_logout') }}">Sign out</a></nav>
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(assessment|default("posttest")) }}
 {% endblock %}
 {% block content %}
 <div class="monitor-page" data-monitor-endpoint="{{ url_for('admin_monitor_data') }}">
   <div class="dashboard-heading monitor-heading">
-    <div><div class="eyebrow">INSTRUCTOR VIEW · MOBILE MONITOR</div><h1>Live Exam Monitor</h1><p class="subtle">Students needing attention are shown first. Security flags are indicators for review, not automatic findings of misconduct.</p></div>
-    <div class="monitor-refresh-state"><span class="live-pulse"></span><span id="monitorUpdated">Live</span></div>
+    <div><div class="eyebrow">INSTRUCTOR VIEW · LIVE ACTIVITY</div><h1>Live Exam Monitor</h1><p class="subtle">Students needing attention are shown first. Security flags are indicators for review, not automatic findings of misconduct.</p></div>
+    <div class="monitor-refresh-state"><span class="live-pulse" aria-hidden="true"></span><span id="monitorUpdated">Live</span></div>
   </div>
 
   <div class="monitor-summary" id="monitorSummary">
@@ -18,16 +19,21 @@
 
   <div class="monitor-toolbar">
     <label>Show<select id="monitorFilter"><option value="all">All active students</option><option value="attention">Needs attention</option><option value="locked">Locked only</option><option value="clear">Clear only</option></select></label>
-    <button type="button" class="secondary" id="monitorRefresh">Refresh now</button>
+    <div class="monitor-toolbar-actions"><a class="secondary button-link" href="{{ url_for('admin_messages') }}">Messages</a><button type="button" class="secondary" id="monitorRefresh">Refresh now</button></div>
   </div>
 
   <div class="monitor-student-list" id="monitorStudentList">
     {% for s in students %}
-    <article class="monitor-student-card attention-{{ s.attention_level }}" data-level="{{ s.attention_level }}">
-      <div class="monitor-card-top"><div><strong>{{ s.student_name or s.email }}</strong><span>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.batch_name }}</span></div><span class="monitor-attention-badge {{ s.attention_level }}">{{ s.attention_label }}</span></div>
+    <article class="monitor-student-card attention-{{ s.attention_level }}" data-level="{{ s.attention_level }}" data-session-id="{{ s.id }}">
+      <div class="monitor-card-top"><div><strong>{% if s.last_name or s.first_name %}{{ s.last_name or '' }}{% if s.last_name and s.first_name %}, {% endif %}{{ s.first_name or '' }}{% else %}{{ s.student_name or s.email }}{% endif %}</strong><span>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.batch_name }}</span></div><span class="monitor-attention-badge {{ s.attention_level }}">{{ s.attention_label }}</span></div>
       <div class="monitor-card-metrics"><div><span>Violations</span><strong>{{ s.violation_count or 0 }}/3</strong></div><div><span>Flags</span><strong>{{ s.flagged_count or 0 }}</strong></div><div><span>Answered</span><strong>{{ s.answered }}/{{ s.total }}</strong></div><div><span>Chat</span><strong>{{ s.unread_messages or 0 }}</strong></div></div>
       <div class="monitor-last-event"><span>Latest event</span><strong>{{ (s.last_event or 'No event yet')|replace('_',' ') }}</strong>{% if s.last_event_detail %}<small>{{ s.last_event_detail }}</small>{% endif %}</div>
-      <div class="monitor-card-actions"><a class="primary button-link" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review Student</a></div>
+      <div class="monitor-card-actions">
+        {% if s.security_locked or s.pending_blackout %}<button type="button" class="secondary monitor-action-btn" data-monitor-action="clear_security">Clear Lock</button>{% endif %}
+        <a class="secondary button-link" href="{{ url_for('admin_messages') }}?session={{ s.id }}">Message</a>
+        <button type="button" class="secondary monitor-action-btn" data-monitor-action="mark_done">Mark Done</button>
+        <a class="primary button-link" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review Student</a>
+      </div>
     </article>
     {% else %}<div class="monitor-empty">No active student sessions right now.</div>{% endfor %}
   </div>

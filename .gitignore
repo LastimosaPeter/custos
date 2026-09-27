@@ -18,3 +18,9 @@ question_bank.py
 all_question_banks*.csv
 *test_set*.csv
 *test_sets*.zip
+
+# Private build artifacts
+private_banks/
+*.db
+*.sqlite
+*.sqlite3

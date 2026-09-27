@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-pwa1';
+const CACHE_NAME = 'custos-static-v098-next2';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -8,6 +8,7 @@ const STATIC_ASSETS = [
   '/static/js/code_highlight.js',
   '/static/js/student_form.js',
   '/static/js/exam.js',
+  '/static/js/ide.js',
   '/static/img/favicon.png',
   '/static/img/apple-touch-icon.png',
   '/static/img/pwa-icon-192.png',
@@ -45,7 +46,8 @@ self.addEventListener('fetch', event => {
     url.pathname.startsWith('/exam') ||
     url.pathname.startsWith('/instructions') ||
     url.pathname.startsWith('/admin') ||
-    url.pathname.startsWith('/login')
+    url.pathname.startsWith('/login') ||
+    url.pathname.startsWith('/ide')
   ) {
     event.respondWith(fetch(request));
     return;

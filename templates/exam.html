@@ -5,10 +5,10 @@
 <div id="examApp" class="exam-app" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}">
   <header class="exam-header">
     <div class="exam-brand">
-      <div class="exam-brand-lockup" aria-label="CSDC101 Custos">
-        <img class="exam-brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="CSDC101">
+      <div class="exam-brand-lockup" aria-label="Custos CSDC101">
+        <span class="exam-custos-wordmark"><span class="exam-custos-orb"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></span><span>Custos</span></span>
         <span class="exam-brand-divider" aria-hidden="true"></span>
-        <span class="exam-custos-wordmark"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""><span>Custos</span></span>
+        <img class="exam-brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="CSDC101">
       </div>
       <div class="exam-brand-copy">
         <strong>{{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }} {% if exam_session.is_test %}<em class="test-chip">TEST MODE</em>{% endif %}</strong>
@@ -18,7 +18,7 @@
     <div class="exam-header-meta">
       {% if exam_session.is_test and session.get('admin_id') %}<form method="post" action="{{ url_for('admin_testing_return') }}" class="inline-form test-return-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="test-return" type="submit">Return to Instructor</button></form>{% else %}<span>{{ exam_session.email }}</span>{% endif %}
       <button type="button" id="questionNavToggle" class="secondary exam-items-toggle" aria-controls="questionNavigator" aria-expanded="false">Items</button>
-      <button class="theme-toggle exam-theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>☾</span></button>
+      <button class="theme-toggle exam-theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>🌙</span></button>
     </div>
   </header>
 

@@ -23,6 +23,10 @@ services:
         value: Asia/Manila
       - key: SESSION_COOKIE_SECURE
         value: "1"
+      - key: STUDENT_IDE_ENABLED
+        value: "0"
+      - key: CODE_RUNNER_BACKEND
+        value: disabled
 
 databases:
   - name: custos-db

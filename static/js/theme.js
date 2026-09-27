@@ -9,7 +9,7 @@
       btn.setAttribute('aria-label', dark ? 'Switch to light mode' : 'Switch to dark mode');
       btn.setAttribute('title', dark ? 'Switch to light mode' : 'Switch to dark mode');
       const icon = btn.querySelector('[data-theme-icon]');
-      if (icon) icon.textContent = dark ? '☀' : '☾';
+      if (icon) icon.textContent = dark ? '☀️' : '🌙';
     });
   }
 

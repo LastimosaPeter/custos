@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Custos - Configure Set{% endblock %}
-{% block header_right %}<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=batch.assessment_type) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=batch.assessment_type) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=batch.assessment_type) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=batch.assessment_type) }}">Testing</a></nav>{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(batch.assessment_type) }}
+{% endblock %}
 {% block content %}
 <div class="content-card narrow-card">
   <div class="eyebrow">{% if batch.assessment_type == 'posttest' %}POST-TEST · SET {{ batch.slot - 8 }}{% else %}MIDTERM · SET {{ batch.slot }}{% endif %}</div>

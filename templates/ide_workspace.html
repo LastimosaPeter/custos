@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% block title %}Custos - Secure C++ IDE{% endblock %}
+{% block body_class %}ide-page{% endblock %}
+{% block body %}
+<div id="ideApp" class="ide-app" data-remaining="{{ remaining if remaining is not none else '' }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-violation-count="{{ security.violation_count }}" data-is-test="{{ 1 if cs.is_test else 0 }}">
+  <header class="ide-header">
+    <div class="ide-brand-lockup" aria-label="Custos IDE · {{ cs.subject_code }}">
+      <strong class="ide-custos-identity"><span class="ide-custos-orb"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></span><span>Custos IDE</span></strong>
+      <span class="ide-brand-divider" aria-hidden="true"></span>
+      <img class="ide-subject-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="{{ cs.subject_code }}">
+    </div>
+    <div class="ide-header-meta"><span>{{ cs.student_name }}</span><button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme"><span data-theme-icon>🌙</span></button></div>
+  </header>
+
+  <div class="ide-shell">
+    <aside class="ide-task-nav" id="ideTaskNav">
+      <div class="ide-task-nav-head"><div><strong>{{ cs.subject_code }}</strong><span>{{ cs.lab_title }}</span></div><button type="button" id="ideTaskNavClose" class="ide-mobile-close">×</button></div>
+      <div class="ide-task-list">
+      {% for t in tasks %}<button type="button" class="ide-task-button {% if loop.first %}active{% endif %}" data-task-index="{{ loop.index0 }}"><span>{{ t.position }}</span><div><strong>{{ t.title }}</strong><small>{{ t.score }}/{{ t.points }} pts · {{ t.last_status|replace('_',' ') }}</small></div></button>{% endfor %}
+      </div>
+      <div class="ide-security-mini"><span>Security</span><strong id="ideViolationMini">{{ security.violation_count }}/3 violations</strong></div>
+    </aside>
+    <div class="ide-task-backdrop" id="ideTaskBackdrop"></div>
+
+    <main class="ide-main">
+      <div class="ide-topbar"><button type="button" id="ideTaskNavToggle" class="secondary ide-task-toggle">Tasks</button><div><strong>{{ cs.assessment_title }}</strong><span>{{ cs.subject_name }}</span></div><div class="ide-save-state" id="ideSaveState">Saved</div><div class="ide-timer" id="ideTimer">{{ 'Untimed' if remaining is none else '--:--:--' }}</div></div>
+
+      {% for t in tasks %}
+      <section class="ide-task-panel {% if not loop.first %}hidden{% endif %}" data-task-index="{{ loop.index0 }}" data-task-id="{{ t.id }}" data-points="{{ t.points }}">
+        <div class="ide-problem-pane">
+          <div class="eyebrow">TASK {{ t.position }} · {{ t.points }} POINTS</div>
+          <h1>{{ t.title }}</h1>
+          <p>{{ t.prompt }}</p>
+          <div class="ide-task-status"><span>Status</span><strong class="js-task-status">{{ t.last_status|replace('_',' ')|title }}</strong><span>Runs</span><strong class="js-run-count">{{ t.run_count }}</strong></div>
+        </div>
+        <div class="ide-editor-pane">
+          <div class="ide-editor-toolbar"><span>C++17 · <strong>main.cpp</strong></span><span>JetBrains Mono</span></div>
+          <div class="ide-editor-wrap"><pre class="ide-line-numbers" aria-hidden="true"></pre><textarea class="ide-code-editor" spellcheck="false" autocomplete="off" autocapitalize="off">{{ t.source_code }}</textarea></div>
+        </div>
+        <div class="ide-console-pane">
+          <div class="ide-console-grid">
+            <label class="ide-input-box"><span>Custom input (stdin)</span><textarea class="ide-stdin" spellcheck="false">{{ t.stdin_text }}</textarea></label>
+            <div class="ide-output-box"><div class="ide-output-head"><span>Console</span><strong class="js-output-status">{{ t.last_status|replace('_',' ')|title }}</strong></div><pre class="ide-output">{{ t.last_output or 'Run your program to see output here.' }}</pre></div>
+          </div>
+        </div>
+      </section>
+      {% endfor %}
+
+      <footer class="ide-footer">
+        <div class="ide-footer-left"><span><strong id="ideCurrentTaskLabel">Task 1</strong></span><span class="ide-footer-separator">·</span><span id="ideRunnerStatus">{{ runner.backend }} {{ 'ready' if runner.ready else 'not configured' }}</span></div>
+        <div class="ide-footer-actions"><button type="button" id="ideSaveBtn" class="secondary">Save</button><button type="button" id="ideRunBtn" class="primary">Run Code</button><button type="button" id="ideSubmitTaskBtn" class="secondary">Submit Task</button><span class="footer-control-divider">|</span><button type="button" id="ideFinishBtn" class="danger-ghost">Finish Lab</button></div>
+      </footer>
+    </main>
+  </div>
+
+  <div id="ideSecureOverlay" class="overlay active" role="dialog" aria-modal="true"><div class="overlay-card"><img class="security-lock-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt=""><h2>Enter Secure Programming Mode</h2><p>Use fullscreen on desktop or launch installed Custos on iOS/Android. Leaving the IDE can trigger the same security penalties as an exam.</p><button id="ideEnterSecure" class="primary wide" type="button">Enter Secure IDE</button><p id="ideSecureError" class="error-text hidden">Secure display mode could not be enabled.</p></div></div>
+
+  <div id="ideLockOverlay" class="security-lock-overlay {% if security.permanent or security.pending or security.temp_remaining > 0 %}active{% endif %}" role="dialog" aria-modal="true"><div class="security-lock-content"><img class="security-lock-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt=""><div class="security-lock-kicker">CUSTOS IDE SECURITY</div><h2 id="ideLockTitle">{% if security.permanent %}Coding Session Locked{% else %}Security Lock{% endif %}</h2><div id="ideLockCountdown" class="security-lock-countdown">{% if security.permanent %}INSTRUCTOR REQUIRED{% elif security.pending %}…{% else %}{{ security.temp_remaining }}{% endif %}</div><p id="ideLockMessage">{% if security.permanent %}Only your instructor can unlock this coding session.{% else %}The editor is temporarily unavailable because a focus/fullscreen violation was recorded.{% endif %}</p><p>Recorded violations: <strong id="ideViolationCount">{{ security.violation_count }}</strong> / 3</p><button id="ideResumeSecure" class="primary hidden" type="button">Return to Secure Mode</button></div></div>
+
+  <div id="ideInactiveOverlay" class="overlay" role="dialog" aria-modal="true"><div class="overlay-card"><h2>Are you still there?</h2><p>No coding, mouse, keyboard, touch, or scroll activity was detected for one minute. This event has been logged.</p><button type="button" id="ideStillHere" class="primary wide">I’m still here</button></div></div>
+
+  <div id="ideFinishOverlay" class="overlay" role="dialog" aria-modal="true"><div class="overlay-card"><h2>Finish Programming Lab?</h2><p>Custos will submit the current task scores and close this attempt. You cannot continue editing afterward.</p><div class="button-row"><button type="button" id="ideCancelFinish" class="secondary">Keep Coding</button><form method="post" action="{{ url_for('nextgen.ide_finish') }}" id="ideFinishForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger" type="submit">Finish Lab</button></form></div></div></div>
+</div>
+<script src="{{ url_for('static', filename='js/ide.js') }}" defer></script>
+{% endblock %}

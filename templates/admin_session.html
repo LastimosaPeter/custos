@@ -1,12 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Custos - Session Review{% endblock %}
-{% block header_right %}<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=ex.assessment_type) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=ex.assessment_type) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=ex.assessment_type) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=ex.assessment_type) }}">Testing</a></nav>{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(ex.assessment_type) }}
+{% endblock %}
 {% block content %}
 <div class="dashboard-heading">
-  <div><div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST SESSION{% else %}SESSION REVIEW{% endif %}</div><h1>{{ ex.test_label if ex.is_test and ex.test_label else (ex.student_name or ex.email) }}</h1><p>{% if not ex.is_test and ex.student_name %}{{ ex.program or '—' }} {{ ex.class_section or '' }} · {{ ex.email }} · {% endif %}{{ ex.batch_name }}{% if ex.is_test %} · Excluded from item analysis{% endif %}</p></div>
+  <div><div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST SESSION{% else %}SESSION REVIEW{% endif %}</div><h1>{% if ex.is_test and ex.test_label %}{{ ex.test_label }}{% elif ex.last_name or ex.first_name %}{{ ex.last_name or '' }}{% if ex.last_name and ex.first_name %}, {% endif %}{{ ex.first_name or '' }}{% else %}{{ ex.student_name or ex.email }}{% endif %}</h1><p>{% if not ex.is_test and ex.student_name %}{{ ex.program or '—' }} {{ ex.class_section or '' }} · {{ ex.email }} · {% endif %}{{ ex.batch_name }}{% if ex.is_test %} · Excluded from item analysis{% endif %}</p></div>
   <div class="session-security-summary">
     {% if security.permanent %}<span class="security-state-badge locked">ATTEMPT LOCKED</span>{% elif security.pending %}<span class="security-state-badge temporary">LOCK PENDING</span>{% elif security.temp_remaining > 0 %}<span class="security-state-badge temporary">TEMPORARY LOCK</span>{% else %}<span class="security-state-badge clear">ACTIVE / CLEAR</span>{% endif %}
     <span class="flag-badge">{{ ex.flagged_count }} proctoring flags</span>
+    {% if ex.monitor_done %}<span class="security-state-badge clear">MONITOR DONE</span>{% endif %}
   </div>
 </div>
 
@@ -28,16 +32,14 @@
       <div><span>Terms accepted</span><strong>{{ ex.terms_accepted_at or '—' }}</strong></div>
       <div><span>Violation count</span><strong>{{ ex.violation_count or 0 }}</strong></div>
     </div>
-    {% if security.permanent %}
-    <form method="post" action="{{ url_for('admin_unlock_session', sid=ex.id) }}" onsubmit="return confirm('Unlock this exam attempt? The recorded violation count will be retained.');">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <button type="submit" class="primary wide">Unlock Student Attempt</button>
-    </form>
-    <p class="micro">Unlocking restores access, but the violation count remains in the audit trail. Another major violation can lock the attempt again.</p>
-    {% endif %}
+    <div class="session-control-actions" data-session-control data-session-id="{{ ex.id }}">
+      {% if security.permanent or security.pending or security.temp_remaining > 0 %}<button type="button" class="primary" data-monitor-action="clear_security">Clear Active Security Lock</button>{% endif %}
+      <button type="button" class="secondary" data-monitor-action="{{ 'restore' if ex.monitor_done else 'mark_done' }}">{{ 'Return to Live Monitor' if ex.monitor_done else 'Mark Done in Monitor' }}</button>
+    </div>
+    <p class="micro">Clearing a lock restores access while retaining recorded violations. Mark Done only removes this attempt from Live Monitor; it does not alter answers, scores, or submission status.</p>
   </div>
 
-  <div class="content-card instructor-chat-card" data-admin-chat data-chat-url="{{ url_for('admin_chat_messages', sid=ex.id) }}">
+  <div class="content-card instructor-chat-card" data-admin-chat data-chat-url="{{ url_for('admin_chat_messages', sid=ex.id) }}" data-chat-send-url="{{ url_for('admin_chat_send', sid=ex.id) }}">
     <div class="section-heading"><div><h2>Student Chat</h2><p class="subtle">Clarifications sent from the live exam.</p></div><span class="chat-live-dot">LIVE</span></div>
     <div id="adminChatMessages" class="admin-chat-messages">
       {% for m in messages %}
@@ -65,14 +67,26 @@
   </form>
 </div>
 
-<div class="content-card">
-  <h2>Answer Audit</h2>
-  <div class="table-wrap">
-  <table>
-    <thead><tr><th>#</th><th>Part</th><th>Topic</th><th>Selected</th><th>Correct</th><th>Result</th></tr></thead>
-    <tbody>{% for a in answers %}<tr><td>{{ a.q_order }}</td><td>{{ a.part }}</td><td>{{ a.topic }}</td><td>{{ a.selected_option or '—' }}</td><td>{{ a.correct_option }}</td><td>{% if a.selected_option == a.correct_option %}Correct{% else %}Incorrect{% endif %}</td></tr>{% endfor %}</tbody>
-  </table>
-  </div>
+<div class="session-audit-grid">
+  <section class="content-card session-audit-card">
+    <div class="section-heading"><div><h2>Answer Audit</h2><p class="subtle">Selections and answer-key comparison.</p></div></div>
+    <div class="table-wrap session-audit-scroll">
+      <table>
+        <thead><tr><th>#</th><th>Part</th><th>Topic</th><th>Selected</th><th>Correct</th><th>Result</th></tr></thead>
+        <tbody>{% for a in answers %}<tr><td>{{ a.q_order }}</td><td>{{ a.part }}</td><td>{{ a.topic }}</td><td>{{ a.selected_option or '—' }}</td><td>{{ a.correct_option }}</td><td>{% if a.selected_option == a.correct_option %}Correct{% else %}Incorrect{% endif %}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="content-card session-audit-card">
+    <div class="section-heading"><div><h2>Proctoring Event Log</h2><p class="subtle">Chronological security and activity events.</p></div></div>
+    <div class="table-wrap session-audit-scroll">
+      <table>
+        <thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
+        <tbody>{% for e in events %}<tr><td>{{ e.created_at }}</td><td><code>{{ e.event_type }}</code></td><td>{{ e.detail or '—' }}</td></tr>{% else %}<tr><td colspan="3">No events.</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+  </section>
 </div>
 
 {% if bonus_audit %}
@@ -84,16 +98,7 @@
 </div>
 {% endif %}
 
-<div class="content-card">
-  <h2>Proctoring Event Log</h2>
-  <div class="table-wrap">
-  <table>
-    <thead><tr><th>Time</th><th>Event</th><th>Detail</th></tr></thead>
-    <tbody>
-      {% for e in events %}<tr><td>{{ e.created_at }}</td><td><code>{{ e.event_type }}</code></td><td>{{ e.detail or '—' }}</td></tr>{% else %}<tr><td colspan="3">No events.</td></tr>{% endfor %}
-    </tbody>
-  </table>
-  </div>
-</div>
+<script src="{{ url_for('static', filename='js/admin_session_controls.js') }}" defer></script>
 <script src="{{ url_for('static', filename='js/admin_chat.js') }}" defer></script>
 {% endblock %}
+

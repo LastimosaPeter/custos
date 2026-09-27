@@ -1,6 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Custos - Edit Question{% endblock %}
-{% block header_right %}<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a class="active" href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a></nav>{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(assessment) }}
+{% endblock %}
 {% block content %}
 <a class="back-link" href="{{ url_for('admin_questions', assessment=assessment, batch_slot=q.batch_slot, part=q.part) }}">◂ Back to Question Banks</a>
 <div class="content-card narrow-card">

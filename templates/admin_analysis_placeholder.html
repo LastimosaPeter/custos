@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Item Analysis{% endblock %}
 {% block header_right %}
-<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a class="active" href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a><a href="{{ url_for('admin_logout') }}">Sign out</a></nav>
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(assessment) }}
 {% endblock %}
 {% block content %}
 <div class="dashboard-heading analysis-placeholder-heading">

@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Testing Sessions{% endblock %}
 {% block header_right %}
-<nav class="admin-nav"><a href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a class="active" href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a><a href="{{ url_for('admin_logout') }}">Sign out</a></nav>
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(assessment) }}
 {% endblock %}
 {% block content %}
 <div class="dashboard-heading">
@@ -28,7 +29,7 @@
   <div class="dryrun-session-list">
     <h3>Recent Dry-run Participants</h3>
     <div class="table-wrap"><table><thead><tr><th>Student</th><th>Status</th><th>Score</th><th>Security</th><th></th></tr></thead><tbody>
-      {% for s in dryrun_sessions %}<tr><td><strong>{{ s.student_name or s.email }}</strong><br><small>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.email }}</small></td><td><span class="status {{ s.status }}">{{ s.status|replace('_',' ') }}</span></td><td>{{ s.auto_total if s.status == 'submitted' else '—' }}/50</td><td>{{ s.violation_count or 0 }}/3 violations · {{ s.flagged_count or 0 }} flags</td><td><a class="secondary button-link table-action-btn" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review</a></td></tr>{% endfor %}
+      {% for s in dryrun_sessions %}<tr><td><strong>{% if s.last_name or s.first_name %}{{ s.last_name or '' }}{% if s.last_name and s.first_name %}, {% endif %}{{ s.first_name or '' }}{% else %}{{ s.student_name or s.email }}{% endif %}</strong><br><small>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.email }}</small></td><td><span class="status {{ s.status }}">{{ s.status|replace('_',' ') }}</span></td><td>{{ s.auto_total if s.status == 'submitted' else '—' }}/50</td><td>{{ s.violation_count or 0 }}/3 violations · {{ s.flagged_count or 0 }} flags</td><td><a class="secondary button-link table-action-btn" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review</a></td></tr>{% endfor %}
     </tbody></table></div>
   </div>
   {% endif %}

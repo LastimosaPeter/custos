@@ -10,9 +10,14 @@
   <p class="lead">Use your Ateneo de Naga University email address and the <strong>session key announced by your instructor</strong> for your assigned set.</p>
   <form method="post" class="form-grid" data-student-identity-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Full name
-      <input type="text" name="student_name" placeholder="e.g., Juan Dela Cruz" value="{{ request.form.get('student_name', '') }}" required maxlength="120" autocomplete="name">
-    </label>
+    <div class="student-name-grid">
+      <label>First Name
+        <input type="text" name="first_name" placeholder="e.g., Juan" value="{{ request.form.get('first_name', '') }}" required maxlength="60" autocomplete="given-name">
+      </label>
+      <label>Last Name
+        <input type="text" name="last_name" placeholder="e.g., Dela Cruz" value="{{ request.form.get('last_name', '') }}" required maxlength="60" autocomplete="family-name">
+      </label>
+    </div>
     <div class="student-class-grid">
       <label>Program
         <select name="program" required data-program-select>
@@ -33,6 +38,6 @@
     <button class="primary wide" type="submit">Verify Key & Continue</button>
   </form>
   <p class="micro">The key determines the exact assessment set you are allowed to enter. Keys may be changed by the instructor at any time.</p>
-  <a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
+  <div class="student-alt-path"><span>Programming activities</span><a class="secondary button-link disabled-feature-link" href="{{ url_for('nextgen.ide_coming_soon') }}" title="Coming soon">IDE · Coming Soon</a></div><a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
 </div>
 {% endblock %}

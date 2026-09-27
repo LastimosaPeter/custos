@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Custos - Messages{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(assessment|default("posttest")) }}
+{% endblock %}
+{% block content %}
+<div class="messages-page" data-threads-url="{{ url_for('admin_message_threads') }}" data-thread-base="{{ url_for('admin_messages') }}">
+  <div class="dashboard-heading messages-heading">
+    <div><div class="eyebrow">INSTRUCTOR VIEW · COMMUNICATIONS</div><h1>Student Messages</h1><p class="subtle">Read and reply to exam messages without leaving the monitoring workspace or refreshing the page.</p></div>
+    <a class="secondary button-link" href="{{ url_for('admin_monitor') }}">Open Live Monitor</a>
+  </div>
+
+  <div class="messages-shell">
+    <aside class="message-thread-list" id="messageThreadList" aria-label="Student conversations">
+      {% for t in threads %}
+      <button type="button" class="message-thread {% if loop.first %}active{% endif %}" data-session-id="{{ t.id }}">
+        <span class="message-thread-name">{% if t.last_name or t.first_name %}{{ t.last_name or '' }}{% if t.last_name and t.first_name %}, {% endif %}{{ t.first_name or '' }}{% else %}{{ t.student_name or t.email }}{% endif %}</span>
+        <span class="message-thread-meta">{{ t.program or '—' }} {{ t.class_section or '' }} · {{ t.batch_name }}</span>
+        <span class="message-thread-preview">{{ t.last_message or 'No message yet' }}</span>
+        {% if t.unread_messages %}<span class="message-thread-unread">{{ t.unread_messages }}</span>{% endif %}
+      </button>
+      {% else %}<div class="messages-empty">No student conversations yet.</div>{% endfor %}
+    </aside>
+
+    <section class="message-conversation" aria-live="polite">
+      <header class="message-conversation-head">
+        <div><strong id="messageStudentName">{% if threads %}{{ threads[0].student_name or threads[0].email }}{% else %}Select a student{% endif %}</strong><span id="messageStudentMeta">{% if threads %}{{ threads[0].program or '—' }} {{ threads[0].class_section or '' }} · {{ threads[0].batch_name }}{% endif %}</span></div>
+        <a id="messageReviewLink" class="secondary button-link {% if not threads %}hidden{% endif %}" href="{% if threads %}{{ url_for('admin_session_detail', sid=threads[0].id) }}{% else %}#{% endif %}">Open Session Review</a>
+      </header>
+      <div id="messageConversationBody" class="message-conversation-body"><div class="chat-empty">{% if threads %}Loading conversation…{% else %}Messages from students will appear here.{% endif %}</div></div>
+      <form id="messageReplyForm" class="message-reply-form" {% if not threads %}hidden{% endif %}>
+        <textarea id="messageReplyInput" rows="2" maxlength="1000" placeholder="Reply to the student…" required></textarea>
+        <button type="submit" class="primary">Send Reply</button>
+      </form>
+    </section>
+  </div>
+</div>
+<script src="{{ url_for('static', filename='js/admin_messages.js') }}" defer></script>
+{% endblock %}

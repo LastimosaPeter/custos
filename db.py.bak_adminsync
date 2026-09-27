@@ -1,5 +1,4 @@
 import os
-import json
 import secrets
 import sqlite3
 from datetime import datetime, timedelta, timezone
@@ -99,8 +98,6 @@ CREATE TABLE IF NOT EXISTS questions (
 CREATE TABLE IF NOT EXISTS exam_sessions (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     email TEXT NOT NULL,
-    first_name TEXT,
-    last_name TEXT,
     student_name TEXT,
     program TEXT,
     class_section TEXT,
@@ -131,8 +128,6 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     security_locked INTEGER NOT NULL DEFAULT 0,
     temp_locked_until TEXT,
     pending_blackout INTEGER NOT NULL DEFAULT 0,
-    monitor_done INTEGER NOT NULL DEFAULT 0,
-    last_question_index INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(batch_id) REFERENCES batches(id)
 );
 
@@ -192,172 +187,11 @@ CREATE TABLE IF NOT EXISTS exam_messages (
 );
 
 CREATE INDEX IF NOT EXISTS idx_exam_messages_session ON exam_messages(session_id, id);
-
-CREATE TABLE IF NOT EXISTS ui_preferences (
-    preference_key TEXT PRIMARY KEY,
-    theme TEXT NOT NULL CHECK(theme IN ('light','dark')),
-    updated_at TEXT NOT NULL
-);
-"""
-
-
-FUTURE_SCHEMA = """
-CREATE TABLE IF NOT EXISTS subjects (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    code TEXT NOT NULL,
-    name TEXT NOT NULL,
-    term TEXT NOT NULL DEFAULT '',
-    school_year TEXT NOT NULL DEFAULT '',
-    active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL,
-    UNIQUE(code, term, school_year)
-);
-
-CREATE TABLE IF NOT EXISTS instructors (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    admin_id INTEGER UNIQUE,
-    display_name TEXT NOT NULL,
-    email TEXT,
-    active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(admin_id) REFERENCES admins(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS subject_instructors (
-    subject_id INTEGER NOT NULL,
-    instructor_id INTEGER NOT NULL,
-    role TEXT NOT NULL DEFAULT 'instructor',
-    PRIMARY KEY(subject_id, instructor_id),
-    FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-    FOREIGN KEY(instructor_id) REFERENCES instructors(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS assessments (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    subject_id INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    slug TEXT NOT NULL UNIQUE,
-    assessment_type TEXT NOT NULL DEFAULT 'quiz',
-    description TEXT NOT NULL DEFAULT '',
-    duration_minutes INTEGER NOT NULL DEFAULT 60,
-    start_at TEXT,
-    end_at TEXT,
-    access_code TEXT UNIQUE,
-    max_attempts INTEGER NOT NULL DEFAULT 1,
-    security_mode TEXT NOT NULL DEFAULT 'standard',
-    active INTEGER NOT NULL DEFAULT 1,
-    created_by_instructor_id INTEGER,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-    FOREIGN KEY(created_by_instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS programming_labs (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    assessment_id INTEGER NOT NULL UNIQUE,
-    language TEXT NOT NULL DEFAULT 'cpp',
-    title TEXT NOT NULL,
-    instructions TEXT NOT NULL DEFAULT '',
-    starter_code TEXT NOT NULL DEFAULT '',
-    allow_custom_input INTEGER NOT NULL DEFAULT 1,
-    runner_backend TEXT NOT NULL DEFAULT 'inherit',
-    active INTEGER NOT NULL DEFAULT 1,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS programming_tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lab_id INTEGER NOT NULL,
-    position INTEGER NOT NULL,
-    title TEXT NOT NULL,
-    prompt TEXT NOT NULL,
-    starter_code TEXT NOT NULL DEFAULT '',
-    points REAL NOT NULL DEFAULT 10,
-    hidden_tests_json TEXT NOT NULL DEFAULT '[]',
-    active INTEGER NOT NULL DEFAULT 1,
-    UNIQUE(lab_id, position),
-    FOREIGN KEY(lab_id) REFERENCES programming_labs(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS coding_sessions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    lab_id INTEGER NOT NULL,
-    email TEXT NOT NULL,
-    first_name TEXT,
-    last_name TEXT,
-    student_name TEXT NOT NULL,
-    program TEXT,
-    class_section TEXT,
-    started_at TEXT NOT NULL,
-    submitted_at TEXT,
-    status TEXT NOT NULL DEFAULT 'in_progress',
-    current_task_id INTEGER,
-    terms_accepted_at TEXT,
-    violation_count INTEGER NOT NULL DEFAULT 0,
-    security_locked INTEGER NOT NULL DEFAULT 0,
-    temp_locked_until TEXT,
-    pending_blackout INTEGER NOT NULL DEFAULT 0,
-    flagged_count INTEGER NOT NULL DEFAULT 0,
-    ip_address TEXT,
-    user_agent TEXT,
-    is_test INTEGER NOT NULL DEFAULT 0,
-    total_score REAL NOT NULL DEFAULT 0,
-    UNIQUE(email, lab_id),
-    FOREIGN KEY(lab_id) REFERENCES programming_labs(id) ON DELETE CASCADE,
-    FOREIGN KEY(current_task_id) REFERENCES programming_tasks(id) ON DELETE SET NULL
-);
-
-CREATE TABLE IF NOT EXISTS coding_task_progress (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    task_id INTEGER NOT NULL,
-    source_code TEXT NOT NULL DEFAULT '',
-    stdin_text TEXT NOT NULL DEFAULT '',
-    last_output TEXT NOT NULL DEFAULT '',
-    last_status TEXT NOT NULL DEFAULT 'not_run',
-    run_count INTEGER NOT NULL DEFAULT 0,
-    score REAL NOT NULL DEFAULT 0,
-    submitted_at TEXT,
-    last_saved_at TEXT,
-    UNIQUE(session_id, task_id),
-    FOREIGN KEY(session_id) REFERENCES coding_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY(task_id) REFERENCES programming_tasks(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS coding_submissions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    task_id INTEGER NOT NULL,
-    source_code TEXT NOT NULL,
-    stdin_text TEXT NOT NULL DEFAULT '',
-    stdout_text TEXT NOT NULL DEFAULT '',
-    stderr_text TEXT NOT NULL DEFAULT '',
-    compile_output TEXT NOT NULL DEFAULT '',
-    status TEXT NOT NULL,
-    runtime_ms INTEGER,
-    passed_count INTEGER NOT NULL DEFAULT 0,
-    total_tests INTEGER NOT NULL DEFAULT 0,
-    score REAL NOT NULL DEFAULT 0,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(session_id) REFERENCES coding_sessions(id) ON DELETE CASCADE,
-    FOREIGN KEY(task_id) REFERENCES programming_tasks(id) ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS coding_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    session_id INTEGER NOT NULL,
-    event_type TEXT NOT NULL,
-    detail TEXT,
-    created_at TEXT NOT NULL,
-    FOREIGN KEY(session_id) REFERENCES coding_sessions(id) ON DELETE CASCADE
-);
-CREATE INDEX IF NOT EXISTS idx_coding_events_session ON coding_events(session_id, id);
 """
 
 # PostgreSQL uses SERIAL for auto-incrementing integer primary keys.
 POSTGRES_SCHEMA = (
-    (SQLITE_SCHEMA + FUTURE_SCHEMA).replace("PRAGMA foreign_keys = ON;", "")
+    SQLITE_SCHEMA.replace("PRAGMA foreign_keys = ON;", "")
     .replace("INTEGER PRIMARY KEY AUTOINCREMENT", "SERIAL PRIMARY KEY")
 )
 
@@ -416,16 +250,6 @@ def connect():
     return conn
 
 
-def _table_names(conn):
-    if DATABASE_ENGINE == "postgresql":
-        rows = conn.execute(
-            "SELECT table_name FROM information_schema.tables WHERE table_schema=current_schema()"
-        ).fetchall()
-        return {row[0] for row in rows}
-    rows = conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
-    return {row[0] for row in rows}
-
-
 def _table_columns(conn, table_name):
     if DATABASE_ENGINE == "postgresql":
         rows = conn.execute(
@@ -439,7 +263,7 @@ def _table_columns(conn, table_name):
 
 def _apply_schema(conn):
     if DATABASE_ENGINE == "sqlite":
-        conn.executescript(SQLITE_SCHEMA + FUTURE_SCHEMA)
+        conn.executescript(SQLITE_SCHEMA)
         return
     for statement in POSTGRES_SCHEMA.split(";"):
         statement = statement.strip()
@@ -449,23 +273,11 @@ def _apply_schema(conn):
 
 
 def migrate_schema(conn):
-    admin_cols = _table_columns(conn, "admins")
-    for name, definition in {
-        "display_name": "TEXT",
-        "email": "TEXT",
-        "role": "TEXT NOT NULL DEFAULT 'owner'",
-        "active": "INTEGER NOT NULL DEFAULT 1",
-    }.items():
-        if name not in admin_cols:
-            conn.execute(f"ALTER TABLE admins ADD COLUMN {name} {definition}")
-
     session_cols = _table_columns(conn, "exam_sessions")
     session_additions = {
         "is_test": "INTEGER NOT NULL DEFAULT 0",
         "test_label": "TEXT",
         "untimed": "INTEGER NOT NULL DEFAULT 0",
-        "first_name": "TEXT",
-        "last_name": "TEXT",
         "student_name": "TEXT",
         "program": "TEXT",
         "class_section": "TEXT",
@@ -474,153 +286,26 @@ def migrate_schema(conn):
         "security_locked": "INTEGER NOT NULL DEFAULT 0",
         "temp_locked_until": "TEXT",
         "pending_blackout": "INTEGER NOT NULL DEFAULT 0",
-        "monitor_done": "INTEGER NOT NULL DEFAULT 0",
         "bonus_correct": "INTEGER NOT NULL DEFAULT 0",
         "bonus_score": "INTEGER NOT NULL DEFAULT 0",
         "admin_bonus_score": "REAL",
-        "last_question_index": "INTEGER NOT NULL DEFAULT 0",
-        "assessment_id": "INTEGER",
     }
     for name, definition in session_additions.items():
         if name not in session_cols:
             conn.execute(f"ALTER TABLE exam_sessions ADD COLUMN {name} {definition}")
-
-    coding_cols = _table_columns(conn, "coding_sessions") if "coding_sessions" in _table_names(conn) else set()
-    for name, definition in {
-        "first_name": "TEXT",
-        "last_name": "TEXT",
-    }.items():
-        if coding_cols and name not in coding_cols:
-            conn.execute(f"ALTER TABLE coding_sessions ADD COLUMN {name} {definition}")
-
-    # Best-effort compatibility for attempts created before First/Last Name were separate fields.
-    for table in ("exam_sessions", "coding_sessions"):
-        if table not in _table_names(conn):
-            continue
-        cols = _table_columns(conn, table)
-        if not {"id", "student_name", "first_name", "last_name"}.issubset(cols):
-            continue
-        rows = conn.execute(
-            f"SELECT id,student_name,first_name,last_name FROM {table} WHERE student_name IS NOT NULL"
-        ).fetchall()
-        for row in rows:
-            if row["first_name"] and row["last_name"]:
-                continue
-            parts = str(row["student_name"] or "").strip().split()
-            if not parts:
-                continue
-            first = row["first_name"] or (" ".join(parts[:-1]) if len(parts) > 1 else parts[0])
-            last = row["last_name"] or (parts[-1] if len(parts) > 1 else "")
-            conn.execute(f"UPDATE {table} SET first_name=?,last_name=? WHERE id=?", (first,last,row["id"]))
 
     question_cols = _table_columns(conn, "questions")
     if "active" not in question_cols:
         conn.execute("ALTER TABLE questions ADD COLUMN active INTEGER NOT NULL DEFAULT 1")
     if "created_by" not in question_cols:
         conn.execute("ALTER TABLE questions ADD COLUMN created_by TEXT NOT NULL DEFAULT 'builtin'")
-    if "subject_id" not in question_cols:
-        conn.execute("ALTER TABLE questions ADD COLUMN subject_id INTEGER")
-    if "assessment_id" not in question_cols:
-        conn.execute("ALTER TABLE questions ADD COLUMN assessment_id INTEGER")
 
     batch_cols = _table_columns(conn, "batches")
     if "assessment_type" not in batch_cols:
         conn.execute("ALTER TABLE batches ADD COLUMN assessment_type TEXT NOT NULL DEFAULT 'midterm'")
-    if "subject_id" not in batch_cols:
-        conn.execute("ALTER TABLE batches ADD COLUMN subject_id INTEGER")
-    if "assessment_id" not in batch_cols:
-        conn.execute("ALTER TABLE batches ADD COLUMN assessment_id INTEGER")
     conn.execute("UPDATE batches SET assessment_type='midterm' WHERE slot BETWEEN 1 AND 8")
     conn.commit()
 
-
-
-def _future_access_code(prefix="LAB"):
-    secret = "".join(secrets.choice(SESSION_KEY_ALPHABET) for _ in range(10))
-    return f"{prefix}-{secret[:5]}-{secret[5:]}"
-
-
-def _ensure_future_seed(conn, admin_username):
-    now = iso_now()
-    admin = conn.execute("SELECT id FROM admins WHERE username=?", (admin_username,)).fetchone()
-    if admin:
-        conn.execute(
-            "UPDATE admins SET display_name=COALESCE(NULLIF(display_name,''),?), role=COALESCE(NULLIF(role,''),'owner'), active=1 WHERE id=?",
-            (admin_username, admin["id"]),
-        )
-        conn.execute(
-            """INSERT INTO instructors(admin_id,display_name,email,active,created_at)
-               VALUES(?,?,NULL,1,?) ON CONFLICT(admin_id) DO NOTHING""",
-            (admin["id"], admin_username, now),
-        )
-    conn.execute(
-        """INSERT INTO subjects(code,name,term,school_year,active,created_at)
-           VALUES('CSDC101','Fundamentals of Programming','1st Semester','2026-2027',1,?)
-           ON CONFLICT(code,term,school_year) DO NOTHING""",
-        (now,),
-    )
-    subject = conn.execute(
-        "SELECT * FROM subjects WHERE code='CSDC101' AND term='1st Semester' AND school_year='2026-2027'"
-    ).fetchone()
-    instructor = conn.execute("SELECT * FROM instructors WHERE admin_id=?", (admin["id"],)).fetchone() if admin else None
-    if subject and instructor:
-        conn.execute(
-            """INSERT INTO subject_instructors(subject_id,instructor_id,role) VALUES(?,?,'owner')
-               ON CONFLICT(subject_id,instructor_id) DO NOTHING""",
-            (subject["id"], instructor["id"]),
-        )
-
-    defaults = [
-        ('csdc101-midterm','Midterm Examination','midterm','Current 50-point examination plus bonus.',90),
-        ('csdc101-posttest','Monday Post-test','posttest','Post-test assessment family.',90),
-        ('csdc101-dryrun','Public Dry Run','dryrun','Deployment rehearsal assessment.',90),
-    ]
-    for slug,title,atype,description,duration in defaults:
-        conn.execute(
-            """INSERT INTO assessments(subject_id,title,slug,assessment_type,description,duration_minutes,
-                       max_attempts,security_mode,active,created_by_instructor_id,created_at)
-               VALUES(?,?,?,?,?,?,1,'strict',1,?,?) ON CONFLICT(slug) DO NOTHING""",
-            (subject["id"],title,slug,atype,description,duration,instructor["id"] if instructor else None,now),
-        )
-    for atype in ('midterm','posttest','dryrun'):
-        assessment = conn.execute("SELECT id FROM assessments WHERE slug=?", (f"csdc101-{atype}",)).fetchone()
-        if assessment:
-            conn.execute("UPDATE batches SET subject_id=?, assessment_id=? WHERE assessment_type=?", (subject["id"],assessment["id"],atype))
-            conn.execute("UPDATE questions SET subject_id=?, assessment_id=? WHERE batch_slot IN (SELECT slot FROM batches WHERE assessment_type=?)", (subject["id"],assessment["id"],atype))
-            conn.execute("UPDATE exam_sessions SET assessment_id=? WHERE batch_id IN (SELECT id FROM batches WHERE assessment_type=?) AND assessment_id IS NULL", (assessment["id"],atype))
-
-    # Seed one extensible C++ Programming Lab without hard-coding a public GitHub secret.
-    lab_assessment = conn.execute("SELECT * FROM assessments WHERE slug='csdc101-cpp-lab'").fetchone()
-    if not lab_assessment:
-        access = _future_access_code('CPP')
-        cur = conn.execute(
-            """INSERT INTO assessments(subject_id,title,slug,assessment_type,description,duration_minutes,
-                       access_code,max_attempts,security_mode,active,created_by_instructor_id,created_at)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",
-            (subject["id"],'C++ Programming Lab','csdc101-cpp-lab','programming_lab',
-             'Secure browser-based C++ coding environment.',90,access,1,'strict',1,
-             instructor["id"] if instructor else None,now),
-        )
-        lab_assessment_id = cur.fetchone()[0]
-    else:
-        lab_assessment_id = lab_assessment["id"]
-    lab_starter = "#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}\n"
-    conn.execute(
-        """INSERT INTO programming_labs(assessment_id,language,title,instructions,starter_code,allow_custom_input,active,created_at)
-           VALUES(?, 'cpp', 'C++ Programming Lab', 'Write, run, test, and submit C++17 programs inside Custos.', ?, 1, 1, ?)
-           ON CONFLICT(assessment_id) DO NOTHING""",
-        (lab_assessment_id, lab_starter, now),
-    )
-    lab = conn.execute("SELECT id FROM programming_labs WHERE assessment_id=?", (lab_assessment_id,)).fetchone()
-    if lab:
-        tests = json.dumps([{"stdin":"2 3\n","expected":"5"},{"stdin":"10 -4\n","expected":"6"}])
-        task_starter = "#include <iostream>\nusing namespace std;\n\nint main() {\n    int a, b;\n    cin >> a >> b;\n    cout << a + b;\n    return 0;\n}\n"
-        conn.execute(
-            """INSERT INTO programming_tasks(lab_id,position,title,prompt,starter_code,points,hidden_tests_json,active)
-               VALUES(?,1,'Sum Two Integers','Read two integers and print their sum.',?,10,?,1)
-               ON CONFLICT(lab_id,position) DO NOTHING""",
-            (lab["id"], task_starter, tests),
-        )
 
 def init_db(admin_username="admin", admin_password="ChangeMe123!"):
     conn = connect()
@@ -636,7 +321,7 @@ def init_db(admin_username="admin", admin_password="ChangeMe123!"):
 
         conn.execute(
             """INSERT INTO admins(username, password_hash) VALUES (?, ?)
-               ON CONFLICT(username) DO UPDATE SET password_hash=excluded.password_hash""",
+               ON CONFLICT(username) DO NOTHING""",
             (admin_username, generate_password_hash(admin_password)),
         )
 
@@ -706,8 +391,6 @@ def init_db(admin_username="admin", admin_password="ChangeMe123!"):
                    ON CONFLICT(assessment_type,position) DO NOTHING""",
                 (position, topic, prompt, accepted_answer),
             )
-
-        _ensure_future_seed(conn, admin_username)
 
         conn.commit()
     except Exception:

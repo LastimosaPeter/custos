@@ -1,51 +1,55 @@
-# Custos PostgreSQL Compatibility Validation
+# Custos Next — UI/UX & Workspace Revision Validation
 
-Release: **Custos v0.98 · Scarabs**
-
-## Changes validated
-
-- Dual database mode: SQLite locally, PostgreSQL when `DATABASE_URL` is set.
-- PostgreSQL driver dependency added (`psycopg2-binary`).
-- SQLite `?` parameter markers are translated to PostgreSQL `%s` only inside the PostgreSQL compatibility wrapper.
-- SQLite-only `INSERT OR IGNORE` replaced with portable `ON CONFLICT ... DO NOTHING`.
-- New session IDs use `INSERT ... RETURNING id`, supported by PostgreSQL and modern SQLite.
-- PostgreSQL schema replaces SQLite `AUTOINCREMENT` with `SERIAL`.
-- Schema migration checks use `information_schema.columns` on PostgreSQL and `PRAGMA table_info` on SQLite.
-- PostgreSQL initialization is protected with an advisory lock for multi-worker startup.
-- `/health` checks both the web application and active database connection.
-- `render.yaml` wires `DATABASE_URL` to a managed Render PostgreSQL database.
-
-## Local fallback test
-
-The revised database layer was initialized against a clean SQLite database using the compatibility code path:
-
-- 17 assessment/dry-run batch records created
-- 1 administrator record created
-- 5 Midterm bonus placeholders created
-- `INSERT ... RETURNING id` verified with SQLite fallback
+Validation date: 2026-09-27
 
 ## Static validation
 
-- `app.py`, `db.py`, `item_analysis.py`, and `init_db.py` compile successfully.
-- No private question-bank CSV, answer-key CSV, populated SQLite database, or generated test-set source is required by the deployment build.
+- Python syntax compilation: **PASS** (`app.py`, `db.py`, `workspace.py`, `code_runner.py`, `item_analysis.py`, `init_db.py`)
+- JavaScript syntax: **PASS** for all files under `static/js/`
+- Jinja template parse: **PASS** — 28 templates
+- Fresh SQLite schema creation with dependency stubs: **PASS** — 22 tables
+- Migration from the previous Custos Next SQLite schema: **PASS**
+- New `exam_sessions` fields verified: `first_name`, `last_name`, `monitor_done`
+- New `coding_sessions` fields verified: `first_name`, `last_name`
 
-## Production caution
+## UI/UX changes validated structurally
 
-A real PostgreSQL server was not available inside the packaging runtime, so the final network connection must be verified after Render provisions `custos-db`. The `/health` endpoint is included specifically for this deployment check.
+- Single reusable instructor navigation macro across instructor pages
+- Workspace promoted to the primary instructor destination
+- Assessment tools grouped beneath one Assessment navigation menu
+- Dedicated Messages center added
+- Session chat replies use AJAX and no longer require a page reload
+- Answer Audit and Proctoring Event Log use a two-column desktop layout
+- Live Monitor supports Clear Lock and non-destructive Mark Done actions
+- Live Monitor activity dot has fixed square dimensions / circular radius
+- Custos-first header lockup followed by subject logo
+- Compact IDE Custos logo treatment
+- IDE public entry replaced by Coming Soon page while feature flag is off
+- PWA icons regenerated on white backgrounds
+- PWA cache version incremented to force updated shell assets
+- iPad landscape desktop-like overrides included
+- Installed-app status converted to green boxed treatment
+- Theme icon uses emoji sun/moon pair
 
-## PWA / Mobile Exam Mode Validation
+## IDE release safety
 
-- Added `manifest.webmanifest` with standalone/fullscreen display fallback.
-- Added 180 px Apple touch icon, 192/512 PWA icons, and 512 px maskable icon.
-- Added root-scoped service worker route and static-only service-worker cache policy.
-- Dynamic exam/API/admin/login pages are explicitly excluded from service-worker caching.
-- Added iOS/iPadOS standalone detection via `navigator.standalone` and display-mode media query.
-- Added Android/Chromium installed-app detection via display-mode media query.
-- Installed-app mode is accepted as secure display mode while existing visibility/focus security monitoring remains enabled.
-- Added mobile installed-app exam layout with off-canvas question navigator.
-- Desktop browser exam/fullscreen behavior remains unchanged.
-- Python source compilation: PASS.
-- JavaScript syntax (`pwa.js`, `exam.js`, `sw.js`): PASS.
-- PWA manifest JSON parse: PASS.
-- 17 Jinja templates parse: PASS.
-- Live Flask route smoke test was not run in the packaging environment because Flask is not installed there.
+Public student IDE access defaults to disabled through:
+
+```env
+STUDENT_IDE_ENABLED=0
+```
+
+Direct public `/ide` entry redirects to the Coming Soon page. Instructor management and preview remain available. `render.yaml` explicitly keeps the feature disabled.
+
+## Database compatibility
+
+Custos remains dual-mode:
+
+- PostgreSQL when `DATABASE_URL` is configured
+- SQLite fallback for local development
+
+The schema changes are additive and the old `student_name` field is retained for compatibility.
+
+## Environment limitation
+
+A full Flask HTTP integration test was not run in the packaging container because the system Python does not include Flask/Werkzeug. Python/Jinja/JavaScript syntax and SQLite schema/migration behavior were validated independently. Install `requirements.txt` in the project virtual environment for the normal local run.

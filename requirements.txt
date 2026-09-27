@@ -4,3 +4,4 @@ waitress>=3.0,<4
 tzdata>=2025.2
 gunicorn>=23,<24
 psycopg2-binary>=2.9,<3
+requests>=2.32,<3

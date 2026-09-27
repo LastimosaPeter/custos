@@ -115,16 +115,20 @@ def short_answer_matches(submitted, accepted):
 
 def parse_student_identity(form):
     """Validate the student identity fields shared by Home and Student View."""
-    name = re.sub(r"\s+", " ", form.get("student_name", "").strip())
+    first_name = re.sub(r"\s+", " ", form.get("first_name", "").strip())
+    last_name = re.sub(r"\s+", " ", form.get("last_name", "").strip())
     program = form.get("program", "").strip().upper()
     class_section = form.get("class_section", "").strip()
-    if len(name) < 2 or len(name) > 120:
-        return None, "Enter your full name."
+    if len(first_name) < 1 or len(first_name) > 60:
+        return None, "Enter your first name."
+    if len(last_name) < 1 or len(last_name) > 60:
+        return None, "Enter your last name."
+    name = f"{first_name} {last_name}".strip()
     if program not in STUDENT_SECTIONS:
         return None, "Choose either ZT or ZS."
     if class_section not in STUDENT_SECTIONS[program]:
         return None, f"Choose a valid section for {program}."
-    return (name, program, class_section), None
+    return (first_name, last_name, name, program, class_section), None
 
 
 def parse_iso(value):
@@ -160,6 +164,7 @@ def inject_app_identity():
         "app_release_species": APP_RELEASE_SPECIES,
         "app_release_common_name": APP_RELEASE_COMMON_NAME,
         "custos_theme": get_saved_theme(),
+        "admin_assessment": session.get("admin_assessment", "posttest"),
     }
 
 
@@ -263,7 +268,7 @@ def assign_questions_to_session(conn, sid, batch_slot):
             (sid, qid, q_order, json.dumps(option_order)),
         )
 
-    batch = conn.execute("SELECT assessment_type FROM batches WHERE slot=?", (batch_slot,)).fetchone()
+    batch = conn.execute("SELECT assessment_type,subject_id,assessment_id FROM batches WHERE slot=?", (batch_slot,)).fetchone()
     if batch and batch["assessment_type"] == "midterm":
         bonus = conn.execute(
             "SELECT id,position FROM bonus_questions WHERE assessment_type='midterm' AND active=1 ORDER BY position"
@@ -414,7 +419,7 @@ def student_login():
         if identity_error:
             flash(identity_error, "error")
             return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
-        student_name, program, class_section = identity
+        first_name, last_name, student_name, program, class_section = identity
         email_re = rf"^[A-Za-z0-9._%+\-]+@{re.escape(ALLOWED_EMAIL_DOMAIN)}$"
         if not re.match(email_re, email):
             flash(f"Use your @{ALLOWED_EMAIL_DOMAIN} account.", "error")
@@ -433,8 +438,8 @@ def student_login():
         ).fetchone()
         if existing:
             conn.execute(
-                "UPDATE exam_sessions SET student_name=?, program=?, class_section=? WHERE id=?",
-                (student_name, program, class_section, existing["id"]),
+                "UPDATE exam_sessions SET first_name=?, last_name=?, student_name=?, program=?, class_section=?, monitor_done=0 WHERE id=?",
+                (first_name, last_name, student_name, program, class_section, existing["id"]),
             )
             conn.commit()
             if existing["status"] == "submitted":
@@ -444,6 +449,8 @@ def student_login():
             if not existing["terms_accepted_at"]:
                 conn.close()
                 session["pending_email"] = email
+                session["pending_first_name"] = first_name
+                session["pending_last_name"] = last_name
                 session["pending_student_name"] = student_name
                 session["pending_program"] = program
                 session["pending_class_section"] = class_section
@@ -461,6 +468,8 @@ def student_login():
             return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
 
         session["pending_email"] = email
+        session["pending_first_name"] = first_name
+        session["pending_last_name"] = last_name
         session["pending_student_name"] = student_name
         session["pending_program"] = program
         session["pending_class_section"] = class_section
@@ -486,6 +495,8 @@ def instructions():
         "instructions.html",
         batch=batch,
         email=email,
+        first_name=session.get("pending_first_name"),
+        last_name=session.get("pending_last_name"),
         student_name=session.get("pending_student_name"),
         program=session.get("pending_program"),
         class_section=session.get("pending_class_section"),
@@ -496,12 +507,14 @@ def instructions():
 def start_exam():
     require_csrf()
     email = session.get("pending_email")
+    first_name = session.get("pending_first_name")
+    last_name = session.get("pending_last_name")
     student_name = session.get("pending_student_name")
     program = session.get("pending_program")
     class_section = session.get("pending_class_section")
     batch_id = session.get("pending_batch_id")
     pending_session_key = session.get("pending_session_key", "")
-    if not email or not student_name or not program or not class_section or not batch_id or not pending_session_key:
+    if not email or not first_name or not last_name or not student_name or not program or not class_section or not batch_id or not pending_session_key:
         return redirect(url_for("student_login"))
     if request.form.get("terms_accept") != "yes":
         flash("You must accept the assessment monitoring and integrity terms before starting.", "error")
@@ -515,6 +528,8 @@ def start_exam():
     if not secrets.compare_digest(batch["access_code"], pending_session_key):
         conn.close()
         session.pop("pending_email", None)
+        session.pop("pending_first_name", None)
+        session.pop("pending_last_name", None)
         session.pop("pending_student_name", None)
         session.pop("pending_program", None)
         session.pop("pending_class_section", None)
@@ -538,9 +553,9 @@ def start_exam():
         conn.commit()
     else:
         cur = conn.execute(
-            """INSERT INTO exam_sessions(email,student_name,program,class_section,batch_id,started_at,ip_address,user_agent,terms_accepted_at)
-               VALUES (?,?,?,?,?,?,?,?,?) RETURNING id""",
-            (email, student_name, program, class_section, batch_id, accepted_at, request.remote_addr, request.headers.get("User-Agent", "")[:500], accepted_at),
+            """INSERT INTO exam_sessions(email,first_name,last_name,student_name,program,class_section,batch_id,assessment_id,started_at,ip_address,user_agent,terms_accepted_at)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",
+            (email, first_name, last_name, student_name, program, class_section, batch_id, batch["assessment_id"], accepted_at, request.remote_addr, request.headers.get("User-Agent", "")[:500], accepted_at),
         )
         sid = cur.fetchone()[0]
         try:
@@ -559,6 +574,8 @@ def start_exam():
 
     conn.close()
     session.pop("pending_email", None)
+    session.pop("pending_first_name", None)
+    session.pop("pending_last_name", None)
     session.pop("pending_student_name", None)
     session.pop("pending_program", None)
     session.pop("pending_class_section", None)
@@ -969,7 +986,7 @@ def result():
 
 @app.route("/logout")
 def student_logout():
-    for key in ("student_session_id", "pending_email", "pending_student_name", "pending_program", "pending_class_section", "pending_batch_id", "pending_session_key"):
+    for key in ("student_session_id", "pending_email", "pending_first_name", "pending_last_name", "pending_student_name", "pending_program", "pending_class_section", "pending_batch_id", "pending_session_key"):
         session.pop(key, None)
     return redirect(url_for("student_login"))
 
@@ -983,11 +1000,13 @@ def admin_login():
         conn = connect()
         admin = conn.execute("SELECT * FROM admins WHERE username=?", (username,)).fetchone()
         conn.close()
-        if admin and check_password_hash(admin["password_hash"], password):
+        if admin and ("active" not in admin.keys() or admin["active"]) and check_password_hash(admin["password_hash"], password):
             session.clear()
             session["admin_id"] = admin["id"]
+            session["admin_role"] = admin["role"] if "role" in admin.keys() else "owner"
+            session["admin_display_name"] = (admin["display_name"] if "display_name" in admin.keys() else None) or admin["username"]
             csrf_token()
-            return redirect(url_for("admin_dashboard"))
+            return redirect(url_for("nextgen.workspace"))
         flash("Invalid administrator credentials.", "error")
     return render_template("admin_login.html")
 
@@ -1002,8 +1021,11 @@ def admin_logout():
 @admin_required
 def admin_dashboard():
     assessment = request.args.get("assessment", "posttest").strip().lower()
+def admin_dashboard():
+    assessment = request.args.get("assessment", "posttest").strip().lower()
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"
+    session["admin_assessment"] = assessment
     conn = connect()
     batches = conn.execute(
         """SELECT b.*,
@@ -1218,21 +1240,31 @@ def admin_unlock_session(sid):
 @admin_required
 def admin_chat_send(sid):
     require_csrf()
-    message = re.sub(r"\s+", " ", request.form.get("message", "").strip())[:1000]
+    data = request.get_json(silent=True) if request.is_json else request.form
+    data = data or {}
+    message = re.sub(r"\s+", " ", str(data.get("message", "")).strip())[:1000]
+    wants_json = request.is_json or "application/json" in request.headers.get("Accept", "")
     if not message:
+        if wants_json:
+            return jsonify({"ok": False, "error": "Enter a message before sending."}), 400
         flash("Enter a message before sending.", "error")
         return redirect(url_for("admin_session_detail", sid=sid))
     conn = connect()
     ex = conn.execute("SELECT id FROM exam_sessions WHERE id=?", (sid,)).fetchone()
     if not ex:
         conn.close()
+        if wants_json:
+            return jsonify({"ok": False, "error": "Session not found."}), 404
         abort(404)
-    conn.execute(
-        "INSERT INTO exam_messages(session_id,sender,message,created_at) VALUES (?,?,?,?)",
-        (sid, "instructor", message, iso_now()),
+    created_at = iso_now()
+    cur = conn.execute(
+        "INSERT INTO exam_messages(session_id,sender,message,created_at) VALUES (?,?,?,?) RETURNING id",
+        (sid, "instructor", message, created_at),
     )
-    conn.commit()
-    conn.close()
+    message_id = cur.fetchone()[0]
+    conn.commit(); conn.close()
+    if wants_json:
+        return jsonify({"ok": True, "message": {"id": message_id, "sender": "instructor", "message": message, "created_at": created_at}})
     return redirect(url_for("admin_session_detail", sid=sid))
 
 
@@ -1257,12 +1289,61 @@ def admin_chat_messages(sid):
     return jsonify({"ok": True, "messages": payload})
 
 
+def _message_threads(conn):
+    rows = conn.execute(
+        """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,
+                  b.name AS batch_name,b.assessment_type,
+                  (SELECT COUNT(*) FROM exam_messages m WHERE m.session_id=e.id AND m.sender='student' AND m.read_at IS NULL) AS unread_messages,
+                  (SELECT m.message FROM exam_messages m WHERE m.session_id=e.id ORDER BY m.id DESC LIMIT 1) AS last_message,
+                  (SELECT m.created_at FROM exam_messages m WHERE m.session_id=e.id ORDER BY m.id DESC LIMIT 1) AS last_message_at
+           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+           WHERE COALESCE(e.is_test,0)=0 AND EXISTS(SELECT 1 FROM exam_messages mx WHERE mx.session_id=e.id)
+           ORDER BY CASE WHEN (SELECT COUNT(*) FROM exam_messages mu WHERE mu.session_id=e.id AND mu.sender='student' AND mu.read_at IS NULL) > 0 THEN 0 ELSE 1 END,
+                    last_message_at DESC, e.id DESC"""
+    ).fetchall()
+    return [dict(r) for r in rows]
+
+
+@app.get("/admin/messages")
+@admin_required
+def admin_messages():
+    conn = connect(); threads = _message_threads(conn); conn.close()
+    return render_template("admin_messages.html", threads=threads, assessment=session.get("admin_assessment", "posttest"))
+
+
+@app.get("/admin/messages/threads")
+@admin_required
+def admin_message_threads():
+    conn = connect(); threads = _message_threads(conn); conn.close()
+    return jsonify({"ok": True, "threads": threads})
+
+
+@app.get("/admin/messages/<int:sid>")
+@admin_required
+def admin_message_thread(sid):
+    conn = connect()
+    ex = conn.execute(
+        """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,b.name AS batch_name
+           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id WHERE e.id=?""",
+        (sid,),
+    ).fetchone()
+    if not ex:
+        conn.close(); return jsonify({"ok": False, "error": "Session not found."}), 404
+    rows = conn.execute("SELECT id,sender,message,created_at FROM exam_messages WHERE session_id=? ORDER BY id", (sid,)).fetchall()
+    conn.execute("UPDATE exam_messages SET read_at=? WHERE session_id=? AND sender='student' AND read_at IS NULL", (iso_now(),sid))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "student": dict(ex), "messages": [dict(r) for r in rows]})
+
+
 @app.route("/admin/testing")
 @admin_required
 def admin_testing():
     assessment = request.args.get("assessment", "posttest").strip().lower()
+def admin_testing():
+    assessment = request.args.get("assessment", "posttest").strip().lower()
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"
+    session["admin_assessment"] = assessment
     conn = connect()
     batches = conn.execute("SELECT * FROM batches WHERE assessment_type=? ORDER BY slot", (assessment,)).fetchall()
     tests = conn.execute(
@@ -1300,9 +1381,9 @@ def admin_student_preview():
         sid = existing["id"]
     else:
         cur = conn.execute(
-            """INSERT INTO exam_sessions(email,student_name,program,class_section,batch_id,started_at,ip_address,user_agent,is_test,test_label,untimed,terms_accepted_at)
-               VALUES(?,?,?,?,?,?,?,?,1,?,1,?) RETURNING id""",
-            (preview_email, "Instructor Preview", "ZT", "11", batch["id"], iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], "Instructor Student View · Scarabs", iso_now()),
+            """INSERT INTO exam_sessions(email,student_name,program,class_section,batch_id,assessment_id,started_at,ip_address,user_agent,is_test,test_label,untimed,terms_accepted_at)
+               VALUES(?,?,?,?,?,?,?,?,?,1,?,1,?) RETURNING id""",
+            (preview_email, "Instructor Preview", "ZT", "11", batch["id"], batch["assessment_id"], iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], "Instructor Student View · Scarabs", iso_now()),
         )
         sid = cur.fetchone()[0]
         assign_questions_to_session(conn, sid, batch["slot"])
@@ -1334,9 +1415,9 @@ def admin_testing_start():
     label = request.form.get("test_label", "").strip()[:120] or f"Instructor test · {batch['name']}"
     untimed = 1 if request.form.get("untimed") == "1" else 0
     cur = conn.execute(
-        """INSERT INTO exam_sessions(email,batch_id,started_at,ip_address,user_agent,is_test,test_label,untimed)
-           VALUES (?,?,?,?,?,1,?,?) RETURNING id""",
-        (email, batch_id, iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], label, untimed),
+        """INSERT INTO exam_sessions(email,batch_id,assessment_id,started_at,ip_address,user_agent,is_test,test_label,untimed)
+           VALUES (?,?,?,?,?,?,1,?,?) RETURNING id""",
+        (email, batch_id, batch["assessment_id"], iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], label, untimed),
     )
     sid = cur.fetchone()[0]
     try:
@@ -1426,8 +1507,8 @@ def admin_testing_return():
 
 def _live_monitor_payload(conn):
     rows = conn.execute(
-        """SELECT e.id,e.email,e.student_name,e.program,e.class_section,e.status,e.started_at,
-                  e.flagged_count,e.violation_count,e.security_locked,e.temp_locked_until,e.pending_blackout,
+        """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,e.started_at,
+                  e.flagged_count,e.violation_count,e.security_locked,e.temp_locked_until,e.pending_blackout,e.monitor_done,
                   b.name AS batch_name,b.assessment_type,
                   (SELECT COUNT(*) FROM exam_messages m WHERE m.session_id=e.id AND m.sender='student' AND m.read_at IS NULL) AS unread_messages,
                   (SELECT pe.event_type FROM proctor_events pe WHERE pe.session_id=e.id ORDER BY pe.id DESC LIMIT 1) AS last_event,
@@ -1436,7 +1517,7 @@ def _live_monitor_payload(conn):
                   (SELECT COUNT(*) FROM session_questions sq WHERE sq.session_id=e.id AND sq.selected_option IS NOT NULL) AS answered_mcq,
                   (SELECT COUNT(*) FROM session_questions sq WHERE sq.session_id=e.id) AS total_mcq
            FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
-           WHERE e.status='in_progress' AND COALESCE(e.is_test,0)=0
+           WHERE e.status='in_progress' AND COALESCE(e.is_test,0)=0 AND COALESCE(e.monitor_done,0)=0
            ORDER BY e.id DESC"""
     ).fetchall()
     payload=[]
@@ -1474,7 +1555,7 @@ def _live_monitor_payload(conn):
         item["answered"] = int(item.get("answered_mcq") or 0)
         item["total"] = int(item.get("total_mcq") or 0)
         payload.append(item)
-    payload.sort(key=lambda x: (-x["risk_score"], x.get("student_name") or x.get("email") or ""))
+    payload.sort(key=lambda x: (-x["risk_score"], x.get("last_name") or x.get("student_name") or x.get("email") or "", x.get("first_name") or ""))
     return payload
 
 
@@ -1486,7 +1567,7 @@ def admin_monitor():
     conn.close()
     attention_count=sum(1 for s in students if s["attention_level"] in {"high","locked"})
     locked_count=sum(1 for s in students if s["attention_level"] == "locked")
-    return render_template("admin_monitor.html", students=students, assessment="posttest", attention_count=attention_count, locked_count=locked_count)
+    return render_template("admin_monitor.html", students=students, assessment=session.get("admin_assessment", "posttest"), attention_count=attention_count, locked_count=locked_count)
 
 
 @app.route("/admin/monitor/data")
@@ -1498,12 +1579,55 @@ def admin_monitor_data():
     return jsonify({"ok": True, "students": students, "updated_at": iso_now()})
 
 
+@app.post("/admin/monitor/session/<int:sid>/action")
+@admin_required
+def admin_monitor_action(sid):
+    require_csrf()
+    data = request.get_json(silent=True) or request.form
+    action = str(data.get("action", "")).strip().lower()
+    conn = connect()
+    ex = conn.execute("SELECT * FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    if not ex:
+        conn.close()
+        return jsonify({"ok": False, "error": "Session not found."}), 404
+    if action == "clear_security":
+        conn.execute(
+            "UPDATE exam_sessions SET security_locked=0,temp_locked_until=NULL,pending_blackout=0 WHERE id=?",
+            (sid,),
+        )
+        detail = f"Instructor cleared active security lock from Live Monitor; violation count retained at {ex['violation_count'] or 0}."
+        event_type = "monitor_security_cleared"
+        message = "Security lock cleared."
+    elif action == "mark_done":
+        conn.execute("UPDATE exam_sessions SET monitor_done=1 WHERE id=?", (sid,))
+        detail = "Instructor marked this attempt as done in Live Monitor. Exam status and answers were not changed."
+        event_type = "monitor_marked_done"
+        message = "Student removed from Live Monitor."
+    elif action == "restore":
+        conn.execute("UPDATE exam_sessions SET monitor_done=0 WHERE id=?", (sid,))
+        detail = "Instructor returned this attempt to Live Monitor."
+        event_type = "monitor_restored"
+        message = "Student returned to Live Monitor."
+    else:
+        conn.close()
+        return jsonify({"ok": False, "error": "Unknown monitor action."}), 400
+    conn.execute(
+        "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
+        (sid,event_type,detail,iso_now()),
+    )
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "message": message})
+
+
 @app.route("/admin/questions")
 @admin_required
 def admin_questions():
     assessment = request.args.get("assessment", "posttest").strip().lower()
+def admin_questions():
+    assessment = request.args.get("assessment", "posttest").strip().lower()
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"
+    session["admin_assessment"] = assessment
     conn = connect()
     batches = conn.execute(
         "SELECT slot,name FROM batches WHERE assessment_type=? ORDER BY slot", (assessment,)
@@ -1601,14 +1725,14 @@ def admin_question_add():
     try:
         batch_slot, part, topic, prompt, code, options, correct, explanation = _question_form_values(request.form)
         conn = connect()
-        batch = conn.execute("SELECT assessment_type FROM batches WHERE slot=?", (batch_slot,)).fetchone()
+        batch = conn.execute("SELECT assessment_type,subject_id,assessment_id FROM batches WHERE slot=?", (batch_slot,)).fetchone()
         if not batch or batch["assessment_type"] != assessment:
             conn.close()
             raise ValueError("The selected bank does not belong to this assessment.")
         conn.execute(
-            """INSERT INTO questions(part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,correct_option,explanation,active,created_by)
-               VALUES(?,?,?,?,?,?,?,?,?,?,?,1,'instructor')""",
-            (part, batch_slot, topic, prompt, code, options["A"], options["B"], options["C"], options["D"], correct, explanation),
+            """INSERT INTO questions(part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,correct_option,explanation,active,created_by,subject_id,assessment_id)
+               VALUES(?,?,?,?,?,?,?,?,?,?,?,1,'instructor',?,?)""",
+            (part, batch_slot, topic, prompt, code, options["A"], options["B"], options["C"], options["D"], correct, explanation, batch["subject_id"], batch["assessment_id"]),
         )
         conn.commit()
         conn.close()
@@ -1639,8 +1763,8 @@ def admin_question_edit(qid):
             if not batch or batch["assessment_type"] != assessment:
                 raise ValueError("The selected bank does not belong to this assessment.")
             conn.execute(
-                """UPDATE questions SET part=?,batch_slot=?,topic=?,prompt=?,code=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_option=?,explanation=? WHERE id=?""",
-                (part, batch_slot, topic, prompt, code, options["A"], options["B"], options["C"], options["D"], correct, explanation, qid),
+                """UPDATE questions SET part=?,batch_slot=?,topic=?,prompt=?,code=?,option_a=?,option_b=?,option_c=?,option_d=?,correct_option=?,explanation=?,subject_id=?,assessment_id=? WHERE id=?""",
+                (part, batch_slot, topic, prompt, code, options["A"], options["B"], options["C"], options["D"], correct, explanation, batch["subject_id"], batch["assessment_id"], qid),
             )
             conn.commit()
             flash("Question updated.", "success")
@@ -1714,6 +1838,7 @@ def admin_analysis():
     assessment = request.args.get("assessment", "posttest").strip().lower()
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"
+    session["admin_assessment"] = assessment
     batch_slot = request.args.get("batch_slot", "").strip()
     part = request.args.get("part", "").strip()
     topic = request.args.get("topic", "").strip()
@@ -1915,6 +2040,11 @@ def import_private_questions():
                               correct_option,explanation,active,'dryrun-runtime-copy'
                        FROM questions WHERE batch_slot=9 ORDER BY id"""
                 )
+            conn.execute(
+                """UPDATE questions SET subject_id=(SELECT b.subject_id FROM batches b WHERE b.slot=questions.batch_slot),
+                       assessment_id=(SELECT b.assessment_id FROM batches b WHERE b.slot=questions.batch_slot)
+                   WHERE subject_id IS NULL OR assessment_id IS NULL"""
+            )
             conn.commit()
         except Exception:
             conn.rollback()
@@ -1949,6 +2079,11 @@ def export_questions():
     for r in rows:
         writer.writerow([r[k] for k in ["id", "part", "batch_slot", "topic", "prompt", "code", "option_a", "option_b", "option_c", "option_d", "correct_option", "active", "created_by"]])
     return Response(sio.getvalue(), mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename=csdc101_{assessment}_question_bank.csv"})
+
+
+# Custos Next: subjects, multi-assessment workspace, and secure C++ Programming Lab.
+from workspace import register as register_nextgen
+register_nextgen(app)
 
 
 if __name__ == "__main__":

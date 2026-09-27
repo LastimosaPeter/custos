@@ -1,7 +1,8 @@
 {% extends "base.html" %}
 {% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Dashboard{% endblock %}
 {% block header_right %}
-<nav class="admin-nav"><a class="active" href="{{ url_for('admin_dashboard', assessment=assessment) }}">Dashboard</a><a href="{{ url_for('admin_monitor') }}">Monitor</a><a href="{{ url_for('admin_analysis', assessment=assessment) }}">Item Analysis</a><a href="{{ url_for('admin_questions', assessment=assessment) }}">Question Banks</a><a href="{{ url_for('admin_testing', assessment=assessment) }}">Testing</a><a href="{{ url_for('admin_logout') }}">Sign out</a></nav>
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(assessment) }}
 {% endblock %}
 {% block content %}
 <div class="dashboard-heading">
@@ -59,7 +60,7 @@
     <tbody>
       {% for s in sessions %}
       <tr>
-        <td><strong>{{ s.student_name or s.email }}</strong>{% if s.student_name %}<br><small>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.email }}</small>{% endif %}</td><td>{{ s.batch_name }}</td><td><span class="status {{ s.status }}">{{ s.status }}</span></td>
+        <td><strong>{% if s.last_name or s.first_name %}{{ s.last_name or '' }}{% if s.last_name and s.first_name %}, {% endif %}{{ s.first_name or '' }}{% else %}{{ s.student_name or s.email }}{% endif %}</strong>{% if s.student_name %}<br><small>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.email }}</small>{% endif %}</td><td>{{ s.batch_name }}</td><td><span class="status {{ s.status }}">{{ s.status }}</span></td>
         <td>{% if s.status == 'submitted' %}{{ s.auto_total }}/{{ 55 if assessment == 'midterm' else 50 }}{% else %}—{% endif %}</td>
         <td>{% if s.security_locked %}<span class="security-state-badge locked">Locked</span>{% else %}<span class="security-mini">{{ s.violation_count or 0 }}/3 violations · {{ s.flagged_count }} flags</span>{% endif %}</td>
         <td>{% if s.unread_messages %}<span class="chat-unread-dashboard">{{ s.unread_messages }} new</span>{% else %}<span class="subtle">—</span>{% endif %}</td>

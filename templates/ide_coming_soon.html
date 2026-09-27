@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Custos - IDE Coming Soon{% endblock %}
+{% block content %}
+<div class="coming-soon-wrap">
+  <section class="coming-soon-card" aria-labelledby="coming-soon-title">
+    <div class="work-zone-sign" aria-hidden="true">
+      <span class="work-zone-icon">🚧</span>
+      <strong>CAUTION</strong>
+      <small>MEN AT WORK</small>
+    </div>
+    <div class="eyebrow">CUSTOS · PROGRAMMING ENVIRONMENT</div>
+    <h1 id="coming-soon-title">IDE is under construction.</h1>
+    <p>The secure Custos programming environment is being prepared for a future release. Student access is currently disabled while the editor, code runner, and assessment workflow are being finalized.</p>
+    <div class="coming-soon-stripe" aria-hidden="true"></div>
+    <a class="primary button-link" href="{{ url_for('index') }}">Return to Custos</a>
+  </section>
+</div>
+{% endblock %}

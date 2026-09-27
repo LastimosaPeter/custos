@@ -1,167 +1,117 @@
-# Custos v0.98 · Scarabs
+# Custos Next
 
-**The Official Assessment Portal of CSDC101**
+**Custos** is a PostgreSQL-ready secure assessment platform designed around **Instructors → Subjects → Assessments → Attempts**. The current CSDC101 objective-exam workflow remains supported while the Workspace provides the foundation for additional subjects, assessment types, instructors, and a future secure C++ Programming Lab.
 
-This is the **GitHub-safe deployment build** of Custos. It contains the Flask application, templates, static assets, security controls, instructor tools, question-bank editor/importer, live monitor, and Render/PostgreSQL deployment configuration.
+## Instructor information architecture
 
-## Database mode
+The instructor header now uses one consistent hierarchy across Custos:
 
-Custos now supports two database backends without changing application code:
+- **Workspace** — the primary management surface for subjects, assessments, instructors, and their settings.
+- **Assessment** — a grouped menu containing Dashboard, Live Monitor, Item Analysis, Question Banks, and Testing.
+- **Messages** — a central inbox for student exam chat with AJAX replies (no full-page refresh).
+- **IDE** — instructor-only programming-lab configuration and preview while the feature is under development.
 
-- **Local development:** SQLite (`exam.db`) when `DATABASE_URL` is blank or unset.
-- **Production / Render:** PostgreSQL when `DATABASE_URL` is set.
+After instructor sign-in, Custos opens **Workspace** first.
 
-Render can inject its managed PostgreSQL connection string directly into `DATABASE_URL`. The application initializes the schema automatically on startup.
+## Student IDE release gate
 
-## Important: no exam questions are included
+The IDE code is included in the project, but public student access is **disabled by default**:
 
-This repository intentionally contains **no Midterm/Post-test question CSVs, answer keys, generated question source, populated database, or private test-set bundles**.
-
-After deployment:
-
-1. Sign in to **Instructor View**.
-2. Open **Question Banks**.
-3. Use **Load Private Question Bank**.
-4. Upload the private CSV from your secure local copy of Custos.
-5. Configure the five Midterm bonus questions.
-6. Regenerate session keys and configure assessment windows before opening an exam.
-
-The uploaded CSV is parsed in memory and inserted into PostgreSQL; Custos does not save the uploaded CSV into the repository or application filesystem.
-
-Expected private CSV columns:
-
-```text
-part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,correct_option,explanation
+```env
+STUDENT_IDE_ENABLED=0
 ```
 
-Each imported bank must contain at least **40 active Part I** and **20 active Part II** items.
+The public Home navigation shows **IDE** as greyed/Coming Soon. Clicking it opens the Caution / Men at Work page. Direct public visits to `/ide` are also redirected there.
 
-## Local setup with SQLite
+Instructor IDE management and instructor preview remain available. When the feature is ready for students, set `STUDENT_IDE_ENABLED=1` and configure an isolated production code runner before deployment.
 
-```bash
-python -m venv .venv
+## C++ execution
+
+Production defaults to:
+
+```env
+CODE_RUNNER_BACKEND=disabled
 ```
 
-Windows PowerShell:
+For local development only, with `g++` installed:
+
+```env
+CODE_RUNNER_BACKEND=local
+CODE_RUNNER_ALLOW_LOCAL=1
+CXX=g++
+```
+
+For production, use an isolated Judge0-compatible service:
+
+```env
+CODE_RUNNER_BACKEND=judge0
+JUDGE0_URL=https://your-isolated-runner.example.com
+JUDGE0_CPP_LANGUAGE_ID=54
+```
+
+Do not enable direct local execution on a public Flask/Render service.
+
+## Database
+
+Custos uses PostgreSQL whenever `DATABASE_URL` is configured, and SQLite when it is blank. Startup migrations are additive and preserve existing attempts.
+
+Student identity now stores separate `first_name` and `last_name` fields while retaining `student_name` for backwards compatibility with old attempts. Existing records are best-effort backfilled during migration.
+
+Live Monitor also stores a non-destructive `monitor_done` state. **Mark Done** removes an attempt from Live Monitor without changing its answers, score, or submission state. If that student resumes the attempt, Custos automatically returns the attempt to Live Monitor.
+
+## PWA / responsive behavior
+
+- iOS/iPadOS and Android installed-app support
+- white-background Custos PWA icons
+- safe-area handling for camera/status bar and Home indicator
+- iPad landscape stays close to the desktop layout
+- installed-app status is shown as a green status box
+- desktop fullscreen and installed-PWA secure exam modes remain supported
+
+## Student identity
+
+Student assessment sign-in now asks for:
+
+- First Name
+- Last Name
+- Program
+- Section
+- ADNU email
+- Session key
+
+Live monitoring displays new identities as **Last Name, First Name** for quick scanning, with older attempts falling back to their saved full name.
+
+## Local setup
 
 ```powershell
-.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-copy .env.example .env
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install -r requirements.txt
+Copy-Item .env.example .env
 ```
 
-macOS/Linux:
+Set `SECRET_KEY` and `ADMIN_PASSWORD` in `.env`, then:
 
-```bash
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-```
-
-Edit `.env` and set `SECRET_KEY` and `ADMIN_PASSWORD`. Leave `DATABASE_URL=` blank to keep using SQLite locally.
-
-Then:
-
-```bash
+```powershell
 python init_db.py
 python app.py
 ```
 
-The health endpoint is available at:
+## PostgreSQL / Render
 
-```text
-/health
+`render.yaml` configures the web service and PostgreSQL connection. The included deployment configuration keeps:
+
+```env
+STUDENT_IDE_ENABLED=0
+CODE_RUNNER_BACKEND=disabled
 ```
 
-It reports whether Custos is currently using `sqlite` or `postgresql`.
+until you intentionally enable the student programming environment.
 
-## Render + PostgreSQL
+## GitHub safety
 
-This repository includes `render.yaml`, so the easiest deployment path is a **Render Blueprint**.
+Never commit `.env`, databases, or private question banks. `.gitignore` excludes those files. The GitHub-ready package supplied with this revision does **not** contain the private question-bank CSVs.
 
-The Blueprint creates:
+## Current release
 
-- a Python web service named `custos`
-- a Render PostgreSQL database named `custos-db`
-- `DATABASE_URL` linked automatically to the database's internal connection string
-- a generated `SECRET_KEY`
-- HTTPS-only session cookies
-- a `/health` health check
-
-During Blueprint creation, Render prompts you for `ADMIN_PASSWORD`. Do not put the password in GitHub.
-
-The included `render.yaml` uses Render's **Free** plans for initial testing. Free services are suitable for a dry run, not a live graded examination. Before the real exam, upgrade both the web service and database to paid instances so the web service does not spin down and the database does not expire.
-
-### Manual Render configuration
-
-If you do not use the Blueprint, create a Render Postgres database and a Python Web Service. Set:
-
-```text
-Build Command: pip install -r requirements.txt
-Start Command: gunicorn --workers 2 --threads 4 --timeout 120 app:app
-```
-
-Set these environment variables in Render:
-
-```text
-DATABASE_URL=<Render Postgres internal connection URL>
-SECRET_KEY=<long random secret>
-ADMIN_USERNAME=<your instructor username>
-ADMIN_PASSWORD=<strong private password>
-ALLOWED_EMAIL_DOMAIN=adnu.edu.ph
-APP_TIMEZONE=Asia/Manila
-SESSION_COOKIE_SECURE=1
-```
-
-Do not set `EXAM_DB_PATH` on Render when PostgreSQL is being used.
-
-## PostgreSQL notes
-
-- `psycopg2-binary` is included in `requirements.txt`.
-- Existing Custos queries remain parameterized.
-- IDs are generated by PostgreSQL `SERIAL` columns.
-- The schema is created automatically at process startup.
-- A PostgreSQL advisory lock prevents multiple Gunicorn workers from racing during first-time schema initialization.
-- Each request opens a short-lived database connection and closes it after use.
-
-## Repository hygiene
-
-`.gitignore` excludes:
-
-- `.env`
-- SQLite databases
-- Python caches
-- private bank directories
-- question-bank CSV exports
-- answer-key CSVs
-- test-set bundles
-- generated question-bank source
-
-Do not override those exclusions for a public repository.
-
-## Security note
-
-Custos logs browser/exam events and implements server-backed temporary/permanent attempt locks, but normal web browsers cannot physically disable a monitor or guarantee interception of every operating-system action. Veyon remains the instructor-side workstation monitoring layer.
-
-## Mobile installed-app exam mode (PWA)
-
-Custos can be installed as a Progressive Web App (PWA) so mobile devices can run the exam without normal browser chrome.
-
-### iPhone / iPad
-1. Open the deployed Custos site in Safari.
-2. Tap **Share**.
-3. Choose **Add to Home Screen** and confirm **Add**.
-4. Launch Custos from the Home Screen icon.
-5. Enter the assessment normally. Custos recognizes iOS/iPadOS standalone app mode as a valid secure display mode.
-
-### Android
-1. Open the deployed Custos site in Chrome or Edge.
-2. Use **Install app** or **Add to Home screen** from the browser menu. On supported browsers Custos can also show a native install prompt.
-3. Launch Custos from its installed app icon.
-4. Enter the assessment normally. Custos recognizes installed standalone/fullscreen display mode as a valid secure display mode.
-
-On installed phones/tablets, the exam changes to a mobile app layout with an **Items** drawer for question navigation, safe-area-aware header/footer controls, responsive code and answer panels, and a mobile chat panel. Desktop browser fullscreen behavior is unchanged.
-
-Installed-app mode does **not** give a website operating-system control. Custos still cannot disable the Home gesture, app switcher, screenshots, notifications, Control Center/Quick Settings, or another physical device. Switching Custos to the background is instead detected through browser visibility/focus events and handled by the existing server-backed security-violation rules.
-
-The service worker deliberately does not cache exam pages, APIs, instructor pages, logins, or assessment data. An active exam therefore still requires a network connection to Custos/PostgreSQL.
+Custos v0.98 · **Scarabs**

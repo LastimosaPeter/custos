@@ -27,23 +27,24 @@
 <body class="{% block body_class %}{% endblock %}">
   {% block body %}
   <header class="site-header">
-    <a class="brand-lockup" href="{{ url_for('index') }}" aria-label="CSDC101 Custos home">
-      <img class="brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="CSDC101">
-      <span class="brand-divider" aria-hidden="true"></span>
+    <a class="brand-lockup" href="{{ url_for('index') }}" aria-label="Custos home">
       <span class="custos-wordmark">
-        <img class="custos-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
+        <span class="custos-header-orb" aria-hidden="true"><img class="custos-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></span>
         <span>Custos</span>
       </span>
+      <span class="brand-divider" aria-hidden="true"></span>
+      <img class="brand-logo subject-brand-logo" src="{{ url_for('static', filename=subject_logo_filename|default('img/csdc101-logo.png')) }}" alt="{{ subject_logo_alt|default('CSDC101') }}">
     </a>
     <button class="mobile-nav-toggle" type="button" aria-expanded="false" aria-label="Open navigation" title="Menu"><span aria-hidden="true">☰</span></button>
     {% block header_right %}
     <nav class="site-nav" aria-label="Primary navigation">
       <a href="{{ url_for('student_login') }}">Student View</a>
       <a href="{{ url_for('admin_login') }}">Instructor View</a>
-      <a href="{{ url_for('index') }}">Help</a>
+      <span class="site-nav-divider" aria-hidden="true"></span>
+      <a class="nav-coming-soon" href="{{ url_for('nextgen.ide_coming_soon') }}" data-tooltip="Coming soon" aria-label="IDE — coming soon">IDE</a>
     </nav>
     {% endblock %}
-    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>☾</span></button>
+    <button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>🌙</span></button>
   </header>
   <main class="page-shell">
     <div class="page-shell-inner">

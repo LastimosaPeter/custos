@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ lab.title }}{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav(admin_assessment|default("posttest")) }}
+{% endblock %}
+{% block content %}
+<a class="back-link" href="{{ url_for('nextgen.admin_ide') }}">◂ Back to Programming IDE</a>
+<div class="dashboard-heading"><div><div class="eyebrow">{{ lab.subject_code }} · C++17</div><h1>{{ lab.title }}</h1><p class="subtle">Configure the lab and its coding tasks.</p></div><div class="runner-mini {{ 'ready' if runner.ready else 'warning' }}">{{ runner.backend }} · {{ 'ready' if runner.ready else 'not ready' }}</div></div>
+<section class="content-card"><h2>Lab Settings</h2><form method="post" class="compact-form-grid"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Title<input name="title" value="{{ lab.title }}" required></label><label>Duration<input type="number" name="duration_minutes" value="{{ lab.duration_minutes }}" min="1" max="480"></label><label class="wide-field">Session key<input name="access_code" value="{{ lab.access_code }}" required></label><label class="wide-field">Instructions<textarea name="instructions" rows="3">{{ lab.instructions }}</textarea></label><button class="primary wide-field" type="submit">Save Lab Settings</button></form></section>
+
+<section class="content-card"><div class="section-heading"><div><h2>Add Coding Task</h2><p class="subtle">Hidden tests remain server-side and are never rendered to students.</p></div></div><form method="post" action="{{ url_for('nextgen.admin_ide_task_add', lab_id=lab.id) }}" class="question-editor-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Title<input name="title" required></label><label>Points<input type="number" name="points" value="10" min="0" step="0.5"></label><label class="wide-field">Prompt<textarea name="prompt" rows="3" required></textarea></label><label class="wide-field">Starter code<textarea name="starter_code" rows="8" class="code-editor" spellcheck="false">#include &lt;iostream&gt;
+using namespace std;
+
+int main() {
+    return 0;
+}</textarea></label><label class="wide-field">Hidden tests JSON<textarea name="hidden_tests_json" rows="5" class="code-editor" spellcheck="false">[{"stdin":"2 3\n","expected":"5"}]</textarea><small>Each test needs <code>stdin</code> and <code>expected</code>.</small></label><div class="add-question-submit"><button class="primary" type="submit">Add Coding Task</button></div></form></section>
+
+{% for task in tasks %}<section class="content-card coding-task-admin"><form method="post" action="{{ url_for('nextgen.admin_ide_task_edit', task_id=task.id) }}" class="question-editor-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><div class="section-heading"><div><div class="eyebrow">TASK {{ task.position }} · {{ task.points }} POINTS</div><h2>{{ task.title }}</h2></div><label class="toggle-inline"><input type="checkbox" name="active" value="1" {% if task.active %}checked{% endif %}> Active</label></div><label>Title<input name="title" value="{{ task.title }}" required></label><label>Points<input type="number" name="points" value="{{ task.points }}" min="0" step="0.5"></label><label class="wide-field">Prompt<textarea name="prompt" rows="3" required>{{ task.prompt }}</textarea></label><label class="wide-field">Starter code<textarea name="starter_code" rows="8" class="code-editor">{{ task.starter_code }}</textarea></label><label class="wide-field">Hidden tests JSON<textarea name="hidden_tests_json" rows="5" class="code-editor">{{ task.hidden_tests_json }}</textarea></label><div class="add-question-submit"><button class="secondary" type="submit">Save Task</button></div></form></section>{% endfor %}
+{% endblock %}
