@@ -2491,6 +2491,7 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
     padding-right:max(14px, env(safe-area-inset-right, 0px)) !important;
   }
 
+  html.pwa-standalone body:not(.exam-page) .breadcrumb-nav{padding-top:4px!important;}
   html.pwa-standalone body:not(.exam-page) .site-footer{
     box-sizing:border-box;
     height:auto !important;
@@ -2945,4 +2946,128 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
 @media(max-width:360px){
   .site-header .subject-brand-logo{width:78px!important;max-width:24vw!important}
   .site-header .custos-wordmark>span:last-child{font-size:13px}
+}
+
+
+/* =========================================================
+   Custos UI consistency pass · breadcrumb / footer / nav
+   2026-09-27
+   ========================================================= */
+
+/* Breadcrumbs share the exact content column used by headings/cards. */
+.breadcrumb-nav{
+  width:100%;
+  max-width:100%;
+  box-sizing:border-box;
+  margin:0 0 14px;
+  padding:0;
+  min-height:18px;
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:5px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.25;
+  font-weight:700;
+}
+.breadcrumb-nav a{font-weight:700;color:var(--muted)}
+.breadcrumb-current{font-weight:800}
+.breadcrumb-separator{font-size:13px;line-height:1;color:#a6b0bf}
+
+/* Workspace is a peer navigation item, not a primary filled CTA. */
+.admin-nav .workspace-link{
+  font-weight:700!important;
+  color:#4b5870!important;
+  background:transparent!important;
+  border:0!important;
+}
+.admin-nav .workspace-link:hover,
+.admin-nav .workspace-link.active{
+  color:var(--accent)!important;
+  background:#edf5ff!important;
+  border:0!important;
+}
+:root[data-theme="dark"] .admin-nav .workspace-link{
+  color:#b8c4d6!important;
+  background:transparent!important;
+  border:0!important;
+}
+:root[data-theme="dark"] .admin-nav .workspace-link:hover,
+:root[data-theme="dark"] .admin-nav .workspace-link.active{
+  color:#83baff!important;
+  background:#1d2a3b!important;
+}
+
+/* Compact application footer. The iOS safe inset is added exactly once. */
+.site-footer{
+  box-sizing:border-box;
+  height:28px!important;
+  min-height:28px!important;
+  flex:0 0 28px!important;
+  padding:0 16px!important;
+  gap:5px;
+  font-size:9px;
+  line-height:1;
+  align-items:center;
+}
+
+@media(max-width:700px){
+  .breadcrumb-nav{
+    margin-bottom:12px;
+    padding-top:4px;
+    min-height:17px;
+    font-size:12px;
+    line-height:1.2;
+    font-weight:700;
+    gap:4px;
+  }
+  .breadcrumb-nav a{font-weight:700}
+  .breadcrumb-separator{font-size:12px}
+  .site-footer{
+    height:26px!important;
+    min-height:26px!important;
+    flex-basis:26px!important;
+    padding:0 12px!important;
+    font-size:9px;
+  }
+}
+
+/* Installed iOS/Android app: 26px footer strip + the OS safe area only once. */
+@media(max-width:1024px){
+  html.pwa-standalone body:not(.exam-page) .breadcrumb-nav{padding-top:4px!important;}
+  html.pwa-standalone body:not(.exam-page) .site-footer{
+    box-sizing:border-box!important;
+    height:auto!important;
+    min-height:calc(26px + env(safe-area-inset-bottom, 0px))!important;
+    flex:0 0 calc(26px + env(safe-area-inset-bottom, 0px))!important;
+    padding-top:0!important;
+    padding-bottom:env(safe-area-inset-bottom, 0px)!important;
+    padding-left:max(12px, env(safe-area-inset-left, 0px))!important;
+    padding-right:max(12px, env(safe-area-inset-right, 0px))!important;
+  }
+  html.pwa-standalone body:not(.exam-page) .page-shell-inner{
+    padding-bottom:max(96px, calc(62px + env(safe-area-inset-bottom, 0px)))!important;
+  }
+  html.pwa-standalone body:not(.exam-page) .page-watermark{
+    bottom:calc(36px + env(safe-area-inset-bottom, 0px))!important;
+  }
+  html.pwa-standalone body:not(.exam-page) .institution-logos,
+  html.pwa-standalone body:not(.exam-page) .institution-logos-dark{
+    bottom:calc(34px + env(safe-area-inset-bottom, 0px))!important;
+  }
+}
+
+/* Desktop alignment: breadcrumb and content cards inherit this one shared gutter. */
+@media(min-width:1051px){
+  body:not(.exam-page) .page-shell-inner{
+    max-width:1180px;
+    padding-left:22px;
+    padding-right:22px;
+  }
+  body:not(.exam-page) .breadcrumb-nav{
+    width:100%;
+    margin-left:0;
+    margin-right:0;
+  }
 }

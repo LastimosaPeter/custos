@@ -5,7 +5,7 @@
 {{ admin_nav(admin_assessment|default("posttest")) }}
 {% endblock %}
 {% block content %}
-<a class="back-link" href="{{ url_for('nextgen.admin_ide') }}">◂ Back to Programming IDE</a>
+<a class="back-link" href="{{ url_for('nextgen.admin_ide') }}">◂ Back to Caudex IDE</a>
 <div class="dashboard-heading"><div><div class="eyebrow">{{ lab.subject_code }} · C++17</div><h1>{{ lab.title }}</h1><p class="subtle">Configure the lab and its coding tasks.</p></div><div class="runner-mini {{ 'ready' if runner.ready else 'warning' }}">{{ runner.backend }} · {{ 'ready' if runner.ready else 'not ready' }}</div></div>
 <section class="content-card"><h2>Lab Settings</h2><form method="post" class="compact-form-grid"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><label>Title<input name="title" value="{{ lab.title }}" required></label><label>Duration<input type="number" name="duration_minutes" value="{{ lab.duration_minutes }}" min="1" max="480"></label><label class="wide-field">Session key<input name="access_code" value="{{ lab.access_code }}" required></label><label class="wide-field">Instructions<textarea name="instructions" rows="3">{{ lab.instructions }}</textarea></label><button class="primary wide-field" type="submit">Save Lab Settings</button></form></section>
 

@@ -1,11 +1,11 @@
 {% extends "base.html" %}
-{% block title %}Custos - Programming IDE{% endblock %}
+{% block title %}Custos - Caudex IDE{% endblock %}
 {% block header_right %}
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav(admin_assessment|default("posttest")) }}
 {% endblock %}
 {% block content %}
-<div class="dashboard-heading"><div><div class="eyebrow">CUSTOS PROGRAMMING LAB</div><h1>Secure C++ IDE</h1><p class="subtle">Create coding tasks, monitor attempts, and review submissions without weakening the exam-security model.</p></div><a class="secondary button-link" href="{{ url_for('nextgen.workspace') }}">Manage Workspace</a></div>
+<div class="dashboard-heading"><div><div class="eyebrow">SECURE C++ PROGRAMMING ENVIRONMENT</div><h1>Caudex IDE</h1><p class="subtle">Create coding tasks, monitor attempts, and review submissions without weakening the exam-security model.</p></div><a class="secondary button-link" href="{{ url_for('nextgen.workspace') }}">Manage Workspace</a></div>
 <div class="ide-private-banner"><strong>Student access restricted</strong><span>The IDE is included in this build for instructor development and preview only. Public student entry remains behind <code>STUDENT_IDE_ENABLED=0</code>.</span></div>
 <div class="runner-banner {{ 'ready' if runner.ready else 'warning' }}"><strong>{{ 'Runner ready' if runner.ready else 'Runner not configured' }}</strong><span>{{ runner.detail }} · backend: <code>{{ runner.backend }}</code></span></div>
 

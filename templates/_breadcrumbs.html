@@ -62,9 +62,9 @@
     <a href="{{ url_for('nextgen.workspace') }}">Workspace</a>
     <span class="breadcrumb-separator" aria-hidden="true">›</span>
     {% if ep == 'nextgen.admin_ide' %}
-      <span class="breadcrumb-current" aria-current="page">IDE</span>
+      <span class="breadcrumb-current" aria-current="page">Caudex IDE</span>
     {% else %}
-      <a href="{{ url_for('nextgen.admin_ide') }}">IDE</a>
+      <a href="{{ url_for('nextgen.admin_ide') }}">Caudex IDE</a>
       <span class="breadcrumb-separator" aria-hidden="true">›</span>
       <span class="breadcrumb-current" aria-current="page">{{ 'Programming Lab' if ep == 'nextgen.admin_ide_lab' else 'Coding Session Review' }}</span>
     {% endif %}

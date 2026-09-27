@@ -15,7 +15,7 @@
     </div>
   </details>
   <a class="{% if ep == 'admin_messages' %}active{% endif %}" href="{{ url_for('admin_messages') }}">Messages</a>
-  <a class="{% if ep.startswith('nextgen.admin_ide') %}active{% endif %}" href="{{ url_for('nextgen.admin_ide') }}">IDE</a>
+  <a class="{% if ep.startswith('nextgen.admin_ide') %}active{% endif %}" href="{{ url_for('nextgen.admin_ide') }}">Caudex IDE</a>
   <span class="admin-nav-divider" aria-hidden="true"></span>
   <a href="{{ url_for('admin_logout') }}">Sign out</a>
 </nav>
