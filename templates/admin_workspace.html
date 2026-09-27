@@ -46,18 +46,11 @@
   {% else %}<section class="content-card"><h2>Instructor Accounts</h2><p class="subtle">Only the Custos owner can create or manage instructor logins.</p></section>{% endif %}
 </div>
 
-<section class="content-card">
-  <div class="section-heading"><div><h2>Create Assessment</h2><p class="subtle">Create a quiz, examination, practice activity, or private Programming Lab.</p></div></div>
-  <form method="post" action="{{ url_for('nextgen.assessment_add') }}" class="assessment-create-grid">
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Subject<select name="subject_id" required>{% for s in subjects %}<option value="{{ s.id }}">{{ s.code }} · {{ s.name }}</option>{% endfor %}</select></label>
-    <label>Title<input name="title" placeholder="Quiz 01" required></label>
-    <label>Type<select name="assessment_type"><option value="quiz">Quiz</option><option value="posttest">Post-test</option><option value="midterm">Midterm</option><option value="exam">Exam</option><option value="practice">Practice</option><option value="programming_lab">Programming Lab / IDE</option></select></label>
-    <label>Duration (min)<input type="number" name="duration_minutes" value="60" min="1" max="480"></label>
-    <label>Security<select name="security_mode"><option value="standard">Standard</option><option value="strict" selected>Strict</option><option value="practice">Practice</option></select></label>
-    <label class="wide-field">Description<textarea name="description" rows="2"></textarea></label>
-    <button class="primary wide-field" type="submit">Create Assessment</button>
-  </form>
+<section class="content-card workspace-assessment-handoff">
+  <div class="section-heading">
+    <div><h2>Assessment Creation</h2><p class="subtle">Assessment delivery now has its own dashboard. Build a test from a blank question bank instead of choosing a fixed Midterm/Post-test template.</p></div>
+    <a class="primary button-link" href="{{ url_for('admin_dashboard') }}">Open Assessments Dashboard →</a>
+  </div>
 </section>
 
 <div class="workspace-management-grid">
@@ -105,7 +98,7 @@
   <div class="workspace-assessment-list">
     {% for a in assessments %}
     <details class="workspace-assessment-record">
-      <summary><div><span class="workspace-subject-chip">{{ a.subject_code }}</span><strong>{{ a.title }}</strong><small>{{ a.assessment_type|replace('_',' ')|title }} · {{ a.duration_minutes }} min · {{ a.security_mode|title }}</small></div><div class="workspace-assessment-meta"><span class="status {{ 'submitted' if a.active else 'disabled' }}">{{ 'Active' if a.active else 'Disabled' }}</span>{% if a.has_lab %}<span class="ide-private-chip">IDE private</span>{% endif %}</div></summary>
+      <summary><div><span class="workspace-subject-chip">{{ a.subject_code }}</span><strong>{{ a.title }}</strong><small>{{ (a.display_type if a.assessment_type == 'custom' else a.assessment_type|replace('_',' ')|title) }} · {{ a.duration_minutes }} min · {{ a.security_mode|title }}</small></div><div class="workspace-assessment-meta"><span class="status {{ 'submitted' if a.active else 'disabled' }}">{{ 'Active' if a.active else 'Disabled' }}</span>{% if a.has_lab %}<span class="ide-private-chip">IDE private</span>{% endif %}</div></summary>
       <form method="post" action="{{ url_for('nextgen.assessment_edit', assessment_id=a.id) }}" class="assessment-create-grid workspace-edit-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Title<input name="title" value="{{ a.title }}" required></label>
@@ -114,7 +107,7 @@
         <label>Access key<input name="access_code" value="{{ a.access_code or '' }}" placeholder="Legacy assessments use set keys"></label>
         <label class="wide-field">Description<textarea name="description" rows="2">{{ a.description or '' }}</textarea></label>
         <label class="check-row wide-field"><input type="checkbox" name="active" value="1" {% if a.active %}checked{% endif %}><span>Assessment is active</span></label>
-        <div class="workspace-edit-actions wide-field"><button class="secondary" type="submit">Save Assessment</button>{% if a.has_lab %}<a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Manage IDE Tasks</a>{% else %}<a class="primary button-link" href="{{ url_for('admin_dashboard', assessment=a.assessment_type if a.assessment_type in ['midterm','posttest'] else 'posttest') }}">Open Assessment Tools</a>{% endif %}</div>
+        <div class="workspace-edit-actions wide-field"><button class="secondary" type="submit">Save Assessment</button>{% if a.has_lab %}<a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Manage Caudex Tasks</a>{% elif a.assessment_type == 'custom' %}<a class="primary button-link" href="{{ url_for('nextgen.custom_assessment', assessment_id=a.id) }}">Open Builder</a>{% elif a.assessment_type in ['midterm','posttest'] %}<a class="primary button-link" href="{{ url_for('admin_dashboard', assessment=a.assessment_type) }}">Open Legacy Dashboard</a>{% endif %}</div>
       </form>
     </details>
     {% else %}<p class="empty-cell">No assessments yet.</p>{% endfor %}

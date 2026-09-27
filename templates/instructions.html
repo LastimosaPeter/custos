@@ -2,16 +2,23 @@
 {% block title %}Custos - Exam Instructions{% endblock %}
 {% block content %}
 <div class="content-card instructions-card">
-  <div class="eyebrow">{{ batch.name }}</div>
+  <div class="eyebrow">{% if assessment %}{{ assessment.subject_code }} · {{ assessment.display_type or assessment.assessment_type|replace("_"," ")|title }}{% else %}{{ batch.name }}{% endif %}</div>
   <h1>Before You Begin</h1>
   <p>Signed in as <strong>{{ student_name }}</strong> · <strong>{{ program }} {{ class_section }}</strong><br><span class="subtle">{{ email }}</span></p>
 
   <div class="instruction-grid">
     <section>
-      <h2>Exam Structure</h2>
-      <p><strong>Part I:</strong> 40 Code Tracing / Inspection questions. Raw correct answers are recorded, but this part is capped at <strong>30 points</strong>.</p>
-      <p><strong>Part II:</strong> 20 Programming Logic / Code Selection questions worth <strong>20 points</strong>.</p>
-      {% if batch.assessment_type == 'midterm' %}<p><strong>Part III · Bonus:</strong> 5 short-answer general-knowledge questions worth up to <strong>+5 points</strong>.</p><p><strong>Base score:</strong> 50 points · <strong>Maximum with bonus:</strong> 55 points.</p>{% else %}<p><strong>Total:</strong> 50 points.</p>{% endif %}
+      <h2>Assessment Structure</h2>
+      {% if assessment and assessment.assessment_type == 'custom' %}
+        <p><strong>{{ assessment.display_type or 'Custom Assessment' }}:</strong> {{ custom_question_count }} multiple-choice question{{ '' if custom_question_count == 1 else 's' }}.</p>
+        <p><strong>Maximum score:</strong> {{ custom_max_score }} point{{ '' if custom_max_score == 1 else 's' }}.</p>
+        {% if assessment.shuffle_questions %}<p>Question order may be different for each student.</p>{% endif %}
+        {% if assessment.shuffle_options %}<p>Answer choices may also appear in a different order.</p>{% endif %}
+      {% else %}
+        <p><strong>Part I:</strong> 40 Code Tracing / Inspection questions. Raw correct answers are recorded, but this part is capped at <strong>30 points</strong>.</p>
+        <p><strong>Part II:</strong> 20 Programming Logic / Code Selection questions worth <strong>20 points</strong>.</p>
+        {% if batch.assessment_type == 'midterm' %}<p><strong>Part III · Bonus:</strong> 5 short-answer general-knowledge questions worth up to <strong>+5 points</strong>.</p><p><strong>Base score:</strong> 50 points · <strong>Maximum with bonus:</strong> 55 points.</p>{% else %}<p><strong>Total:</strong> 50 points.</p>{% endif %}
+      {% endif %}
     </section>
     <section>
       <h2>Time & Security</h2>

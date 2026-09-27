@@ -92,6 +92,8 @@ CREATE TABLE IF NOT EXISTS questions (
     option_d TEXT NOT NULL,
     correct_option TEXT NOT NULL CHECK(correct_option IN ('A','B','C','D')),
     explanation TEXT NOT NULL DEFAULT '',
+    points INTEGER NOT NULL DEFAULT 1,
+    position INTEGER,
     active INTEGER NOT NULL DEFAULT 1,
     created_by TEXT NOT NULL DEFAULT 'builtin'
 );
@@ -239,6 +241,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     title TEXT NOT NULL,
     slug TEXT NOT NULL UNIQUE,
     assessment_type TEXT NOT NULL DEFAULT 'quiz',
+    display_type TEXT NOT NULL DEFAULT 'Assessment',
     description TEXT NOT NULL DEFAULT '',
     duration_minutes INTEGER NOT NULL DEFAULT 60,
     start_at TEXT,
@@ -246,6 +249,11 @@ CREATE TABLE IF NOT EXISTS assessments (
     access_code TEXT UNIQUE,
     max_attempts INTEGER NOT NULL DEFAULT 1,
     security_mode TEXT NOT NULL DEFAULT 'standard',
+    reveal_score INTEGER NOT NULL DEFAULT 1,
+    shuffle_questions INTEGER NOT NULL DEFAULT 1,
+    shuffle_options INTEGER NOT NULL DEFAULT 1,
+    allowed_sections TEXT NOT NULL DEFAULT '',
+    question_limit INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
     created_by_instructor_id INTEGER,
     created_at TEXT NOT NULL,
@@ -527,6 +535,22 @@ def migrate_schema(conn):
         conn.execute("ALTER TABLE questions ADD COLUMN subject_id INTEGER")
     if "assessment_id" not in question_cols:
         conn.execute("ALTER TABLE questions ADD COLUMN assessment_id INTEGER")
+    if "points" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN points INTEGER NOT NULL DEFAULT 1")
+    if "position" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN position INTEGER")
+
+    assessment_cols = _table_columns(conn, "assessments") if "assessments" in _table_names(conn) else set()
+    for name, definition in {
+        "display_type": "TEXT NOT NULL DEFAULT 'Assessment'",
+        "reveal_score": "INTEGER NOT NULL DEFAULT 1",
+        "shuffle_questions": "INTEGER NOT NULL DEFAULT 1",
+        "shuffle_options": "INTEGER NOT NULL DEFAULT 1",
+        "allowed_sections": "TEXT NOT NULL DEFAULT ''",
+        "question_limit": "INTEGER NOT NULL DEFAULT 0",
+    }.items():
+        if assessment_cols and name not in assessment_cols:
+            conn.execute(f"ALTER TABLE assessments ADD COLUMN {name} {definition}")
 
     batch_cols = _table_columns(conn, "batches")
     if "assessment_type" not in batch_cols:

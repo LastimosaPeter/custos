@@ -49,6 +49,7 @@
   const chatUnreadBadge = document.getElementById('chatUnreadBadge');
 
   const untimed = app.dataset.untimed === '1';
+  const isCustomAssessment = app.dataset.custom === '1';
   const isInstalledAppMode = () =>
     window.matchMedia('(display-mode: standalone)').matches ||
     window.matchMedia('(display-mode: fullscreen)').matches ||
@@ -108,10 +109,14 @@
     navButtons.forEach((b, i) => b.classList.toggle('current', i === current));
     position.textContent = `Question ${current + 1} of ${panels.length}`;
     if (currentPartIndicator) {
-      const part = panels[current].dataset.part;
-      currentPartIndicator.textContent = part === '1'
-        ? 'Part I · Code Tracing / Inspection'
-        : (part === '2' ? 'Part II · Programming Logic / Code Selection' : 'Part III · Bonus Points');
+      if (isCustomAssessment) {
+        currentPartIndicator.textContent = 'Questions';
+      } else {
+        const part = panels[current].dataset.part;
+        currentPartIndicator.textContent = part === '1'
+          ? 'Part I · Code Tracing / Inspection'
+          : (part === '2' ? 'Part II · Programming Logic / Code Selection' : 'Part III · Bonus Points');
+      }
     }
     prevBtn.disabled = current === 0;
     nextBtn.textContent = current === panels.length - 1 ? 'Review' : 'Next';

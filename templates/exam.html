@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Custos - {{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }} Exam{% endblock %}
+{% block title %}Custos - {{ assessment.title if is_custom else ('Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm')) }}{% endblock %}
 {% block body_class %}exam-page{% endblock %}
 {% block body %}
-<div id="examApp" class="exam-app" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}">
+<div id="examApp" class="exam-app" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-custom="{{ 1 if is_custom else 0 }}">
   <header class="exam-header">
     <div class="exam-brand">
       <div class="exam-brand-lockup" aria-label="Custos CSDC101">
@@ -11,8 +11,8 @@
         <img class="exam-brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="CSDC101">
       </div>
       <div class="exam-brand-copy">
-        <strong>{{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }} {% if exam_session.is_test %}<em class="test-chip">TEST MODE</em>{% endif %}</strong>
-        <span>{{ batch.name }}{% if exam_session.is_test and exam_session.test_label %} · {{ exam_session.test_label }}{% endif %}</span>
+        <strong>{% if is_custom %}{{ assessment.display_type or 'Assessment' }}{% else %}{{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }}{% endif %} {% if exam_session.is_test %}<em class="test-chip">TEST MODE</em>{% endif %}</strong>
+        <span>{% if is_custom %}{{ assessment.title }}{% else %}{{ batch.name }}{% endif %}{% if exam_session.is_test and exam_session.test_label %} · {{ exam_session.test_label }}{% endif %}</span>
       </div>
     </div>
     <div class="exam-header-meta">
@@ -27,6 +27,19 @@
       <div class="mobile-question-nav-header"><div class="nav-title">Question Navigator</div><button type="button" id="questionNavClose" class="question-nav-close" aria-label="Close question navigator">×</button></div>
       <div class="nav-legend"><span class="dot answered"></span> Answered <span class="dot current"></span> Current <span class="dot review"></span> Flagged</div>
 
+      {% if is_custom %}
+      <section class="question-part-block" aria-label="Assessment questions">
+        <div class="question-part-heading">
+          <strong>Questions</strong>
+          <span>{{ questions|length }} item{{ '' if questions|length == 1 else 's' }}</span>
+        </div>
+        <div class="question-grid" id="questionGridCustom">
+          {% for q in questions %}
+            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %} {% if q.marked_for_review %}review-flagged{% endif %} {% if (q.q_order - 1) == resume_index %}current{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
+          {% endfor %}
+        </div>
+      </section>
+      {% else %}
       <section class="question-part-block" aria-label="Part I questions">
         <div class="question-part-heading">
           <strong>Part I</strong>
@@ -50,13 +63,14 @@
           {% endfor %}
         </div>
       </section>
+      {% endif %}
     </aside>
     <button type="button" id="questionNavBackdrop" class="question-nav-backdrop" aria-label="Close question navigator" tabindex="-1"></button>
 
     <main class="question-stage">
       <div class="stage-topline">
         <span id="questionPosition">Question {{ resume_index + 1 }} of {{ total_count|default(questions|length) }}</span>
-        <strong id="currentPartIndicator" class="current-part-indicator">Part I · Code Tracing / Inspection</strong>
+        <strong id="currentPartIndicator" class="current-part-indicator">{{ assessment.display_type if is_custom else 'Part I · Code Tracing / Inspection' }}</strong>
         <div class="stage-topline-actions">
           <button type="button" id="reviewFlagBtn" class="review-flag-btn" aria-pressed="false" title="Mark this item so you can return to it later">Flag for Review</button>
           <span id="saveStatus" class="save-status">Ready</span>
@@ -66,7 +80,7 @@
       {% for q in questions %}
       <section class="question-panel {% if loop.index0 != resume_index %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}" data-review-flagged="{{ 1 if q.marked_for_review else 0 }}">
         <div class="part-label">
-          <span>{{ 'Part I · Code Tracing / Inspection' if q.part == 1 else 'Part II · Programming Logic / Code Selection' }}</span>
+          <span>{% if is_custom %}Question {{ q.q_order }}{% if q.points and q.points != 1 %} · {{ q.points }} points{% endif %}{% else %}{{ 'Part I · Code Tracing / Inspection' if q.part == 1 else 'Part II · Programming Logic / Code Selection' }}{% endif %}</span>
         </div>
         <h1>{{ q.prompt }}</h1>
         {% if q.code %}

@@ -24,13 +24,17 @@
     <span>Instructor</span>
     <span class="breadcrumb-separator" aria-hidden="true">›</span>
     <span class="breadcrumb-current" aria-current="page">Workspace</span>
-  {% elif ep in ['admin_dashboard','admin_batch','admin_monitor','admin_analysis','admin_analysis_item','admin_questions','admin_question_edit','admin_testing','admin_session'] %}
+  {% elif ep in ['admin_dashboard','admin_batch','admin_monitor','admin_analysis','admin_analysis_item','admin_questions','admin_question_edit','admin_testing','admin_session'] or ep.startswith('nextgen.custom_') %}
     <a href="{{ url_for('index') }}">Home</a>
     <span class="breadcrumb-separator" aria-hidden="true">›</span>
     <a href="{{ url_for('nextgen.workspace') }}">Workspace</a>
     <span class="breadcrumb-separator" aria-hidden="true">›</span>
     {% if ep == 'admin_dashboard' %}
-      <span class="breadcrumb-current" aria-current="page">{{ assessment_label }} Dashboard</span>
+      <span class="breadcrumb-current" aria-current="page">{% if request.args.get('assessment') %}{{ assessment_label }} Dashboard{% else %}Assessments{% endif %}</span>
+    {% elif ep.startswith('nextgen.custom_') %}
+      <a href="{{ url_for('admin_dashboard') }}">Assessments</a>
+      <span class="breadcrumb-separator" aria-hidden="true">›</span>
+      <span class="breadcrumb-current" aria-current="page">Assessment Builder</span>
     {% elif ep == 'admin_batch' %}
       <a href="{{ url_for('admin_dashboard', assessment=active_assessment) }}">{{ assessment_label }} Dashboard</a>
       <span class="breadcrumb-separator" aria-hidden="true">›</span>

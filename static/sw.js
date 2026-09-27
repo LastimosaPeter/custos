@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-next10-caudexwordmark';
+const CACHE_NAME = 'custos-static-v098-next11-customassess';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -77,3 +77,5 @@ self.addEventListener('fetch', event => {
 // UI cache refresh: Caudex compact lockup 2026-09-27
 
 // UI cache refresh: theme-aware Caudex wordmark 2026-09-27
+
+// UI + assessment engine refresh: free-form custom assessments 2026-09-27

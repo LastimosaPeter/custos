@@ -238,12 +238,42 @@ def session_security_blocked(exam_session):
 
 
 def assign_questions_to_session(conn, sid, batch_slot):
-    """Assign exactly 40 Part I + 20 Part II questions from the active pool.
+    """Assign questions for either legacy fixed-format exams or free-form custom assessments."""
+    batch = conn.execute(
+        "SELECT assessment_type,subject_id,assessment_id FROM batches WHERE slot=?", (batch_slot,)
+    ).fetchone()
+    if not batch:
+        raise ValueError("Assessment delivery set was not found.")
 
-    If an instructor adds more questions to a bank, each new session samples
-    from the larger pool while keeping the exam length fixed. Midterm sessions
-    also receive the five active bonus questions.
-    """
+    rng = random.SystemRandom()
+    if batch["assessment_type"] == "custom" and batch["assessment_id"]:
+        assessment = conn.execute("SELECT * FROM assessments WHERE id=?", (batch["assessment_id"],)).fetchone()
+        qrows = conn.execute(
+            """SELECT id FROM questions WHERE assessment_id=? AND COALESCE(active,1)=1
+               ORDER BY COALESCE(position,id),id""",
+            (batch["assessment_id"],),
+        ).fetchall()
+        selected = [r["id"] for r in qrows]
+        if not selected:
+            raise ValueError("This custom assessment does not have any active questions yet.")
+        limit = int(assessment["question_limit"] or 0) if assessment and "question_limit" in assessment.keys() else 0
+        if limit > 0:
+            if len(selected) < limit:
+                raise ValueError(f"This assessment is configured for {limit} questions but only {len(selected)} are active.")
+            selected = rng.sample(selected, limit) if assessment["shuffle_questions"] else selected[:limit]
+        elif assessment and assessment["shuffle_questions"]:
+            rng.shuffle(selected)
+        for q_order, qid in enumerate(selected, start=1):
+            option_order = ["A", "B", "C", "D"]
+            if not assessment or assessment["shuffle_options"]:
+                rng.shuffle(option_order)
+            conn.execute(
+                "INSERT INTO session_questions(session_id,question_id,q_order,option_order) VALUES (?,?,?,?)",
+                (sid, qid, q_order, json.dumps(option_order)),
+            )
+        return
+
+    # Legacy CSDC101 Midterm/Post-test flow remains unchanged.
     qrows = conn.execute(
         "SELECT id, part FROM questions WHERE batch_slot=? AND COALESCE(active,1)=1 ORDER BY id",
         (batch_slot,),
@@ -255,7 +285,6 @@ def assign_questions_to_session(conn, sid, batch_slot):
             f"Question bank {batch_slot} needs at least 40 active Part I and 20 active Part II questions "
             f"(currently {len(p1)} and {len(p2)})."
         )
-    rng = random.SystemRandom()
     selected_p1 = rng.sample(p1, 40)
     selected_p2 = rng.sample(p2, 20)
     rng.shuffle(selected_p1)
@@ -268,8 +297,7 @@ def assign_questions_to_session(conn, sid, batch_slot):
             (sid, qid, q_order, json.dumps(option_order)),
         )
 
-    batch = conn.execute("SELECT assessment_type,subject_id,assessment_id FROM batches WHERE slot=?", (batch_slot,)).fetchone()
-    if batch and batch["assessment_type"] == "midterm":
+    if batch["assessment_type"] == "midterm":
         bonus = conn.execute(
             "SELECT id,position FROM bonus_questions WHERE assessment_type='midterm' AND active=1 ORDER BY position"
         ).fetchall()
@@ -288,29 +316,41 @@ def finalize_exam(conn, session_id, reason="submitted"):
     if not exam or exam["status"] == "submitted":
         return exam
 
+    assessment = None
+    if "assessment_id" in exam.keys() and exam["assessment_id"]:
+        assessment = conn.execute("SELECT * FROM assessments WHERE id=?", (exam["assessment_id"],)).fetchone()
+
     rows = conn.execute(
-        """SELECT q.part, q.correct_option, sq.selected_option
+        """SELECT q.part, q.correct_option, q.points, sq.selected_option
            FROM session_questions sq
            JOIN questions q ON q.id = sq.question_id
            WHERE sq.session_id=?""",
         (session_id,),
     ).fetchall()
 
-    p1_correct = sum(1 for r in rows if r["part"] == 1 and r["selected_option"] == r["correct_option"])
-    p2_correct = sum(1 for r in rows if r["part"] == 2 and r["selected_option"] == r["correct_option"])
-    p1_score = min(p1_correct, 30)
-    p2_score = p2_correct
+    if assessment and assessment["assessment_type"] == "custom":
+        correct = sum(1 for r in rows if r["selected_option"] == r["correct_option"])
+        score = sum(int(r["points"] or 1) for r in rows if r["selected_option"] == r["correct_option"])
+        p1_correct, p1_score = correct, score
+        p2_correct = p2_score = 0
+        bonus_correct = bonus_score = 0
+        total = score
+    else:
+        p1_correct = sum(1 for r in rows if r["part"] == 1 and r["selected_option"] == r["correct_option"])
+        p2_correct = sum(1 for r in rows if r["part"] == 2 and r["selected_option"] == r["correct_option"])
+        p1_score = min(p1_correct, 30)
+        p2_score = p2_correct
+        bonus_rows = conn.execute(
+            """SELECT sba.answer_text, b.accepted_answer
+               FROM session_bonus_answers sba
+               JOIN bonus_questions b ON b.id=sba.bonus_question_id
+               WHERE sba.session_id=?""",
+            (session_id,),
+        ).fetchall()
+        bonus_correct = sum(1 for r in bonus_rows if short_answer_matches(r["answer_text"], r["accepted_answer"]))
+        bonus_score = bonus_correct
+        total = p1_score + p2_score + bonus_score
 
-    bonus_rows = conn.execute(
-        """SELECT sba.answer_text, b.accepted_answer
-           FROM session_bonus_answers sba
-           JOIN bonus_questions b ON b.id=sba.bonus_question_id
-           WHERE sba.session_id=?""",
-        (session_id,),
-    ).fetchall()
-    bonus_correct = sum(1 for r in bonus_rows if short_answer_matches(r["answer_text"], r["accepted_answer"]))
-    bonus_score = bonus_correct
-    total = p1_score + p2_score + bonus_score
     submitted_at = iso_now()
     conn.execute(
         """UPDATE exam_sessions
@@ -429,8 +469,19 @@ def student_login():
         batch = conn.execute("SELECT * FROM batches WHERE access_code=?", (session_key,)).fetchone()
         if not batch:
             conn.close()
-            flash("Invalid session key. Check the key announced for your assigned set.", "error")
+            flash("Invalid session key. Check the key announced by your instructor.", "error")
             return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
+
+        assessment = None
+        if "assessment_id" in batch.keys() and batch["assessment_id"]:
+            assessment = conn.execute("SELECT * FROM assessments WHERE id=?", (batch["assessment_id"],)).fetchone()
+        if assessment and assessment["assessment_type"] == "custom":
+            allowed = {x.strip().upper() for x in str(assessment["allowed_sections"] or "").split(",") if x.strip()}
+            student_section = f"{program}{class_section}"
+            if allowed and student_section not in allowed:
+                conn.close()
+                flash(f"This assessment is not assigned to {student_section}.", "error")
+                return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
 
         existing = conn.execute(
             "SELECT * FROM exam_sessions WHERE email=? AND batch_id=?",
@@ -488,12 +539,34 @@ def instructions():
         return redirect(url_for("student_login"))
     conn = connect()
     batch = conn.execute("SELECT * FROM batches WHERE id=?", (batch_id,)).fetchone()
+    assessment = None
+    custom_question_count = 0
+    custom_max_score = 0
+    if batch and "assessment_id" in batch.keys() and batch["assessment_id"]:
+        assessment = conn.execute(
+            """SELECT a.*,s.code AS subject_code,s.name AS subject_name
+               FROM assessments a JOIN subjects s ON s.id=a.subject_id WHERE a.id=?""",
+            (batch["assessment_id"],),
+        ).fetchone()
+        if assessment and assessment["assessment_type"] == "custom":
+            qrows = conn.execute(
+                "SELECT points FROM questions WHERE assessment_id=? AND COALESCE(active,1)=1 ORDER BY COALESCE(position,id),id",
+                (assessment["id"],),
+            ).fetchall()
+            limit = int(assessment["question_limit"] or 0)
+            if limit > 0:
+                qrows = qrows[:limit]
+            custom_question_count = len(qrows)
+            custom_max_score = sum(int(r["points"] or 1) for r in qrows)
     conn.close()
     if not batch:
         return redirect(url_for("student_login"))
     return render_template(
         "instructions.html",
         batch=batch,
+        assessment=assessment,
+        custom_question_count=custom_question_count,
+        custom_max_score=custom_max_score,
         email=email,
         first_name=session.get("pending_first_name"),
         last_name=session.get("pending_last_name"),
@@ -600,6 +673,13 @@ def exam():
         return redirect(url_for("result"))
 
     batch = conn.execute("SELECT * FROM batches WHERE id=?", (exam_session["batch_id"],)).fetchone()
+    assessment = None
+    if batch and "assessment_id" in batch.keys() and batch["assessment_id"]:
+        assessment = conn.execute(
+            """SELECT a.*,s.code AS subject_code,s.name AS subject_name
+               FROM assessments a JOIN subjects s ON s.id=a.subject_id WHERE a.id=?""",
+            (batch["assessment_id"],),
+        ).fetchone()
     remaining, deadline = session_remaining(exam_session, batch)
     if remaining is not None and remaining <= 0:
         finalize_exam(conn, sid, "time_limit_reached")
@@ -608,7 +688,7 @@ def exam():
 
     rows = conn.execute(
         """SELECT sq.q_order, sq.option_order, sq.selected_option, COALESCE(sq.marked_for_review,0) AS marked_for_review,
-                  q.id AS question_id, q.part, q.topic, q.prompt, q.code,
+                  q.id AS question_id, q.part, q.topic, q.prompt, q.code, q.points,
                   q.option_a, q.option_b, q.option_c, q.option_d
            FROM session_questions sq
            JOIN questions q ON q.id=sq.question_id
@@ -642,10 +722,10 @@ def exam():
     resume_index = max(0, min(stored_position, max(total_count - 1, 0)))
     conn.close()
     return render_template(
-        "exam.html", exam_session=exam_session, batch=batch, questions=questions,
+        "exam.html", exam_session=exam_session, batch=batch, assessment=assessment, questions=questions,
         bonus_questions=bonus_questions, total_count=total_count, resume_index=resume_index,
         remaining=remaining, deadline=deadline.isoformat() if deadline else None,
-        security=security
+        security=security, is_custom=bool(assessment and assessment["assessment_type"] == "custom")
     )
 
 
@@ -996,22 +1076,41 @@ def result():
     sid = session["student_session_id"]
     conn = connect()
     ex = conn.execute(
-        """SELECT e.*, b.name AS batch_name, b.reveal_score, b.assessment_type
-           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id WHERE e.id=?""", (sid,)
+        """SELECT e.*, b.name AS batch_name, b.reveal_score, b.assessment_type,
+                  a.title AS assessment_title, a.display_type, a.assessment_type AS configured_type
+           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+           LEFT JOIN assessments a ON a.id=e.assessment_id
+           WHERE e.id=?""", (sid,)
     ).fetchone()
-    conn.close()
     if not ex or ex["status"] != "submitted":
+        conn.close()
         return redirect(url_for("exam"))
-    display_p1 = ex["admin_part1_score"] if ex["admin_part1_score"] is not None else ex["part1_score"]
-    display_p2 = ex["admin_part2_score"] if ex["admin_part2_score"] is not None else ex["part2_score"]
-    display_bonus = ex["admin_bonus_score"] if ex["admin_bonus_score"] is not None else ex["bonus_score"]
-    is_midterm = ex["assessment_type"] == "midterm"
-    max_total = 55 if is_midterm else 50
-    computed_total = display_p1 + display_p2 + (display_bonus if is_midterm else 0)
-    display_total = ex["admin_total"] if ex["admin_total"] is not None else computed_total
+    is_custom = (ex["configured_type"] == "custom") if "configured_type" in ex.keys() else False
+    if is_custom:
+        max_row = conn.execute(
+            """SELECT COALESCE(SUM(q.points),0) AS max_score
+               FROM session_questions sq JOIN questions q ON q.id=sq.question_id WHERE sq.session_id=?""",
+            (sid,),
+        ).fetchone()
+        max_total = int(max_row["max_score"] or 0)
+        display_total = ex["admin_total"] if ex["admin_total"] is not None else ex["auto_total"]
+        display_p1 = ex["admin_part1_score"] if ex["admin_part1_score"] is not None else ex["part1_score"]
+        display_p2 = 0
+        display_bonus = 0
+        is_midterm = False
+    else:
+        display_p1 = ex["admin_part1_score"] if ex["admin_part1_score"] is not None else ex["part1_score"]
+        display_p2 = ex["admin_part2_score"] if ex["admin_part2_score"] is not None else ex["part2_score"]
+        display_bonus = ex["admin_bonus_score"] if ex["admin_bonus_score"] is not None else ex["bonus_score"]
+        is_midterm = ex["assessment_type"] == "midterm"
+        max_total = 55 if is_midterm else 50
+        computed_total = display_p1 + display_p2 + (display_bonus if is_midterm else 0)
+        display_total = ex["admin_total"] if ex["admin_total"] is not None else computed_total
+    conn.close()
     return render_template(
         "result.html", ex=ex, display_p1=display_p1, display_p2=display_p2,
-        display_bonus=display_bonus, display_total=display_total, max_total=max_total, is_midterm=is_midterm
+        display_bonus=display_bonus, display_total=display_total, max_total=max_total,
+        is_midterm=is_midterm, is_custom=is_custom
     )
 
 
@@ -1051,8 +1150,36 @@ def admin_logout():
 @app.route("/admin")
 @admin_required
 def admin_dashboard():
-    assessment = request.args.get("assessment", "posttest").strip().lower()
-    assessment = request.args.get("assessment", "posttest").strip().lower()
+    requested = request.args.get("assessment", "").strip().lower()
+    if not requested:
+        conn = connect()
+        assessments = conn.execute(
+            """SELECT a.*, s.code AS subject_code, s.name AS subject_name,
+                      (SELECT COUNT(*) FROM questions q WHERE q.assessment_id=a.id AND COALESCE(q.active,1)=1) AS question_count,
+                      (SELECT COALESCE(SUM(q.points),0) FROM questions q WHERE q.assessment_id=a.id AND COALESCE(q.active,1)=1) AS max_score,
+                      (SELECT COUNT(*) FROM exam_sessions e WHERE e.assessment_id=a.id AND COALESCE(e.is_test,0)=0) AS attempt_count,
+                      (SELECT COUNT(*) FROM exam_sessions e WHERE e.assessment_id=a.id AND COALESCE(e.is_test,0)=0 AND e.status='submitted') AS submitted_count,
+                      (SELECT AVG(e.auto_total) FROM exam_sessions e WHERE e.assessment_id=a.id AND COALESCE(e.is_test,0)=0 AND e.status='submitted') AS avg_score,
+                      (SELECT COUNT(*) FROM coding_sessions cs JOIN programming_labs pl ON pl.id=cs.lab_id WHERE pl.assessment_id=a.id) AS coding_attempt_count
+               FROM assessments a JOIN subjects s ON s.id=a.subject_id
+               ORDER BY a.active DESC, a.created_at DESC, a.id DESC"""
+        ).fetchall()
+        subjects = conn.execute("SELECT * FROM subjects WHERE active=1 ORDER BY code,name").fetchall()
+        totals = conn.execute(
+            """SELECT COUNT(*) AS assessment_count,
+                      SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) AS active_count
+               FROM assessments"""
+        ).fetchone()
+        active_sessions = conn.execute(
+            "SELECT COUNT(*) AS c FROM exam_sessions WHERE status='in_progress' AND COALESCE(is_test,0)=0"
+        ).fetchone()["c"]
+        conn.close()
+        return render_template(
+            "admin_assessments_dashboard.html", assessments=assessments, subjects=subjects,
+            totals=totals, active_sessions=active_sessions, assessment=""
+        )
+
+    assessment = requested
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"
     session["admin_assessment"] = assessment
@@ -1171,12 +1298,22 @@ def admin_regenerate_key(batch_id):
 def admin_session_detail(sid):
     conn = connect()
     ex = conn.execute(
-        """SELECT e.*, b.name AS batch_name, b.assessment_type FROM exam_sessions e
-           JOIN batches b ON b.id=e.batch_id WHERE e.id=?""", (sid,)
+        """SELECT e.*, b.name AS batch_name, b.assessment_type,
+                  a.title AS assessment_title, a.display_type, a.assessment_type AS configured_type
+           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+           LEFT JOIN assessments a ON a.id=e.assessment_id WHERE e.id=?""", (sid,)
     ).fetchone()
     if not ex:
         conn.close()
         abort(404)
+    is_custom = (ex["configured_type"] == "custom") if "configured_type" in ex.keys() else False
+    custom_max_score = 0
+    if is_custom:
+        max_row = conn.execute(
+            """SELECT COALESCE(SUM(q.points),0) AS max_score FROM session_questions sq
+               JOIN questions q ON q.id=sq.question_id WHERE sq.session_id=?""", (sid,)
+        ).fetchone()
+        custom_max_score = int(max_row["max_score"] or 0)
     if request.method == "POST":
         require_csrf()
         def optional_float(name):
@@ -1189,13 +1326,17 @@ def admin_session_detail(sid):
             total = optional_float("admin_total")
             note = request.form.get("admin_note", "").strip()[:1000]
             is_midterm = ex["assessment_type"] == "midterm"
-            if p1 is not None and not (0 <= p1 <= 30):
-                raise ValueError("Part I override must be from 0 to 30.")
-            if p2 is not None and not (0 <= p2 <= 20):
-                raise ValueError("Part II override must be from 0 to 20.")
-            if bonus is not None and not (0 <= bonus <= 5):
-                raise ValueError("Bonus override must be from 0 to 5.")
-            max_total = 55 if is_midterm else 50
+            if not is_custom:
+                if p1 is not None and not (0 <= p1 <= 30):
+                    raise ValueError("Part I override must be from 0 to 30.")
+                if p2 is not None and not (0 <= p2 <= 20):
+                    raise ValueError("Part II override must be from 0 to 20.")
+                if bonus is not None and not (0 <= bonus <= 5):
+                    raise ValueError("Bonus override must be from 0 to 5.")
+                max_total = 55 if is_midterm else 50
+            else:
+                p1 = p2 = bonus = None
+                max_total = custom_max_score
             if total is not None and not (0 <= total <= max_total):
                 raise ValueError(f"Total override must be from 0 to {max_total}.")
             conn.execute(
@@ -1207,8 +1348,10 @@ def admin_session_detail(sid):
         except ValueError as exc:
             flash(str(exc), "error")
         ex = conn.execute(
-            """SELECT e.*, b.name AS batch_name, b.assessment_type FROM exam_sessions e
-               JOIN batches b ON b.id=e.batch_id WHERE e.id=?""", (sid,)
+            """SELECT e.*, b.name AS batch_name, b.assessment_type,
+                      a.title AS assessment_title, a.display_type, a.assessment_type AS configured_type
+               FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+               LEFT JOIN assessments a ON a.id=e.assessment_id WHERE e.id=?""", (sid,)
         ).fetchone()
 
     answers = conn.execute(
@@ -1240,7 +1383,7 @@ def admin_session_detail(sid):
     conn.commit()
     security = get_security_state(ex)
     conn.close()
-    return render_template("admin_session.html", ex=ex, answers=answers, bonus_audit=bonus_audit, events=events, messages=messages, security=security)
+    return render_template("admin_session.html", ex=ex, answers=answers, bonus_audit=bonus_audit, events=events, messages=messages, security=security, is_custom=is_custom, custom_max_score=custom_max_score)
 
 
 @app.route("/admin/session/<int:sid>/unlock", methods=["POST"])

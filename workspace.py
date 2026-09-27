@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import csv
+import io
 import json
 import math
 import os
@@ -332,20 +334,78 @@ def instructor_edit(instructor_id):
     return redirect(url_for("nextgen.workspace"))
 
 
+def _next_custom_slot(conn):
+    row = conn.execute("SELECT COALESCE(MAX(slot), 17) AS max_slot FROM batches").fetchone()
+    return max(18, int(row["max_slot"] or 17) + 1)
+
+
+def _ensure_custom_batch(conn, assessment):
+    """Create/synchronize the one shared delivery batch used by a custom objective assessment."""
+    batch = conn.execute("SELECT * FROM batches WHERE assessment_id=? ORDER BY id LIMIT 1", (assessment["id"],)).fetchone()
+    if batch:
+        conn.execute(
+            """UPDATE batches SET name=?,access_code=?,duration_minutes=?,reveal_score=?,active=?,
+                      open_at=?,close_at=?,assessment_type='custom',subject_id=? WHERE id=?""",
+            (assessment["title"], assessment["access_code"], assessment["duration_minutes"],
+             assessment["reveal_score"], assessment["active"], assessment["start_at"], assessment["end_at"],
+             assessment["subject_id"], batch["id"]),
+        )
+        return conn.execute("SELECT * FROM batches WHERE id=?", (batch["id"],)).fetchone()
+    slot = _next_custom_slot(conn)
+    cur = conn.execute(
+        """INSERT INTO batches(slot,section,batch_label,name,access_code,open_at,close_at,duration_minutes,
+                   reveal_score,active,assessment_type,subject_id,assessment_id)
+           VALUES(?, 'ALL', 'CUSTOM', ?, ?, ?, ?, ?, ?, ?, 'custom', ?, ?) RETURNING id""",
+        (slot, assessment["title"], assessment["access_code"], assessment["start_at"], assessment["end_at"],
+         assessment["duration_minutes"], assessment["reveal_score"], assessment["active"],
+         assessment["subject_id"], assessment["id"]),
+    )
+    bid = cur.fetchone()[0]
+    return conn.execute("SELECT * FROM batches WHERE id=?", (bid,)).fetchone()
+
+
+def _normalize_allowed_sections(form):
+    valid = ["ZT11", "ZT12", "ZT13", "ZS11"]
+    selected = [code for code in valid if form.get(f"section_{code}") == "1"]
+    return ",".join(selected)
+
+
 @bp.post("/admin/workspace/assessment/add")
 @admin_required
 def assessment_add():
+    """Create either a free-form objective assessment or a Programming Lab.
+
+    Objective assessments deliberately do not inherit the old Midterm/Post-test 40+20 template.
+    Their length is defined entirely by the active questions placed in their builder.
+    """
     require_csrf()
     subject_id = request.form.get("subject_id", "")
     title = request.form.get("title", "").strip()
-    assessment_type = request.form.get("assessment_type", "quiz").strip().lower()
+    requested_type = request.form.get("assessment_type", "custom").strip().lower()
+    display_type = request.form.get("display_type", "").strip()[:40]
     description = request.form.get("description", "").strip()
-    duration = max(1, min(480, int(request.form.get("duration_minutes", "60") or 60)))
-    security_mode = request.form.get("security_mode", "standard")
+    try:
+        duration = max(1, min(480, int(request.form.get("duration_minutes", "30") or 30)))
+    except ValueError:
+        duration = 30
+    security_mode = request.form.get("security_mode", "strict").strip().lower()
+    if security_mode not in {"standard", "strict", "practice"}:
+        security_mode = "strict"
     if not subject_id.isdigit() or not title:
         flash("Choose a subject and enter an assessment title.", "error")
-        return redirect(url_for("nextgen.workspace"))
+        return redirect(url_for("admin_dashboard"))
+
+    is_lab = requested_type == "programming_lab"
+    assessment_type = "programming_lab" if is_lab else "custom"
+    if not display_type:
+        display_type = "Programming Lab" if is_lab else "Custom Assessment"
+    allowed_sections = _normalize_allowed_sections(request.form)
+    reveal_score = 1 if request.form.get("reveal_score") == "1" else 0
+    shuffle_questions = 1 if request.form.get("shuffle_questions") == "1" else 0
+    shuffle_options = 1 if request.form.get("shuffle_options") == "1" else 0
+
     conn = connect()
+    assessment_id = None
     try:
         instructor = _current_instructor(conn)
         base_slug = _slugify(title)
@@ -354,30 +414,39 @@ def assessment_add():
         while conn.execute("SELECT 1 FROM assessments WHERE slug=?", (slug,)).fetchone():
             slug = f"{base_slug}-{n}"
             n += 1
-        access = _make_access_code("CPP" if assessment_type == "programming_lab" else "ASSESS")
+        access = _make_access_code("CPP" if is_lab else "TEST")
         cur = conn.execute(
-            """INSERT INTO assessments(subject_id,title,slug,assessment_type,description,duration_minutes,
-                       access_code,max_attempts,security_mode,active,created_by_instructor_id,created_at)
-               VALUES(?,?,?,?,?,?,?,1,?,1,?,?) RETURNING id""",
-            (int(subject_id), title, slug, assessment_type, description, duration, access,
-             security_mode, instructor["id"] if instructor else None, iso_now()),
+            """INSERT INTO assessments(subject_id,title,slug,assessment_type,display_type,description,duration_minutes,
+                       access_code,max_attempts,security_mode,reveal_score,shuffle_questions,shuffle_options,
+                       allowed_sections,question_limit,active,created_by_instructor_id,created_at)
+               VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?,0,1,?,?) RETURNING id""",
+            (int(subject_id), title, slug, assessment_type, display_type, description, duration, access,
+             security_mode, reveal_score, shuffle_questions, shuffle_options, allowed_sections,
+             instructor["id"] if instructor else None, iso_now()),
         )
         assessment_id = cur.fetchone()[0]
-        if assessment_type == "programming_lab":
+        if is_lab:
             conn.execute(
                 """INSERT INTO programming_labs(assessment_id,language,title,instructions,starter_code,
                            allow_custom_input,active,created_at)
-                   VALUES(?, 'cpp', ?, ?, '#include <iostream>\\nusing namespace std;\\n\\nint main() {\\n    return 0;\\n}\\n',1,1,?)""",
+                   VALUES(?, 'cpp', ?, ?, '#include <iostream>\nusing namespace std;\n\nint main() {\n    return 0;\n}\n',1,1,?)""",
                 (assessment_id, title, description or "Complete the programming tasks below.", iso_now()),
             )
+        else:
+            assessment = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
+            _ensure_custom_batch(conn, assessment)
         conn.commit()
-        flash(f"Assessment created. Session key: {access}", "success")
+        flash(f"{display_type} created. Session key: {access}", "success")
     except Exception as exc:
         conn.rollback()
         flash(f"Could not create assessment: {exc}", "error")
     finally:
         conn.close()
-    return redirect(url_for("nextgen.workspace"))
+    if assessment_id and not is_lab:
+        return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
+    if assessment_id and is_lab:
+        return redirect(url_for("nextgen.admin_ide"))
+    return redirect(url_for("admin_dashboard"))
 
 
 @bp.post("/admin/workspace/assessment/<int:assessment_id>/edit")
@@ -386,7 +455,10 @@ def assessment_edit(assessment_id):
     require_csrf()
     title = request.form.get("title", "").strip()
     description = request.form.get("description", "").strip()
-    duration = max(1, min(480, int(request.form.get("duration_minutes", "60") or 60)))
+    try:
+        duration = max(1, min(480, int(request.form.get("duration_minutes", "60") or 60)))
+    except ValueError:
+        duration = 60
     security_mode = request.form.get("security_mode", "standard").strip().lower()
     active = 1 if request.form.get("active") == "1" else 0
     access_code = request.form.get("access_code", "").strip().upper() or None
@@ -397,17 +469,263 @@ def assessment_edit(assessment_id):
     row = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
     if not row:
         conn.close(); abort(404)
+    if row["assessment_type"] == "custom" and not access_code:
+        access_code = row["access_code"] or _make_access_code("TEST")
     try:
         conn.execute("UPDATE assessments SET title=?,description=?,duration_minutes=?,security_mode=?,active=?,access_code=? WHERE id=?", (title,description,duration,security_mode,active,access_code,assessment_id))
         if row["assessment_type"] == "programming_lab":
             conn.execute("UPDATE programming_labs SET title=?,active=? WHERE assessment_id=?", (title,active,assessment_id))
+        elif row["assessment_type"] == "custom":
+            updated = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
+            _ensure_custom_batch(conn, updated)
         conn.commit(); flash("Assessment updated.", "success")
     except Exception as exc:
         conn.rollback(); flash(f"Could not update assessment: {exc}", "error")
     finally:
         try: conn.close()
         except Exception: pass
+    if row["assessment_type"] == "custom":
+        return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
     return redirect(url_for("nextgen.workspace"))
+
+
+def _custom_assessment_or_404(conn, assessment_id):
+    row = conn.execute(
+        """SELECT a.*,s.code AS subject_code,s.name AS subject_name
+           FROM assessments a JOIN subjects s ON s.id=a.subject_id WHERE a.id=?""",
+        (assessment_id,),
+    ).fetchone()
+    if not row or row["assessment_type"] != "custom":
+        abort(404)
+    return row
+
+
+@bp.route("/admin/assessment/<int:assessment_id>")
+@admin_required
+def custom_assessment(assessment_id):
+    conn = connect()
+    assessment = _custom_assessment_or_404(conn, assessment_id)
+    batch = _ensure_custom_batch(conn, assessment)
+    conn.commit()
+    questions = conn.execute(
+        """SELECT * FROM questions WHERE assessment_id=? ORDER BY COALESCE(position,id),id""",
+        (assessment_id,),
+    ).fetchall()
+    summary = conn.execute(
+        """SELECT COUNT(*) AS attempts,
+                  SUM(CASE WHEN status='submitted' THEN 1 ELSE 0 END) AS submitted,
+                  AVG(CASE WHEN status='submitted' THEN auto_total END) AS avg_score
+           FROM exam_sessions WHERE assessment_id=? AND COALESCE(is_test,0)=0""",
+        (assessment_id,),
+    ).fetchone()
+    sessions = conn.execute(
+        """SELECT * FROM exam_sessions WHERE assessment_id=? AND COALESCE(is_test,0)=0 ORDER BY id DESC LIMIT 50""",
+        (assessment_id,),
+    ).fetchall()
+    active_questions = [q for q in questions if q["active"]]
+    max_score = sum(int(q["points"] or 1) for q in active_questions)
+    conn.close()
+    return render_template(
+        "admin_custom_assessment.html", assessment=assessment, batch=batch, questions=questions,
+        summary=summary, sessions=sessions, active_count=len(active_questions), max_score=max_score,
+        assessment_label=assessment["display_type"] or "Custom Assessment",
+    )
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/settings")
+@admin_required
+def custom_assessment_settings(assessment_id):
+    require_csrf()
+    conn = connect()
+    assessment = _custom_assessment_or_404(conn, assessment_id)
+    title = request.form.get("title", "").strip()
+    display_type = request.form.get("display_type", "Custom Assessment").strip()[:40] or "Custom Assessment"
+    description = request.form.get("description", "").strip()
+    try:
+        duration = max(1, min(480, int(request.form.get("duration_minutes", "30") or 30)))
+        question_limit = max(0, min(500, int(request.form.get("question_limit", "0") or 0)))
+    except ValueError:
+        conn.close(); flash("Duration and question limit must be numbers.", "error")
+        return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
+    security_mode = request.form.get("security_mode", "strict")
+    if security_mode not in {"standard", "strict", "practice"}: security_mode = "strict"
+    reveal_score = 1 if request.form.get("reveal_score") == "1" else 0
+    shuffle_questions = 1 if request.form.get("shuffle_questions") == "1" else 0
+    shuffle_options = 1 if request.form.get("shuffle_options") == "1" else 0
+    active = 1 if request.form.get("active") == "1" else 0
+    allowed_sections = _normalize_allowed_sections(request.form)
+    start_at = request.form.get("start_at", "").strip() or None
+    end_at = request.form.get("end_at", "").strip() or None
+    if not title:
+        conn.close(); flash("Assessment title is required.", "error")
+        return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
+    try:
+        conn.execute(
+            """UPDATE assessments SET title=?,display_type=?,description=?,duration_minutes=?,security_mode=?,
+                      reveal_score=?,shuffle_questions=?,shuffle_options=?,allowed_sections=?,question_limit=?,
+                      start_at=?,end_at=?,active=? WHERE id=?""",
+            (title, display_type, description, duration, security_mode, reveal_score, shuffle_questions,
+             shuffle_options, allowed_sections, question_limit, start_at, end_at, active, assessment_id),
+        )
+        updated = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
+        _ensure_custom_batch(conn, updated)
+        conn.commit(); flash("Assessment settings saved.", "success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not save assessment settings: {exc}", "error")
+    finally:
+        conn.close()
+    return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/regenerate-key")
+@admin_required
+def custom_assessment_regenerate_key(assessment_id):
+    require_csrf()
+    conn = connect(); assessment = _custom_assessment_or_404(conn, assessment_id)
+    try:
+        access = _make_access_code("TEST")
+        while conn.execute("SELECT 1 FROM assessments WHERE access_code=?", (access,)).fetchone():
+            access = _make_access_code("TEST")
+        conn.execute("UPDATE assessments SET access_code=? WHERE id=?", (access, assessment_id))
+        updated = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
+        _ensure_custom_batch(conn, updated)
+        conn.commit(); flash(f"New session key generated: {access}", "success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not regenerate key: {exc}", "error")
+    finally: conn.close()
+    return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
+
+
+def _custom_question_values(form):
+    topic = re.sub(r"\s+", " ", form.get("topic", "General").strip())[:120] or "General"
+    prompt = form.get("prompt", "").strip()[:2000]
+    code = form.get("code", "").rstrip()[:8000]
+    options = {letter: form.get(f"option_{letter.lower()}", "").strip()[:1200] for letter in "ABCD"}
+    correct = form.get("correct_option", "").strip().upper()
+    explanation = form.get("explanation", "").strip()[:2500]
+    try: points = max(1, min(100, int(form.get("points", "1") or 1)))
+    except ValueError: points = 1
+    if not prompt or any(not value for value in options.values()):
+        raise ValueError("Question and all four answer choices are required.")
+    if len({value.casefold() for value in options.values()}) != 4:
+        raise ValueError("All four answer choices must be different.")
+    if correct not in {"A", "B", "C", "D"}:
+        raise ValueError("Choose the correct answer.")
+    return topic,prompt,code,options,correct,explanation,points
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/question/add")
+@admin_required
+def custom_question_add(assessment_id):
+    require_csrf(); conn=connect(); assessment=_custom_assessment_or_404(conn,assessment_id)
+    try:
+        topic,prompt,code,options,correct,explanation,points=_custom_question_values(request.form)
+        batch=_ensure_custom_batch(conn,assessment)
+        row=conn.execute("SELECT COALESCE(MAX(position),0)+1 AS next_pos FROM questions WHERE assessment_id=?",(assessment_id,)).fetchone()
+        position=int(row["next_pos"] or 1)
+        conn.execute(
+            """INSERT INTO questions(part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,
+                       correct_option,explanation,points,position,active,created_by,subject_id,assessment_id)
+               VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,1,'instructor',?,?)""",
+            (batch["slot"],topic,prompt,code,options["A"],options["B"],options["C"],options["D"],correct,
+             explanation,points,position,assessment["subject_id"],assessment_id),
+        )
+        conn.commit(); flash("Question added.","success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not add question: {exc}","error")
+    finally: conn.close()
+    return redirect(url_for("nextgen.custom_assessment",assessment_id=assessment_id))
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/question/<int:question_id>/edit")
+@admin_required
+def custom_question_edit(assessment_id,question_id):
+    require_csrf(); conn=connect(); _custom_assessment_or_404(conn,assessment_id)
+    row=conn.execute("SELECT * FROM questions WHERE id=? AND assessment_id=?",(question_id,assessment_id)).fetchone()
+    if not row: conn.close(); abort(404)
+    try:
+        topic,prompt,code,options,correct,explanation,points=_custom_question_values(request.form)
+        active=1 if request.form.get("active")=="1" else 0
+        conn.execute(
+            """UPDATE questions SET topic=?,prompt=?,code=?,option_a=?,option_b=?,option_c=?,option_d=?,
+                      correct_option=?,explanation=?,points=?,active=? WHERE id=?""",
+            (topic,prompt,code,options["A"],options["B"],options["C"],options["D"],correct,explanation,points,active,question_id),
+        )
+        conn.commit(); flash("Question updated.","success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not update question: {exc}","error")
+    finally: conn.close()
+    return redirect(url_for("nextgen.custom_assessment",assessment_id=assessment_id))
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/question/<int:question_id>/delete")
+@admin_required
+def custom_question_delete(assessment_id,question_id):
+    require_csrf(); conn=connect(); _custom_assessment_or_404(conn,assessment_id)
+    used=conn.execute("SELECT 1 FROM session_questions WHERE question_id=? LIMIT 1",(question_id,)).fetchone()
+    if used:
+        conn.execute("UPDATE questions SET active=0 WHERE id=? AND assessment_id=?",(question_id,assessment_id))
+        conn.commit(); flash("Question has attempt history, so it was disabled instead of deleted.","success")
+    else:
+        conn.execute("DELETE FROM questions WHERE id=? AND assessment_id=?",(question_id,assessment_id)); conn.commit(); flash("Question deleted.","success")
+    conn.close(); return redirect(url_for("nextgen.custom_assessment",assessment_id=assessment_id))
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/questions/import")
+@admin_required
+def custom_questions_import(assessment_id):
+    require_csrf(); conn=connect(); assessment=_custom_assessment_or_404(conn,assessment_id)
+    upload=request.files.get("question_csv")
+    if not upload or not upload.filename:
+        conn.close(); flash("Choose a CSV file first.","error"); return redirect(url_for("nextgen.custom_assessment",assessment_id=assessment_id))
+    try:
+        raw=upload.read().decode("utf-8-sig")
+        reader=csv.DictReader(io.StringIO(raw))
+        required={"prompt","option_a","option_b","option_c","option_d","correct_option"}
+        if not reader.fieldnames:
+            raise ValueError("The CSV is missing a header row.")
+        reader.fieldnames=[str(h or "").strip() for h in reader.fieldnames]
+        if not required.issubset(set(reader.fieldnames)):
+            raise ValueError("CSV needs prompt, option_a, option_b, option_c, option_d, and correct_option columns.")
+        rows=list(reader)
+        if not rows: raise ValueError("The CSV contains no questions.")
+        if len(rows)>500: raise ValueError("A single import is limited to 500 questions.")
+        replace_existing=request.form.get("replace_existing")=="1"
+        existing_sessions=conn.execute("SELECT 1 FROM exam_sessions WHERE assessment_id=? LIMIT 1",(assessment_id,)).fetchone()
+        if replace_existing and existing_sessions:
+            raise ValueError("Existing questions cannot be replaced after student attempts exist. Import as additional questions instead.")
+        if replace_existing:
+            conn.execute("DELETE FROM questions WHERE assessment_id=?",(assessment_id,))
+        batch=_ensure_custom_batch(conn,assessment)
+        start=conn.execute("SELECT COALESCE(MAX(position),0) AS max_pos FROM questions WHERE assessment_id=?",(assessment_id,)).fetchone()["max_pos"] or 0
+        imported=0
+        for offset,row in enumerate(rows,1):
+            form={k:(v or "") for k,v in row.items()}
+            topic=re.sub(r"\s+"," ",form.get("topic","General").strip())[:120] or "General"
+            prompt=form.get("prompt","").strip()[:2000]
+            code=form.get("code","").rstrip()[:8000]
+            options={L:form.get(f"option_{L.lower()}","").strip()[:1200] for L in "ABCD"}
+            correct=form.get("correct_option","").strip().upper()
+            explanation=form.get("explanation","").strip()[:2500]
+            try: points=max(1,min(100,int(form.get("points","1") or 1)))
+            except ValueError: points=1
+            if not prompt or any(not v for v in options.values()) or len({v.casefold() for v in options.values()})!=4 or correct not in {"A","B","C","D"}:
+                raise ValueError(f"Row {offset+1}: invalid prompt, choices, or answer key.")
+            try: position=int(form.get("item_number","") or (start+offset))
+            except ValueError: position=start+offset
+            conn.execute(
+                """INSERT INTO questions(part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,
+                           correct_option,explanation,points,position,active,created_by,subject_id,assessment_id)
+                   VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,1,'csv-import',?,?)""",
+                (batch["slot"],topic,prompt,code,options["A"],options["B"],options["C"],options["D"],correct,
+                 explanation,points,position,assessment["subject_id"],assessment_id),
+            )
+            imported+=1
+        conn.commit(); flash(f"Imported {imported} questions.","success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not import questions: {exc}","error")
+    finally: conn.close()
+    return redirect(url_for("nextgen.custom_assessment",assessment_id=assessment_id))
 
 
 @bp.route("/admin/ide")

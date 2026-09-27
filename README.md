@@ -115,3 +115,40 @@ Never commit `.env`, databases, or private question banks. `.gitignore` excludes
 ## Current release
 
 Custos v0.98 · **Scarabs**
+
+## September 27 layout refinement
+
+The mobile/PWA header now renders the product and subject in one horizontal lockup (`Custos mark + Custos | subject logo`). Regular pages include a subtle footer fade behind the persistent course/institution marks, and the Home breadcrumb is centered to the same width as the Home content cards. PWA cache version was bumped so installed devices receive the update.
+
+## Free-form Custom Assessments
+
+Instructor → **Assessment → Dashboard** now shows every assessment across all subjects and includes a blank custom-test builder. New objective assessments no longer inherit the legacy 40-item Part I + 20-item Part II structure.
+
+A custom assessment can define its own:
+
+- title and free-text label (Quiz, Practice Test, Examination, etc.)
+- duration and start/close window
+- allowed sections (ZT11, ZT12, ZT13, ZS11)
+- one shared student session key
+- any number of multiple-choice questions
+- per-question point values
+- question and answer-choice shuffling
+- optional question-pool limit
+- score reveal behavior
+- standard / strict / practice security label
+
+Questions may be created manually or imported from CSV. Required CSV columns are:
+
+```text
+prompt, option_a, option_b, option_c, option_d, correct_option
+```
+
+Optional columns:
+
+```text
+item_number, topic, code, explanation, points
+```
+
+A sample orientation bank is included at `samples/custos_orientation_practice_test_10_items.csv`, and a blank browser-downloadable template is available at `static/samples/custom_assessment_template.csv`.
+
+The legacy CSDC101 Midterm and Post-test dashboards continue to work unchanged and remain available from the unified Assessments dashboard.

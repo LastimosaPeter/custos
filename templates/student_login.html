@@ -34,11 +34,11 @@
       <input type="email" name="email" placeholder="student@{{ domain }}" value="{{ request.form.get('email', '') }}" required autocomplete="username">
     </label>
     <label>Session key
-      <input type="password" name="session_key" placeholder="e.g., PT-1A-XXXX-XXXX" required autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <input type="password" name="session_key" placeholder="Enter instructor-issued session key" required autocomplete="off" autocapitalize="characters" spellcheck="false">
     </label>
     <button class="primary wide" type="submit">Verify Key & Continue</button>
   </form>
-  <p class="micro">The key determines the exact assessment set you are allowed to enter. Keys may be changed by the instructor at any time.</p>
+  <p class="micro">The key identifies the exact assessment your instructor has opened for you. Keys may be changed by the instructor at any time.</p>
   <div class="student-alt-path"><span>Programming activities</span><a class="secondary button-link disabled-feature-link" href="{{ url_for('nextgen.ide_coming_soon') }}" title="Coming soon">IDE · Coming Soon</a></div><a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
 </div>
 {% endblock %}

@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+{% block title %}Custos - Assessments{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav('') }}
+{% endblock %}
+{% block content %}
+<div class="dashboard-heading assessment-hub-heading">
+  <div>
+    <div class="eyebrow">INSTRUCTOR VIEW · ASSESSMENT HUB</div>
+    <h1>Assessments</h1>
+    <p class="subtle">Create and manage every Custos assessment from one dashboard. New objective tests are free-form: you decide the length, questions, points, sections, timing, and security settings.</p>
+  </div>
+  <a class="secondary button-link" href="{{ url_for('admin_monitor') }}">Live Monitor</a>
+</div>
+
+<div class="stat-row four">
+  <div class="stat-card"><span>Assessments</span><strong>{{ totals.assessment_count or 0 }}</strong><small>across all subjects</small></div>
+  <div class="stat-card"><span>Active</span><strong>{{ totals.active_count or 0 }}</strong><small>available assessments</small></div>
+  <div class="stat-card"><span>Live Sessions</span><strong>{{ active_sessions or 0 }}</strong><small>students currently in progress</small></div>
+  <div class="stat-card"><span>Builder</span><strong>Free-form</strong><small>no fixed 40 + 20 template</small></div>
+</div>
+
+<section class="content-card custom-create-card">
+  <div class="section-heading">
+    <div>
+      <div class="eyebrow">NEW ASSESSMENT</div>
+      <h2>Create a Custom Test</h2>
+      <p class="subtle">Start with a blank assessment. Add any number of multiple-choice questions manually or import a CSV afterward.</p>
+    </div>
+  </div>
+  <form method="post" action="{{ url_for('nextgen.assessment_add') }}" class="custom-assessment-create-grid">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="assessment_type" value="custom">
+    <label>Subject
+      <select name="subject_id" required>
+        {% for s in subjects %}<option value="{{ s.id }}">{{ s.code }} · {{ s.name }}</option>{% endfor %}
+      </select>
+    </label>
+    <label>Assessment name
+      <input name="title" placeholder="Custos Orientation Practice Test 01" required>
+    </label>
+    <label>Label
+      <input name="display_type" value="Practice Test" placeholder="Quiz, Practice Test, Examination…">
+    </label>
+    <label>Duration
+      <div class="input-with-suffix"><input type="number" name="duration_minutes" value="15" min="1" max="480" required><span>minutes</span></div>
+    </label>
+    <label>Security
+      <select name="security_mode"><option value="practice">Practice</option><option value="standard">Standard</option><option value="strict" selected>Strict</option></select>
+    </label>
+    <label class="wide-field">Description
+      <textarea name="description" rows="2" placeholder="Short orientation activity for learning the Custos assessment interface."></textarea>
+    </label>
+    <fieldset class="custom-section-picker wide-field">
+      <legend>Sections allowed to use this assessment</legend>
+      <label><input type="checkbox" name="section_ZT11" value="1" checked> ZT11</label>
+      <label><input type="checkbox" name="section_ZT12" value="1" checked> ZT12</label>
+      <label><input type="checkbox" name="section_ZT13" value="1" checked> ZT13</label>
+      <label><input type="checkbox" name="section_ZS11" value="1" checked> ZS11</label>
+    </fieldset>
+    <div class="custom-create-options wide-field">
+      <label class="check-row"><input type="checkbox" name="shuffle_questions" value="1" checked><span>Shuffle question order</span></label>
+      <label class="check-row"><input type="checkbox" name="shuffle_options" value="1" checked><span>Shuffle answer choices</span></label>
+      <label class="check-row"><input type="checkbox" name="reveal_score" value="1" checked><span>Show score after submission</span></label>
+    </div>
+    <button class="primary wide-field" type="submit">Create Blank Assessment →</button>
+  </form>
+</section>
+
+<section class="content-card">
+  <div class="section-heading">
+    <div><h2>All Assessments</h2><p class="subtle">Legacy exams, custom tests, practice activities, and programming labs are shown together.</p></div>
+  </div>
+  <div class="assessment-hub-grid">
+    {% for a in assessments %}
+      <article class="assessment-hub-card {% if not a.active %}assessment-disabled{% endif %}">
+        <div class="assessment-hub-topline">
+          <span class="workspace-subject-chip">{{ a.subject_code }}</span>
+          <span class="status {{ 'submitted' if a.active else 'disabled' }}">{{ 'Active' if a.active else 'Disabled' }}</span>
+        </div>
+        <div class="assessment-hub-type">{{ a.display_type if a.assessment_type == 'custom' else (a.assessment_type|replace('_',' ')|title) }}</div>
+        <h3>{{ a.title }}</h3>
+        <p>{{ a.description or 'No description added.' }}</p>
+        <div class="assessment-hub-stats">
+          {% if a.assessment_type == 'programming_lab' %}
+            <span><b>{{ a.coding_attempt_count or 0 }}</b> coding sessions</span>
+          {% else %}
+            <span><b>{{ a.question_count or 0 }}</b> questions</span>
+            <span><b>{{ a.submitted_count or 0 }}</b>/{{ a.attempt_count or 0 }} submitted</span>
+            {% if a.assessment_type == 'custom' %}<span><b>{{ a.max_score or 0 }}</b> points</span>{% endif %}
+          {% endif %}
+        </div>
+        {% if a.access_code %}<div class="assessment-key-line"><span>Session key</span><code>{{ a.access_code }}</code></div>{% endif %}
+        <div class="assessment-hub-actions">
+          {% if a.assessment_type == 'custom' %}
+            <a class="primary button-link" href="{{ url_for('nextgen.custom_assessment', assessment_id=a.id) }}">Build & Configure</a>
+          {% elif a.assessment_type in ['midterm','posttest'] %}
+            <a class="primary button-link" href="{{ url_for('admin_dashboard', assessment=a.assessment_type) }}">Open Legacy Dashboard</a>
+          {% elif a.assessment_type == 'programming_lab' %}
+            <a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Open Caudex IDE</a>
+          {% else %}
+            <a class="secondary button-link" href="{{ url_for('nextgen.workspace') }}">Manage in Workspace</a>
+          {% endif %}
+        </div>
+      </article>
+    {% else %}
+      <p class="empty-cell">No assessments have been created yet.</p>
+    {% endfor %}
+  </div>
+</section>
+{% endblock %}

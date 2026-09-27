@@ -14,12 +14,20 @@
   </div>
 </div>
 
+{% if is_custom %}
+<div class="stat-row three">
+  <div class="stat-card"><span>Correct Answers</span><strong>{{ ex.part1_correct }}</strong><small>objective items correct</small></div>
+  <div class="stat-card"><span>Automatic Score</span><strong>{{ ex.auto_total }}/{{ custom_max_score }}</strong><small>{{ ex.assessment_title or ex.batch_name }}</small></div>
+  <div class="stat-card"><span>Status</span><strong>{{ ex.status|replace('_',' ')|title }}</strong><small>{{ ex.display_type or 'Custom Assessment' }}</small></div>
+</div>
+{% else %}
 <div class="stat-row {% if ex.assessment_type == 'midterm' %}four{% endif %}">
   <div class="stat-card"><span>Part I</span><strong>{{ ex.part1_score }}/30</strong><small>{{ ex.part1_correct }}/40 raw correct</small></div>
   <div class="stat-card"><span>Part II</span><strong>{{ ex.part2_score }}/20</strong><small>{{ ex.part2_correct }}/20 raw correct</small></div>
   {% if ex.assessment_type == 'midterm' %}<div class="stat-card"><span>Bonus</span><strong>+{{ ex.bonus_score }}/5</strong><small>{{ ex.bonus_correct }}/5 correct</small></div>{% endif %}
   <div class="stat-card"><span>Automatic Total</span><strong>{{ ex.auto_total }}/{{ 55 if ex.assessment_type == 'midterm' else 50 }}</strong><small>{{ ex.status }}</small></div>
 </div>
+{% endif %}
 
 <div class="two-col session-tools-grid">
   <div class="content-card security-control-card">
@@ -58,10 +66,12 @@
   <h2>Instructor Score Override</h2>
   <form method="post" class="score-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Part I override (0–30)<input type="number" step="0.01" min="0" max="30" name="admin_part1_score" value="{{ '' if ex.admin_part1_score is none else ex.admin_part1_score }}"></label>
-    <label>Part II override (0–20)<input type="number" step="0.01" min="0" max="20" name="admin_part2_score" value="{{ '' if ex.admin_part2_score is none else ex.admin_part2_score }}"></label>
-    {% if ex.assessment_type == 'midterm' %}<label>Bonus override (0–5)<input type="number" step="0.01" min="0" max="5" name="admin_bonus_score" value="{{ '' if ex.admin_bonus_score is none else ex.admin_bonus_score }}"></label>{% endif %}
-    <label>Total override (0–{{ 55 if ex.assessment_type == 'midterm' else 50 }})<input type="number" step="0.01" min="0" max="{{ 55 if ex.assessment_type == 'midterm' else 50 }}" name="admin_total" value="{{ '' if ex.admin_total is none else ex.admin_total }}"></label>
+    {% if not is_custom %}
+      <label>Part I override (0–30)<input type="number" step="0.01" min="0" max="30" name="admin_part1_score" value="{{ '' if ex.admin_part1_score is none else ex.admin_part1_score }}"></label>
+      <label>Part II override (0–20)<input type="number" step="0.01" min="0" max="20" name="admin_part2_score" value="{{ '' if ex.admin_part2_score is none else ex.admin_part2_score }}"></label>
+      {% if ex.assessment_type == 'midterm' %}<label>Bonus override (0–5)<input type="number" step="0.01" min="0" max="5" name="admin_bonus_score" value="{{ '' if ex.admin_bonus_score is none else ex.admin_bonus_score }}"></label>{% endif %}
+    {% endif %}
+    <label>Total override (0–{{ custom_max_score if is_custom else (55 if ex.assessment_type == 'midterm' else 50) }})<input type="number" step="0.01" min="0" max="{{ custom_max_score if is_custom else (55 if ex.assessment_type == 'midterm' else 50) }}" name="admin_total" value="{{ '' if ex.admin_total is none else ex.admin_total }}"></label>
     <label class="wide-field">Instructor note<textarea name="admin_note" rows="3">{{ ex.admin_note or '' }}</textarea></label>
     <button class="primary" type="submit">Save Override</button>
   </form>

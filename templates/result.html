@@ -2,16 +2,20 @@
 {% block title %}Custos - Exam Result{% endblock %}
 {% block content %}
 <div class="center-card result-card">
-  <div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST · SUBMITTED{% else %}EXAM SUBMITTED{% endif %}</div>
+  <div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST · SUBMITTED{% elif is_custom %}ASSESSMENT SUBMITTED{% else %}EXAM SUBMITTED{% endif %}</div>
   <h1>Submission Received</h1>
-  <p>{{ ex.email }} · {{ ex.batch_name }}</p>
+  <p>{{ ex.email }} · {{ ex.assessment_title or ex.batch_name }}</p>
   {% if ex.reveal_score or ex.is_test %}
   <div class="score-total">{{ display_total }}<span>/{{ max_total }}</span></div>
-  <div class="score-grid {% if is_midterm %}three-score-grid{% endif %}">
-    <div><span>Part I</span><strong>{{ display_p1 }}/30</strong><small>{{ ex.part1_correct }}/40 raw correct</small></div>
-    <div><span>Part II</span><strong>{{ display_p2 }}/20</strong><small>{{ ex.part2_correct }}/20 raw correct</small></div>
-    {% if is_midterm %}<div><span>Bonus</span><strong>+{{ display_bonus }}/5</strong><small>{{ ex.bonus_correct }}/5 correct</small></div>{% endif %}
-  </div>
+  {% if is_custom %}
+    <div class="score-grid custom-score-grid"><div><span>Correct Answers</span><strong>{{ ex.part1_correct }}</strong><small>{{ display_total }} of {{ max_total }} points earned</small></div></div>
+  {% else %}
+    <div class="score-grid {% if is_midterm %}three-score-grid{% endif %}">
+      <div><span>Part I</span><strong>{{ display_p1 }}/30</strong><small>{{ ex.part1_correct }}/40 raw correct</small></div>
+      <div><span>Part II</span><strong>{{ display_p2 }}/20</strong><small>{{ ex.part2_correct }}/20 raw correct</small></div>
+      {% if is_midterm %}<div><span>Bonus</span><strong>+{{ display_bonus }}/5</strong><small>{{ ex.bonus_correct }}/5 correct</small></div>{% endif %}
+    </div>
+  {% endif %}
   {% else %}
   <div class="warning-box">Your exam has been scored. The instructor has disabled immediate score display for this batch.</div>
   {% endif %}
