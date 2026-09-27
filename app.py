@@ -12,7 +12,7 @@ from functools import wraps
 from dotenv import load_dotenv
 from flask import (
     Flask, Response, abort, flash, g, jsonify, redirect, render_template,
-    request, session, url_for, send_from_directory
+    request, session, url_for, send_from_directory, send_file
 )
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
@@ -1221,6 +1221,214 @@ def admin_dashboard():
     conn.close()
     counts = {r["part"]: r["c"] for r in qcounts}
     return render_template("admin_dashboard.html", batches=batches, sessions=sessions, counts=counts, summary=summary, assessment=assessment)
+
+
+@app.route("/admin/assessment/<int:assessment_id>/export-scores")
+@admin_required
+def admin_export_scores(assessment_id):
+    """Export real student scores for one assessment as an Excel workbook.
+
+    Objective assessments use one worksheet per delivery set/batch. Programming
+    labs use one worksheet with task-level score columns. Instructor test/preview
+    sessions are excluded from the export.
+    """
+    try:
+        from openpyxl import Workbook
+        from openpyxl.styles import Alignment, Font, PatternFill
+        from openpyxl.utils import get_column_letter
+    except ImportError as exc:
+        raise RuntimeError("Score export requires openpyxl. Run: pip install -r requirements.txt") from exc
+
+    conn = connect()
+    assessment_row = conn.execute(
+        """SELECT a.*, s.code AS subject_code, s.name AS subject_name
+           FROM assessments a JOIN subjects s ON s.id=a.subject_id
+           WHERE a.id=?""",
+        (assessment_id,),
+    ).fetchone()
+    if not assessment_row:
+        conn.close()
+        abort(404)
+
+    wb = Workbook()
+    wb.remove(wb.active)
+    used_sheet_names = set()
+
+    def clean_sheet_name(value, fallback="Scores"):
+        name = re.sub(r"[\[\]:*?/\\]", "-", str(value or fallback)).strip() or fallback
+        name = name[:31]
+        base = name
+        counter = 2
+        while name.casefold() in used_sheet_names:
+            suffix = f" ({counter})"
+            name = f"{base[:31-len(suffix)]}{suffix}"
+            counter += 1
+        used_sheet_names.add(name.casefold())
+        return name
+
+    def write_sheet(title, headers, rows):
+        ws = wb.create_sheet(clean_sheet_name(title))
+        ws.append(headers)
+        header_fill = PatternFill("solid", fgColor="EAF2FF")
+        for cell in ws[1]:
+            cell.font = Font(bold=True, color="17365D")
+            cell.fill = header_fill
+            cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        for row in rows:
+            ws.append(row)
+        ws.freeze_panes = "A2"
+        ws.auto_filter.ref = ws.dimensions
+        ws.sheet_view.showGridLines = False
+        for row in ws.iter_rows(min_row=2):
+            for cell in row:
+                cell.alignment = Alignment(vertical="top", wrap_text=True)
+        for idx, header in enumerate(headers, start=1):
+            max_len = len(str(header))
+            for cell in ws[get_column_letter(idx)]:
+                value = "" if cell.value is None else str(cell.value)
+                max_len = max(max_len, len(value))
+            ws.column_dimensions[get_column_letter(idx)].width = min(max(max_len + 2, 11), 34)
+        return ws
+
+    atype = assessment_row["assessment_type"]
+    if atype == "programming_lab":
+        lab = conn.execute(
+            "SELECT * FROM programming_labs WHERE assessment_id=? LIMIT 1",
+            (assessment_id,),
+        ).fetchone()
+        tasks = []
+        sessions = []
+        if lab:
+            tasks = conn.execute(
+                "SELECT id,position,title,points FROM programming_tasks WHERE lab_id=? AND COALESCE(active,1)=1 ORDER BY position,id",
+                (lab["id"],),
+            ).fetchall()
+            sessions = conn.execute(
+                """SELECT * FROM coding_sessions
+                   WHERE lab_id=? AND COALESCE(is_test,0)=0
+                   ORDER BY COALESCE(last_name,student_name,email), COALESCE(first_name,''), email""",
+                (lab["id"],),
+            ).fetchall()
+        headers = [
+            "Student Name", "Email", "Program", "Section", "Status",
+            "Started At", "Submitted At",
+        ]
+        headers.extend([f"Task {t['position']}: {t['title']} / {t['points']}" for t in tasks])
+        headers.extend(["Total Score", "Maximum Score", "Flags", "Violations"])
+        max_score = sum(float(t["points"] or 0) for t in tasks)
+        rows = []
+        for cs in sessions:
+            progress = conn.execute(
+                "SELECT task_id,score FROM coding_task_progress WHERE session_id=?",
+                (cs["id"],),
+            ).fetchall()
+            scores = {int(r["task_id"]): float(r["score"] or 0) for r in progress}
+            display_name = (
+                f"{(cs['last_name'] or '').strip()}, {(cs['first_name'] or '').strip()}".strip(", ")
+                if (cs["last_name"] or cs["first_name"]) else (cs["student_name"] or cs["email"])
+            )
+            row = [
+                display_name, cs["email"], cs["program"] or "", cs["class_section"] or "",
+                str(cs["status"] or "").replace("_", " ").title(), cs["started_at"] or "", cs["submitted_at"] or "",
+            ]
+            row.extend([scores.get(int(t["id"]), 0) for t in tasks])
+            row.extend([float(cs["total_score"] or 0), max_score, int(cs["flagged_count"] or 0), int(cs["violation_count"] or 0)])
+            rows.append(row)
+        write_sheet("Programming Scores", headers, rows)
+    else:
+        batches = conn.execute(
+            "SELECT * FROM batches WHERE assessment_id=? ORDER BY slot,id",
+            (assessment_id,),
+        ).fetchall()
+        if not batches:
+            # Keep export useful even for legacy/imported data with a missing batch link.
+            batches = conn.execute(
+                """SELECT DISTINCT b.* FROM batches b
+                   JOIN exam_sessions e ON e.batch_id=b.id
+                   WHERE e.assessment_id=? ORDER BY b.slot,b.id""",
+                (assessment_id,),
+            ).fetchall()
+
+        for batch in batches or [None]:
+            if batch is None:
+                sessions = conn.execute(
+                    """SELECT e.*,
+                              (SELECT COALESCE(SUM(q.points),0) FROM session_questions sq JOIN questions q ON q.id=sq.question_id WHERE sq.session_id=e.id) AS assigned_max_score
+                       FROM exam_sessions e
+                       WHERE e.assessment_id=? AND COALESCE(e.is_test,0)=0
+                       ORDER BY COALESCE(e.last_name,e.student_name,e.email), COALESCE(e.first_name,''), e.email""",
+                    (assessment_id,),
+                ).fetchall()
+                sheet_title = "Scores"
+                set_label = ""
+            else:
+                sessions = conn.execute(
+                    """SELECT e.*,
+                              (SELECT COALESCE(SUM(q.points),0) FROM session_questions sq JOIN questions q ON q.id=sq.question_id WHERE sq.session_id=e.id) AS assigned_max_score
+                       FROM exam_sessions e
+                       WHERE e.batch_id=? AND COALESCE(e.is_test,0)=0
+                       ORDER BY COALESCE(e.last_name,e.student_name,e.email), COALESCE(e.first_name,''), e.email""",
+                    (batch["id"],),
+                ).fetchall()
+                sheet_title = batch["name"] or f"Set {batch['slot']}"
+                set_label = batch["batch_label"] or batch["name"] or ""
+
+            if atype in {"midterm", "posttest"}:
+                headers = [
+                    "Student Name", "Email", "Program", "Section", "Set", "Status",
+                    "Started At", "Submitted At", "Part I Score", "Part II Score",
+                    "Bonus Score", "Automatic Total", "Final Score", "Maximum Score",
+                    "Flags", "Violations",
+                ]
+            else:
+                headers = [
+                    "Student Name", "Email", "Program", "Section", "Set", "Status",
+                    "Started At", "Submitted At", "Raw Correct", "Automatic Score",
+                    "Final Score", "Maximum Score", "Flags", "Violations",
+                ]
+            rows = []
+            for ex in sessions:
+                display_name = (
+                    f"{(ex['last_name'] or '').strip()}, {(ex['first_name'] or '').strip()}".strip(", ")
+                    if (ex["last_name"] or ex["first_name"]) else (ex["student_name"] or ex["email"])
+                )
+                final_score = ex["admin_total"] if ex["admin_total"] is not None else ex["auto_total"]
+                if atype == "midterm":
+                    max_score = 55
+                elif atype == "posttest":
+                    max_score = 50
+                else:
+                    max_score = float(ex["assigned_max_score"] or 0)
+                    if max_score.is_integer():
+                        max_score = int(max_score)
+                common = [
+                    display_name, ex["email"], ex["program"] or "", ex["class_section"] or "", set_label,
+                    str(ex["status"] or "").replace("_", " ").title(), ex["started_at"] or "", ex["submitted_at"] or "",
+                ]
+                if atype in {"midterm", "posttest"}:
+                    p1 = ex["admin_part1_score"] if ex["admin_part1_score"] is not None else ex["part1_score"]
+                    p2 = ex["admin_part2_score"] if ex["admin_part2_score"] is not None else ex["part2_score"]
+                    bonus = ex["admin_bonus_score"] if ex["admin_bonus_score"] is not None else ex["bonus_score"]
+                    row = common + [p1, p2, bonus, ex["auto_total"], final_score, max_score, int(ex["flagged_count"] or 0), int(ex["violation_count"] or 0)]
+                else:
+                    row = common + [int(ex["part1_correct"] or 0), ex["auto_total"], final_score, max_score, int(ex["flagged_count"] or 0), int(ex["violation_count"] or 0)]
+                rows.append(row)
+            write_sheet(sheet_title, headers, rows)
+
+    conn.close()
+    if not wb.worksheets:
+        write_sheet("Scores", ["Student Name", "Email", "Score"], [])
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    filename_base = re.sub(r"[^A-Za-z0-9._-]+", "_", assessment_row["title"] or "assessment").strip("._") or "assessment"
+    return send_file(
+        output,
+        as_attachment=True,
+        download_name=f"{filename_base}_scores.xlsx",
+        mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    )
 
 
 @app.route("/admin/batch/<int:batch_id>", methods=["GET", "POST"])

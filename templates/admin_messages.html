@@ -31,7 +31,7 @@
           <span id="messageStudentMeta">{% if threads %}{{ threads[0].program or '—' }} {{ threads[0].class_section or '' }} · {{ threads[0].batch_name }} · {{ threads[0].status|replace('_',' ')|title }}{% endif %}</span>
           <span id="messageStudentEmail" class="message-student-email">{% if threads %}{{ threads[0].email }}{% endif %}</span>
         </div>
-        <div class="message-head-actions"><button id="messageDeleteButton" type="button" class="danger-ghost {% if not threads %}hidden{% endif %}">Delete Messages</button><a id="messageReviewLink" class="secondary button-link {% if not threads %}hidden{% endif %}" href="{% if threads %}{{ url_for('admin_session_detail', sid=threads[0].id) }}{% else %}#{% endif %}">Open Session Review</a></div>
+        <div class="message-head-actions"><button id="messageDeleteButton" type="button" class="danger delete-action {% if not threads %}hidden{% endif %}">Delete Messages</button><a id="messageReviewLink" class="secondary button-link {% if not threads %}hidden{% endif %}" href="{% if threads %}{{ url_for('admin_session_detail', sid=threads[0].id) }}{% else %}#{% endif %}">Open Session Review</a></div>
       </header>
       <div id="messageConversationBody" class="message-conversation-body"><div class="chat-empty">{% if threads %}Loading conversation…{% else %}Messages from students will appear here.{% endif %}</div></div>
       <form id="messageReplyForm" class="message-reply-form" {% if not threads %}hidden{% endif %}>

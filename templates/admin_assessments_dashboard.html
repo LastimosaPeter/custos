@@ -102,6 +102,7 @@
                 <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+                <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
               </div>
             </details>
           {% elif a.assessment_type in ['midterm','posttest'] %}
@@ -113,6 +114,7 @@
                 <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+                <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
               </div>
             </details>
           {% elif a.assessment_type == 'dryrun' %}
@@ -128,6 +130,7 @@
                 <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+                <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
               </div>
             </details>
           {% elif a.assessment_type == 'programming_lab' %}
@@ -137,6 +140,7 @@
               <div class="assessment-action-menu-panel">
                 <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Analytics</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+                <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
               </div>
             </details>
           {% else %}
@@ -147,11 +151,12 @@
                 <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+                <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
               </div>
             </details>
           {% endif %}
           <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=a.id) }}" class="assessment-delete-inline" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-ghost assessment-delete-btn" type="submit">Delete</button>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action assessment-delete-btn" type="submit">Delete</button>
           </form>
         </div>
       </article>

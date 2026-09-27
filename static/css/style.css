@@ -3751,3 +3751,34 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
   .testing-history-table{min-width:0!important}
   .table-actions.compact-actions{display:flex;flex-wrap:wrap;gap:6px}
 }
+
+
+/* =========================================================
+   UI refinement pass 2 · 2026-09-28
+   Left-aligned message identities, score export affordance,
+   centered wrapped button text, and destructive action styling.
+   ========================================================= */
+
+/* Student names and metadata in the Messages rail stay anchored to the left. */
+.message-thread{justify-items:start!important;align-items:start!important;text-align:left!important}
+.message-thread-name,.message-thread-meta,.message-thread-preview{display:block;width:100%;text-align:left!important}
+
+/* Wrapped button labels should remain visually centered on both lines. */
+button,.button-link{ text-align:center; line-height:1.22; }
+
+/* The action footer belongs to the white editing surface, not the gray record shell. */
+.workspace-save-delete-row{
+  background:var(--panel);
+  border-top:0;
+}
+
+/* Destructive delete actions use a consistent red fill and white label. */
+.delete-action{
+  background:var(--danger)!important;
+  border:1px solid var(--danger)!important;
+  color:#fff!important;
+}
+.delete-action:hover{filter:brightness(.94)}
+.workspace-delete-assessment-form .delete-action{font-size:10px;padding:7px 10px}
+.assessment-delete-inline .delete-action{min-height:34px}
+.message-head-actions .delete-action{font-size:10px;padding:7px 9px}
