@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-next9';
+const CACHE_NAME = 'custos-static-v098-next9-caudexcompact';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -71,3 +71,5 @@ self.addEventListener('fetch', event => {
 });
 
 // UI cache refresh: Caudex IDE reveal 2026-09-27
+
+// UI cache refresh: Caudex compact lockup 2026-09-27
