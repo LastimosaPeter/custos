@@ -3201,3 +3201,27 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
     height:116px;
   }
 }
+
+/* =========================================================
+   Home breadcrumb exact card-column alignment
+   2026-09-27
+   ========================================================= */
+.home-page{
+  --custos-home-column:1010px;
+}
+.home-page .custos-home,
+.home-page .breadcrumb-nav{
+  width:min(var(--custos-home-column),100%);
+  max-width:var(--custos-home-column);
+  margin-left:auto;
+  margin-right:auto;
+  box-sizing:border-box;
+}
+
+@media(max-width:1050px){
+  .home-page .custos-home,
+  .home-page .breadcrumb-nav{
+    width:100%;
+    max-width:100%;
+  }
+}

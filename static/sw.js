@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-next7';
+const CACHE_NAME = 'custos-static-v098-next8';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -68,3 +68,5 @@ self.addEventListener('fetch', event => {
     );
   }
 });
+
+// UI cache refresh: home breadcrumb exact alignment 2026-09-27
