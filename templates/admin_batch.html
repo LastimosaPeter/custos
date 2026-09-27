@@ -6,7 +6,7 @@
 {% endblock %}
 {% block content %}
 <div class="content-card narrow-card">
-  <div class="eyebrow">{% if batch.assessment_type == 'posttest' %}POST-TEST · SET {{ batch.slot - 8 }}{% else %}MIDTERM · SET {{ batch.slot }}{% endif %}</div>
+  <div class="eyebrow">{% if batch.assessment_type == 'posttest' %}POST-TEST · SET {{ batch.slot - 8 }}{% elif batch.assessment_type == 'dryrun' %}PUBLIC DRY RUN{% elif batch.assessment_type == 'custom' %}CUSTOM ASSESSMENT{% else %}MIDTERM · SET {{ batch.slot }}{% endif %}</div>
   <h1>{{ batch.name }}</h1>
 
   <div class="session-key-card">

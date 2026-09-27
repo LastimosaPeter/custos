@@ -11,11 +11,17 @@
     <h1>{{ assessment.title }}</h1>
     <p class="subtle">A free-form objective assessment. There are no required parts or fixed item counts.</p>
   </div>
-  <div class="button-row compact">
+  <div class="button-row compact custom-builder-actions">
     <a class="secondary button-link" href="{{ url_for('admin_dashboard') }}">All Assessments</a>
-    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=assessment.id) }}">Question Bank</a>
-    <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=assessment.id) }}">Item Analysis</a>
-    <a class="secondary button-link" href="{{ url_for('admin_monitor') }}">Live Monitor</a>
+    <details class="heading-tools-dropdown">
+      <summary>Assessment Tools</summary>
+      <div class="heading-tools-dropdown-menu">
+        <a href="{{ url_for('admin_questions', assessment_id=assessment.id) }}">Question Bank</a>
+        <a href="{{ url_for('admin_analysis', assessment_id=assessment.id) }}">Item Analysis</a>
+        <a href="{{ url_for('admin_monitor', assessment_id=assessment.id) }}">Live Monitor</a>
+        <a href="{{ url_for('admin_testing', assessment_id=assessment.id) }}">Testing</a>
+      </div>
+    </details>
     <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=assessment.id) }}" class="assessment-delete-inline" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-ghost" type="submit">Delete</button></form>
   </div>
 </div>

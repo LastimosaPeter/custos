@@ -3485,3 +3485,269 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
 .monitor-filter-group{display:flex;align-items:end;gap:10px;flex-wrap:wrap}
 .monitor-filter-group label{min-width:190px}
 @media(max-width:760px){.monitor-filter-group{display:grid;grid-template-columns:1fr;width:100%}.monitor-filter-group label{min-width:0;width:100%}}
+
+/* =========================================================
+   UI refinement pass · 2026-09-28
+   Assessment actions, builder labels, messages, testing,
+   workspace save/delete alignment, and result actions.
+   ========================================================= */
+
+/* Assessment navigation should match its peer navigation items exactly. */
+.admin-nav-dropdown>summary{
+  min-height:34px;
+  padding:8px 9px;
+  font-size:14px;
+  line-height:1;
+  font-weight:700;
+}
+@media(max-width:950px){
+  .admin-nav-dropdown>summary{font-size:12px}
+}
+
+/* Compact card actions: keep the primary action and Delete visible; tuck the rest away. */
+.assessment-hub-actions-compact{
+  position:relative;
+  display:flex;
+  align-items:center;
+  gap:7px;
+  flex-wrap:nowrap;
+}
+.assessment-hub-actions-compact .assessment-open-btn,
+.assessment-hub-actions-compact .assessment-delete-btn{
+  min-height:34px;
+  padding:7px 12px;
+  border-radius:8px;
+  font-size:12px;
+  line-height:1;
+}
+.assessment-hub-actions-compact .assessment-delete-inline{margin-left:auto}
+.assessment-action-menu{position:relative;flex:0 0 auto}
+.assessment-action-menu>summary{
+  list-style:none;
+  width:34px;
+  height:34px;
+  padding:0;
+  display:grid;
+  place-items:center;
+  border:1px solid #b9c7d9;
+  border-radius:8px;
+  background:var(--panel);
+  color:var(--muted);
+  font-size:15px;
+  font-weight:900;
+  letter-spacing:.08em;
+  cursor:pointer;
+  user-select:none;
+}
+.assessment-action-menu>summary::-webkit-details-marker{display:none}
+.assessment-action-menu>summary:hover,
+.assessment-action-menu[open]>summary{border-color:#8eafd7;color:var(--accent);background:#f6faff}
+.assessment-action-menu-panel{
+  position:absolute;
+  left:0;
+  top:calc(100% + 6px);
+  z-index:80;
+  min-width:170px;
+  padding:6px;
+  display:grid;
+  gap:2px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel);
+  box-shadow:0 14px 34px rgba(24,40,65,.16);
+}
+.assessment-action-menu:not([open]) .assessment-action-menu-panel{display:none}
+.assessment-action-menu-panel a{
+  padding:8px 9px;
+  border-radius:7px;
+  color:var(--ink);
+  text-decoration:none;
+  font-size:11px;
+  font-weight:750;
+  white-space:nowrap;
+}
+.assessment-action-menu-panel a:hover{background:#edf5ff;color:var(--accent)}
+:root[data-theme="dark"] .assessment-action-menu>summary:hover,
+:root[data-theme="dark"] .assessment-action-menu[open]>summary,
+:root[data-theme="dark"] .assessment-action-menu-panel a:hover{background:#1d2a3b;color:#83baff}
+
+/* Shared small dropdown for Question Bank / Item Analysis / related tools. */
+.heading-tools-dropdown{position:relative;flex:0 0 auto}
+.heading-tools-dropdown>summary{
+  list-style:none;
+  min-height:36px;
+  display:inline-flex;
+  align-items:center;
+  gap:7px;
+  padding:8px 12px;
+  border:1px solid #aeb8c3;
+  border-radius:8px;
+  background:var(--panel);
+  color:var(--ink);
+  font-size:12px;
+  font-weight:800;
+  cursor:pointer;
+  user-select:none;
+}
+.heading-tools-dropdown>summary::-webkit-details-marker{display:none}
+.heading-tools-dropdown>summary::after{content:"▾";font-size:9px;color:var(--muted)}
+.heading-tools-dropdown[open]>summary::after{transform:rotate(180deg)}
+.heading-tools-dropdown-menu{
+  position:absolute;
+  right:0;
+  top:calc(100% + 6px);
+  z-index:90;
+  min-width:180px;
+  padding:6px;
+  display:grid;
+  gap:2px;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:var(--panel);
+  box-shadow:0 14px 34px rgba(24,40,65,.16);
+}
+.heading-tools-dropdown:not([open]) .heading-tools-dropdown-menu{display:none}
+.heading-tools-dropdown-menu a{
+  padding:8px 10px;
+  border-radius:7px;
+  color:var(--ink);
+  text-decoration:none;
+  font-size:11px;
+  font-weight:750;
+  white-space:nowrap;
+}
+.heading-tools-dropdown-menu a:hover{background:#edf5ff;color:var(--accent)}
+:root[data-theme="dark"] .heading-tools-dropdown-menu a:hover{background:#1d2a3b;color:#83baff}
+.custom-builder-actions{align-items:center}
+
+/* Assessment Builder labels: compact, bold, and consistent across all builder forms. */
+.custom-settings-grid>label,
+.custom-question-form>label,
+.stack-form>label,
+.custom-settings-grid>.custom-section-picker>legend,
+.custom-question-form>.custom-section-picker>legend{
+  font-size:11px!important;
+  font-weight:800!important;
+  color:var(--ink);
+  letter-spacing:.01em;
+}
+.custom-settings-grid>label input,
+.custom-settings-grid>label select,
+.custom-settings-grid>label textarea,
+.custom-question-form>label input,
+.custom-question-form>label select,
+.custom-question-form>label textarea,
+.stack-form>label input,
+.stack-form>label select,
+.stack-form>label textarea{font-weight:500}
+.custom-settings-grid>label>small,
+.workspace-edit-form label>small{font-size:10px;font-weight:600;color:var(--muted);line-height:1.35}
+
+/* Workspace save/delete: equal-size peer actions in one row. */
+.workspace-save-delete-row{
+  padding:0 14px 14px;
+  display:grid;
+  grid-template-columns:minmax(130px,160px) minmax(130px,160px);
+  gap:8px;
+  justify-content:end;
+}
+.workspace-save-delete-row>button,
+.workspace-save-delete-row .workspace-delete-assessment-form,
+.workspace-save-delete-row .workspace-delete-assessment-form>button{
+  width:100%;
+  min-height:34px;
+  margin:0;
+}
+.workspace-save-delete-row>button,
+.workspace-save-delete-row .workspace-delete-assessment-form>button{padding:7px 10px;font-size:11px}
+.workspace-save-delete-row .workspace-delete-assessment-form{padding:0;display:block}
+
+/* Messages: constrain the conversation area so the composer never falls below the viewport. */
+.message-conversation{min-height:0;overflow:hidden}
+.message-conversation-head{flex:0 0 auto}
+.message-student-summary{min-width:0;display:grid!important;gap:2px!important}
+.message-student-summary strong,
+.message-student-summary span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.message-student-email{font-size:10px!important;color:var(--accent)!important;font-weight:700}
+.message-conversation-body{
+  flex:1 1 auto;
+  min-height:0;
+  overflow-y:auto;
+  overflow-x:hidden;
+  overscroll-behavior:contain;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-gutter:stable;
+}
+.message-reply-form{flex:0 0 auto;position:relative;z-index:2}
+
+/* Testing history: reserve enough room for Resume / Review / Delete without collisions. */
+.testing-history-table{table-layout:auto;min-width:820px}
+.testing-history-table .col-label{width:25%}
+.testing-history-table .col-batch{width:15%}
+.testing-history-table .col-status{width:11%}
+.testing-history-table .col-score{width:8%}
+.testing-history-table .col-flags{width:7%}
+.testing-history-table .col-started{width:14%}
+.testing-history-table .col-actions{width:190px}
+.table-actions.compact-actions{display:grid;grid-auto-flow:column;grid-auto-columns:max-content;gap:4px;justify-content:start;align-items:center}
+.table-actions.compact-actions .table-action-btn{
+  min-height:29px!important;
+  padding:5px 8px!important;
+  border-radius:7px;
+  font-size:10.5px!important;
+}
+
+/* Submission page: center the final action instead of pinning it to the left edge. */
+.result-actions{display:flex;justify-content:center;align-items:center;margin-top:14px}
+.result-actions form{margin:0;display:flex;justify-content:center}
+.result-actions .button-link,
+.result-actions button{min-width:120px}
+
+@media(max-width:760px){
+  .assessment-hub-actions-compact{gap:6px}
+  .assessment-hub-actions-compact .assessment-open-btn{padding-left:10px;padding-right:10px}
+  .assessment-action-menu-panel{left:auto;right:0}
+  .heading-tools-dropdown{width:auto}
+  .heading-tools-dropdown>summary{min-height:34px;padding:7px 10px;font-size:11px}
+  .custom-builder-actions{width:100%;justify-content:flex-start}
+  .workspace-save-delete-row{grid-template-columns:1fr 1fr;padding:0 12px 12px}
+
+  .messages-shell{
+    height:calc(100dvh - 148px);
+    min-height:0;
+    max-height:none;
+  }
+  .message-thread-list{max-height:145px}
+  .message-conversation{min-height:0}
+  .message-conversation-head{padding:8px 10px;gap:8px}
+  .message-head-actions{gap:5px}
+  .message-head-actions .danger-ghost,
+  .message-conversation-head .button-link{font-size:9px;padding:6px 7px;min-height:30px}
+  .message-conversation-body{padding:12px}
+  .message-reply-form{padding:9px;gap:7px}
+  .message-reply-form textarea{min-height:46px}
+
+  /* iOS/PWA messages should start near the top of the content viewport. */
+  body.messages-body .page-shell-inner{padding-top:6px!important}
+  body.messages-body .breadcrumb-nav{margin-bottom:6px;padding-top:1px}
+  body.messages-body .messages-heading{margin-bottom:8px;gap:7px}
+  body.messages-body .messages-heading h1{margin:.1rem 0}
+  body.messages-body .messages-heading .subtle{margin:3px 0 0;font-size:11px;line-height:1.35}
+
+  .result-actions .button-link,
+  .result-actions button{width:auto!important;min-width:120px}
+}
+
+@media(max-width:430px){
+  .assessment-hub-actions-compact .assessment-open-btn,
+  .assessment-hub-actions-compact .assessment-delete-btn{font-size:11px;padding:7px 9px}
+  .assessment-action-menu>summary{width:32px;height:34px}
+  .workspace-save-delete-row>button,
+  .workspace-save-delete-row .workspace-delete-assessment-form>button{font-size:10px;padding:7px 6px}
+  .messages-shell{height:calc(100dvh - 132px)}
+  .message-thread-list{max-height:128px}
+}
+@media(max-width:1050px){
+  .testing-history-table{min-width:0!important}
+  .table-actions.compact-actions{display:flex;flex-wrap:wrap;gap:6px}
+}

@@ -14,10 +14,13 @@
     <h1>{{ selected_assessment.title }} Testing</h1>
     <p class="subtle">Run the real student interface for this assessment without adding instructor trials to class scores or item statistics.</p>
   </div>
-  <div class="heading-actions">
-    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=selected_assessment.id) }}">Question Bank</a>
-    <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=selected_assessment.id) }}">Item Analysis</a>
-  </div>
+  <details class="heading-tools-dropdown">
+    <summary>Assessment Tools</summary>
+    <div class="heading-tools-dropdown-menu">
+      <a href="{{ url_for('admin_questions', assessment_id=selected_assessment.id) }}">Question Bank</a>
+      <a href="{{ url_for('admin_analysis', assessment_id=selected_assessment.id) }}">Item Analysis</a>
+    </div>
+  </details>
 </div>
 
 <div class="content-card preview-account-card">
@@ -78,13 +81,13 @@
       <tbody>
         {% for t in tests %}
         <tr>
-          <td class="testing-label-cell"><strong>{{ t.test_label or 'Instructor Test' }}</strong><small>{{ t.email }}</small></td>
-          <td>{{ t.batch_name }}</td>
-          <td><span class="status {{ t.status }}">{{ t.status|replace('_', ' ') }}</span>{% if t.untimed %}<small class="cell-note">Untimed trial</small>{% endif %}</td>
-          <td class="numeric-cell">{% if t.status == 'submitted' %}{{ t.auto_total }}/{{ max_score }}{% else %}—{% endif %}</td>
-          <td class="numeric-cell">{{ t.flagged_count or 0 }}</td>
-          <td class="started-cell">{{ (t.started_at or '')[:16]|replace('T', ' ') }}</td>
-          <td class="testing-actions-cell">
+          <td class="testing-label-cell" data-label="Label"><strong>{{ t.test_label or 'Instructor Test' }}</strong><small>{{ t.email }}</small></td>
+          <td data-label="Delivery set">{{ t.batch_name }}</td>
+          <td data-label="Status"><span class="status {{ t.status }}">{{ t.status|replace('_', ' ') }}</span>{% if t.untimed %}<small class="cell-note">Untimed trial</small>{% endif %}</td>
+          <td class="numeric-cell" data-label="Score">{% if t.status == 'submitted' %}{{ t.auto_total }}/{{ max_score }}{% else %}—{% endif %}</td>
+          <td class="numeric-cell" data-label="Flags">{{ t.flagged_count or 0 }}</td>
+          <td class="started-cell" data-label="Started">{{ (t.started_at or '')[:16]|replace('T', ' ') }}</td>
+          <td class="testing-actions-cell" data-label="Actions">
             <div class="table-actions compact-actions">
               {% if t.status == 'in_progress' %}
               <form method="post" action="{{ url_for('admin_testing_resume', sid=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary table-action-btn" type="submit">Resume</button></form>

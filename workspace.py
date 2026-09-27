@@ -186,6 +186,8 @@ def workspace():
     ).fetchall()
     assessments = conn.execute(
         """SELECT a.*, s.code AS subject_code,
+                  CASE WHEN a.assessment_type='dryrun' THEN COALESCE(a.access_code,(SELECT b.access_code FROM batches b WHERE b.assessment_id=a.id ORDER BY b.id LIMIT 1)) ELSE a.access_code END AS effective_access_code,
+                  (SELECT b.id FROM batches b WHERE b.assessment_id=a.id ORDER BY b.id LIMIT 1) AS delivery_batch_id,
                   (SELECT COUNT(*) FROM programming_labs pl WHERE pl.assessment_id=a.id) AS has_lab
            FROM assessments a JOIN subjects s ON s.id=a.subject_id
            WHERE a.deleted_at IS NULL
@@ -472,6 +474,9 @@ def assessment_edit(assessment_id):
         conn.close(); abort(404)
     if row["assessment_type"] == "custom" and not access_code:
         access_code = row["access_code"] or _make_access_code("TEST")
+    if row["assessment_type"] == "dryrun" and not access_code:
+        delivery = conn.execute("SELECT access_code FROM batches WHERE assessment_id=? ORDER BY id LIMIT 1", (assessment_id,)).fetchone()
+        access_code = row["access_code"] or (delivery["access_code"] if delivery else None) or _make_access_code("DRY")
     try:
         conn.execute("UPDATE assessments SET title=?,description=?,duration_minutes=?,security_mode=?,active=?,access_code=? WHERE id=?", (title,description,duration,security_mode,active,access_code,assessment_id))
         if row["assessment_type"] == "programming_lab":
@@ -479,6 +484,11 @@ def assessment_edit(assessment_id):
         elif row["assessment_type"] == "custom":
             updated = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
             _ensure_custom_batch(conn, updated)
+        elif row["assessment_type"] == "dryrun":
+            conn.execute(
+                "UPDATE batches SET name=?,access_code=?,duration_minutes=?,active=? WHERE assessment_id=?",
+                (title, access_code, duration, active, assessment_id),
+            )
         conn.commit(); flash("Assessment updated.", "success")
     except Exception as exc:
         conn.rollback(); flash(f"Could not update assessment: {exc}", "error")

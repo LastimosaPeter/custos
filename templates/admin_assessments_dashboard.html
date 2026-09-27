@@ -79,7 +79,7 @@
           <span class="workspace-subject-chip">{{ a.subject_code }}</span>
           <span class="status {{ 'submitted' if a.active else 'disabled' }}">{{ 'Active' if a.active else 'Disabled' }}</span>
         </div>
-        <div class="assessment-hub-type">{{ a.display_type if a.assessment_type == 'custom' else (a.assessment_type|replace('_',' ')|title) }}</div>
+        <div class="assessment-hub-type">{{ a.display_type if a.assessment_type == 'custom' else ('Dry Run' if a.assessment_type == 'dryrun' else (a.assessment_type|replace('_',' ')|title)) }}</div>
         <h3>{{ a.title }}</h3>
         <p>{{ a.description or 'No description added.' }}</p>
         <div class="assessment-hub-stats">
@@ -91,32 +91,67 @@
             {% if a.assessment_type == 'custom' %}<span><b>{{ a.max_score or 0 }}</b> points</span>{% endif %}
           {% endif %}
         </div>
-        {% if a.access_code %}<div class="assessment-key-line"><span>Session key</span><code>{{ a.access_code }}</code></div>{% endif %}
-        <div class="assessment-hub-actions">
+        {% if a.effective_access_code %}<div class="assessment-key-line"><span>Session key</span><code>{{ a.effective_access_code }}</code></div>{% endif %}
+        <div class="assessment-hub-actions assessment-hub-actions-compact">
           {% if a.assessment_type == 'custom' %}
-            <a class="primary button-link" href="{{ url_for('nextgen.custom_assessment', assessment_id=a.id) }}">Open Assessment</a>
-            <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
-            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
-            <a class="secondary button-link" href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Monitor</a>
-            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+            <a class="primary button-link assessment-open-btn" href="{{ url_for('nextgen.custom_assessment', assessment_id=a.id) }}">Open Assessment</a>
+            <details class="assessment-action-menu">
+              <summary aria-label="More actions" title="More actions">•••</summary>
+              <div class="assessment-action-menu-panel">
+                <a href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
+                <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
+                <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
+                <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+              </div>
+            </details>
           {% elif a.assessment_type in ['midterm','posttest'] %}
-            <a class="primary button-link" href="{{ url_for('admin_dashboard', assessment=a.assessment_type) }}">Open Assessment</a>
-            <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
-            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
-            <a class="secondary button-link" href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Monitor</a>
-            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+            <a class="primary button-link assessment-open-btn" href="{{ url_for('admin_dashboard', assessment=a.assessment_type) }}">Open Assessment</a>
+            <details class="assessment-action-menu">
+              <summary aria-label="More actions" title="More actions">•••</summary>
+              <div class="assessment-action-menu-panel">
+                <a href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
+                <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
+                <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
+                <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+              </div>
+            </details>
+          {% elif a.assessment_type == 'dryrun' %}
+            {% if a.delivery_batch_id %}
+              <a class="primary button-link assessment-open-btn" href="{{ url_for('admin_batch', batch_id=a.delivery_batch_id) }}">Open Assessment</a>
+            {% else %}
+              <a class="primary button-link assessment-open-btn" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Open Assessment</a>
+            {% endif %}
+            <details class="assessment-action-menu">
+              <summary aria-label="More actions" title="More actions">•••</summary>
+              <div class="assessment-action-menu-panel">
+                <a href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
+                <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
+                <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
+                <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+              </div>
+            </details>
           {% elif a.assessment_type == 'programming_lab' %}
-            <a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Open Caudex IDE</a>
-            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Analytics</a>
-            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+            <a class="primary button-link assessment-open-btn" href="{{ url_for('nextgen.admin_ide') }}">Open Caudex IDE</a>
+            <details class="assessment-action-menu">
+              <summary aria-label="More actions" title="More actions">•••</summary>
+              <div class="assessment-action-menu-panel">
+                <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Analytics</a>
+                <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+              </div>
+            </details>
           {% else %}
-            <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
-            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
-            <a class="secondary button-link" href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Monitor</a>
-            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+            <details class="assessment-action-menu assessment-action-menu-leading">
+              <summary aria-label="More actions" title="More actions">•••</summary>
+              <div class="assessment-action-menu-panel">
+                <a href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
+                <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
+                <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
+                <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
+              </div>
+            </details>
           {% endif %}
           <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=a.id) }}" class="assessment-delete-inline" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');">
-            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-ghost" type="submit">Delete</button>
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-ghost assessment-delete-btn" type="submit">Delete</button>
           </form>
         </div>
       </article>

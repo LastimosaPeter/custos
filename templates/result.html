@@ -20,8 +20,10 @@
   <div class="warning-box">Your exam has been scored. The instructor has disabled immediate score display for this batch.</div>
   {% endif %}
   <p class="micro">Proctoring flags recorded: {{ ex.flagged_count }}. Flags are audit events and do not automatically change your score.</p>
-  {% if ex.is_test and session.get('admin_id') %}
-    <form method="post" action="{{ url_for('admin_testing_return') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Return to Instructor Testing</button></form>
-  {% else %}<a href="{{ url_for('student_logout') }}" class="secondary button-link">Finish</a>{% endif %}
+  <div class="result-actions">
+    {% if ex.is_test and session.get('admin_id') %}
+      <form method="post" action="{{ url_for('admin_testing_return') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Return to Instructor Testing</button></form>
+    {% else %}<a href="{{ url_for('student_logout') }}" class="secondary button-link">Finish</a>{% endif %}
+  </div>
 </div>
 {% endblock %}

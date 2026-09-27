@@ -1155,6 +1155,8 @@ def admin_dashboard():
         conn = connect()
         assessments = conn.execute(
             """SELECT a.*, s.code AS subject_code, s.name AS subject_name,
+                      CASE WHEN a.assessment_type='dryrun' THEN COALESCE(a.access_code,(SELECT b.access_code FROM batches b WHERE b.assessment_id=a.id ORDER BY b.id LIMIT 1)) ELSE a.access_code END AS effective_access_code,
+                      (SELECT b.id FROM batches b WHERE b.assessment_id=a.id ORDER BY b.id LIMIT 1) AS delivery_batch_id,
                       (SELECT COUNT(*) FROM questions q WHERE q.assessment_id=a.id AND COALESCE(q.active,1)=1) AS question_count,
                       (SELECT COALESCE(SUM(q.points),0) FROM questions q WHERE q.assessment_id=a.id AND COALESCE(q.active,1)=1) AS max_score,
                       (SELECT COUNT(*) FROM exam_sessions e WHERE e.assessment_id=a.id AND COALESCE(e.is_test,0)=0) AS attempt_count,

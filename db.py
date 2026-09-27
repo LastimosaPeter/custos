@@ -614,11 +614,22 @@ def _ensure_future_seed(conn, admin_username):
             (subject["id"],title,slug,atype,description,duration,instructor["id"] if instructor else None,now),
         )
     for atype in ('midterm','posttest','dryrun'):
-        assessment = conn.execute("SELECT id FROM assessments WHERE slug=?", (f"csdc101-{atype}",)).fetchone()
+        assessment = conn.execute("SELECT id, access_code FROM assessments WHERE slug=?", (f"csdc101-{atype}",)).fetchone()
         if assessment:
             conn.execute("UPDATE batches SET subject_id=?, assessment_id=? WHERE assessment_type=?", (subject["id"],assessment["id"],atype))
             conn.execute("UPDATE questions SET subject_id=?, assessment_id=? WHERE batch_slot IN (SELECT slot FROM batches WHERE assessment_type=?)", (subject["id"],assessment["id"],atype))
             conn.execute("UPDATE exam_sessions SET assessment_id=? WHERE batch_id IN (SELECT id FROM batches WHERE assessment_type=?) AND assessment_id IS NULL", (assessment["id"],atype))
+            # The public dry run uses one real student-facing batch. Keep its key visible in
+            # the unified assessment catalog so instructors do not lose the entry key.
+            if atype == 'dryrun':
+                batch = conn.execute(
+                    "SELECT id, access_code FROM batches WHERE assessment_type='dryrun' ORDER BY slot LIMIT 1"
+                ).fetchone()
+                if batch:
+                    effective_key = assessment["access_code"] or batch["access_code"]
+                    if effective_key:
+                        conn.execute("UPDATE assessments SET access_code=? WHERE id=?", (effective_key, assessment["id"]))
+                        conn.execute("UPDATE batches SET access_code=? WHERE id=?", (effective_key, batch["id"]))
 
     # Seed one extensible C++ Programming Lab without hard-coding a public GitHub secret.
     lab_assessment = conn.execute("SELECT * FROM assessments WHERE slug='csdc101-cpp-lab'").fetchone()

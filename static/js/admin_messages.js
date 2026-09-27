@@ -6,6 +6,7 @@
   const body = document.getElementById('messageConversationBody');
   const nameEl = document.getElementById('messageStudentName');
   const metaEl = document.getElementById('messageStudentMeta');
+  const emailEl = document.getElementById('messageStudentEmail');
   const review = document.getElementById('messageReviewLink');
   const deleteButton = document.getElementById('messageDeleteButton');
   const form = document.getElementById('messageReplyForm');
@@ -36,7 +37,8 @@
       const data = await res.json();
       if (!data.ok) return;
       nameEl.textContent = displayName(data.student);
-      metaEl.textContent = `${data.student.program || '—'} ${data.student.class_section || ''} · ${data.student.batch_name || ''}`;
+      metaEl.textContent = `${data.student.program || '—'} ${data.student.class_section || ''} · ${data.student.batch_name || ''} · ${String(data.student.status || '').replaceAll('_', ' ')}`;
+      if (emailEl) emailEl.textContent = data.student.email || '';
       review.href = `/admin/session/${currentSid}`;
       review.classList.remove('hidden');
       deleteButton?.classList.remove('hidden');
@@ -57,7 +59,7 @@
         list.innerHTML = '<div class="messages-empty">No student conversations yet.</div>';
         return;
       }
-      list.innerHTML = threads.map(t => `<button type="button" class="message-thread ${Number(t.id) === currentSid ? 'active' : ''}" data-session-id="${Number(t.id)}"><span class="message-thread-name">${esc(displayName(t))}</span><span class="message-thread-meta">${esc(t.program || '—')} ${esc(t.class_section || '')} · ${esc(t.batch_name || '')}</span><span class="message-thread-preview">${esc(t.last_message || 'No message yet')}</span>${Number(t.unread_messages || 0) ? `<span class="message-thread-unread">${Number(t.unread_messages)}</span>` : ''}</button>`).join('');
+      list.innerHTML = threads.map(t => `<button type="button" class="message-thread ${Number(t.id) === currentSid ? 'active' : ''}" data-session-id="${Number(t.id)}"><span class="message-thread-name">${esc(displayName(t))}</span><span class="message-thread-meta">${esc(t.email || '')} · ${esc(t.program || '—')} ${esc(t.class_section || '')}</span><span class="message-thread-preview">${esc(t.last_message || 'No message yet')}</span>${Number(t.unread_messages || 0) ? `<span class="message-thread-unread">${Number(t.unread_messages)}</span>` : ''}</button>`).join('');
       if (!currentSid) loadThread(threads[0].id);
     } catch (_) {}
   }
@@ -106,6 +108,7 @@
       currentSid = 0;
       nameEl.textContent = 'Select a student';
       metaEl.textContent = '';
+      if (emailEl) emailEl.textContent = '';
       review.classList.add('hidden');
       deleteButton.classList.add('hidden');
       form.hidden = true;
