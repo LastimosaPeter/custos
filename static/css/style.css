@@ -2778,12 +2778,42 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
 }
 
 /* 2026-09-27 navigation, review flags, and instructor messaging corrections */
-.history-nav{display:flex;align-items:center;gap:2px;flex:0 0 auto;margin-right:8px}
-.history-nav-btn{width:30px;height:34px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink);font-size:26px;font-weight:500;line-height:1;display:grid;place-items:center;cursor:pointer}
-.history-nav-btn:hover,.history-nav-btn:focus-visible{background:#edf3fb;color:var(--accent);outline:none}
-:root[data-theme="dark"] .history-nav-btn{color:#dce5f2}
-:root[data-theme="dark"] .history-nav-btn:hover,:root[data-theme="dark"] .history-nav-btn:focus-visible{background:#1d2a3b;color:#83baff}
-@media(max-width:620px){.history-nav{margin-right:3px;gap:0}.history-nav-btn{width:27px;height:32px;font-size:23px}.site-header{gap:4px}}
+.body-history-nav{
+  display:flex;
+  align-items:center;
+  gap:5px;
+  min-height:22px;
+  margin:-12px 0 10px 2px;
+  width:max-content;
+}
+.body-history-btn{
+  appearance:none;
+  -webkit-appearance:none;
+  display:inline-grid;
+  place-items:center;
+  width:22px;
+  height:22px;
+  padding:0;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:var(--accent);
+  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  font-size:24px;
+  font-weight:500;
+  line-height:18px;
+  cursor:pointer;
+}
+.body-history-btn:hover{background:rgba(21,101,192,.08)}
+.body-history-btn:focus-visible{outline:2px solid rgba(21,101,192,.35);outline-offset:1px}
+.body-history-btn:active{transform:translateX(-1px)}
+.body-history-btn[data-history-forward]:active{transform:translateX(1px)}
+:root[data-theme="dark"] .body-history-btn{color:#83baff}
+:root[data-theme="dark"] .body-history-btn:hover{background:rgba(131,186,255,.12)}
+@media(max-width:620px){
+  .body-history-nav{margin:-16px 0 8px 0;gap:3px;min-height:20px}
+  .body-history-btn{width:21px;height:21px;font-size:23px;border-radius:5px}
+}
 
 /* Student review flags are intentionally distinct from proctoring/security flags. */
 .dot.review{background:#f4a000}
