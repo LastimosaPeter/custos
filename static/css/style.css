@@ -1197,7 +1197,7 @@ body:not(.exam-page) .page-shell{
 }
 
 /* =========================================================
-   Custos v0.98 · Scarabs refinement
+   Custos v1.0 · Goliathus refinement
    ========================================================= */
 
 /* Course mark: intentionally solid black and slightly smaller. */
@@ -2536,7 +2536,7 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
 }
 
 /* =========================================================
-   Custos Next · multi-subject workspace + secure C++ IDE
+   Custos 1.0 · Goliathus · multi-subject workspace + secure C++ IDE
    ========================================================= */
 .future-heading{align-items:flex-start}
 .future-stat-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin:18px 0}
@@ -3782,3 +3782,36 @@ button,.button-link{ text-align:center; line-height:1.22; }
 .workspace-delete-assessment-form .delete-action{font-size:10px;padding:7px 10px}
 .assessment-delete-inline .delete-action{min-height:34px}
 .message-head-actions .delete-action{font-size:10px;padding:7px 9px}
+
+
+/* =========================================================
+   Custos 1.0 · Goliathus
+   Final messages alignment + release cache-safe UI override.
+   ========================================================= */
+.messages-page .message-thread-list{
+  text-align:left!important;
+}
+.messages-page button.message-thread{
+  display:flex!important;
+  flex-direction:column!important;
+  align-items:flex-start!important;
+  justify-content:flex-start!important;
+  width:100%!important;
+  text-align:left!important;
+}
+.messages-page button.message-thread > .message-thread-name,
+.messages-page button.message-thread > .message-thread-meta,
+.messages-page button.message-thread > .message-thread-preview{
+  align-self:stretch!important;
+  width:100%!important;
+  margin:0!important;
+  text-align:left!important;
+}
+.messages-page .message-student-summary{
+  justify-items:start!important;
+  text-align:left!important;
+}
+.messages-page .message-student-summary > *{
+  width:100%;
+  text-align:left!important;
+}

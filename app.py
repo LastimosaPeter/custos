@@ -39,9 +39,10 @@ app.config.update(
 app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1)
 
 APP_NAME = os.getenv("APP_NAME", "Custos")
-APP_VERSION = os.getenv("APP_VERSION", "0.98")
-APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Scarabs")
-APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Scarabaeidae release")
+APP_VERSION = os.getenv("APP_VERSION", "1.0")
+APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
+APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-r1")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -163,6 +164,7 @@ def inject_app_identity():
         "app_version": APP_VERSION,
         "app_release_species": APP_RELEASE_SPECIES,
         "app_release_common_name": APP_RELEASE_COMMON_NAME,
+        "app_asset_revision": APP_ASSET_REVISION,
         "custos_theme": get_saved_theme(),
         "admin_assessment": session.get("admin_assessment", "posttest"),
     }
@@ -2621,7 +2623,7 @@ def export_questions():
     return Response(sio.getvalue(), mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename=csdc101_{assessment}_question_bank.csv"})
 
 
-# Custos Next: subjects, multi-assessment workspace, and secure C++ Programming Lab.
+# Custos 1.0 · Goliathus: subjects, multi-assessment workspace, and secure C++ Programming Lab.
 from workspace import register as register_nextgen
 register_nextgen(app)
 

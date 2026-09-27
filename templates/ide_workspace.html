@@ -61,5 +61,5 @@
 
   <div id="ideFinishOverlay" class="overlay" role="dialog" aria-modal="true"><div class="overlay-card"><h2>Finish Programming Lab?</h2><p>Custos will submit the current task scores and close this attempt. You cannot continue editing afterward.</p><div class="button-row"><button type="button" id="ideCancelFinish" class="secondary">Keep Coding</button><form method="post" action="{{ url_for('nextgen.ide_finish') }}" id="ideFinishForm"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger" type="submit">Finish Lab</button></form></div></div></div>
 </div>
-<script src="{{ url_for('static', filename='js/ide.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/ide.js', v=app_asset_revision) }}" defer></script>
 {% endblock %}

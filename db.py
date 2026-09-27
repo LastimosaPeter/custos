@@ -719,7 +719,7 @@ def init_db(admin_username="admin", admin_password="ChangeMe123!"):
 
         conn.execute(
             """INSERT INTO batches(slot,section,batch_label,name,access_code,duration_minutes,reveal_score,active,assessment_type)
-               VALUES(17,'DRY RUN','A','Custos Public Dry Run','CUSTOS-DRYRUN-SCARABS',90,1,1,'dryrun')
+               VALUES(17,'DRY RUN','A','Custos Public Dry Run','CUSTOS-DRYRUN-GOLIATHUS',90,1,1,'dryrun')
                ON CONFLICT(slot) DO NOTHING"""
         )
         conn.execute(

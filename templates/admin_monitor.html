@@ -41,5 +41,5 @@
     {% else %}<div class="monitor-empty">No active student sessions right now.</div>{% endfor %}
   </div>
 </div>
-<script src="{{ url_for('static', filename='js/admin_monitor.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/admin_monitor.js', v=app_asset_revision) }}" defer></script>
 {% endblock %}

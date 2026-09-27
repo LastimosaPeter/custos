@@ -108,7 +108,7 @@
 </div>
 {% endif %}
 
-<script src="{{ url_for('static', filename='js/admin_session_controls.js') }}" defer></script>
-<script src="{{ url_for('static', filename='js/admin_chat.js') }}" defer></script>
+<script src="{{ url_for('static', filename='js/admin_session_controls.js', v=app_asset_revision) }}" defer></script>
+<script src="{{ url_for('static', filename='js/admin_chat.js', v=app_asset_revision) }}" defer></script>
 {% endblock %}
 

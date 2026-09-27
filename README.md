@@ -1,4 +1,4 @@
-# Custos Next
+# Custos 1.0 — Goliathus
 
 **Custos** is a PostgreSQL-ready secure assessment platform designed around **Instructors → Subjects → Assessments → Attempts**. The current CSDC101 objective-exam workflow remains supported while the Workspace provides the foundation for additional subjects, assessment types, instructors, and a future secure C++ Programming Lab.
 
@@ -114,7 +114,7 @@ Never commit `.env`, databases, or private question banks. `.gitignore` excludes
 
 ## Current release
 
-Custos v0.98 · **Scarabs**
+Custos v1.0 · **Goliathus**
 
 ## September 27 layout refinement
 

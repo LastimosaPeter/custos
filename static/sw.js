@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-next13-unified-assessments';
+const CACHE_NAME = 'custos-static-v100-goliathus-r1';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -79,3 +79,5 @@ self.addEventListener('fetch', event => {
 // UI cache refresh: theme-aware Caudex wordmark 2026-09-27
 
 // UI + assessment engine refresh: free-form custom assessments 2026-09-27
+
+// Custos 1.0 · Goliathus cache refresh.

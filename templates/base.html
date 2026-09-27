@@ -17,12 +17,13 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
-  <script src="{{ url_for('static', filename='js/pwa.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='js/theme.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='js/code_highlight.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='js/student_form.js') }}" defer></script>
-  <script src="{{ url_for('static', filename='js/mobile_ui.js') }}" defer></script>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=app_asset_revision) }}">
+  <script>window.CUSTOS_ASSET_REVISION={{ app_asset_revision|tojson }};</script>
+  <script src="{{ url_for('static', filename='js/pwa.js', v=app_asset_revision) }}" defer></script>
+  <script src="{{ url_for('static', filename='js/theme.js', v=app_asset_revision) }}" defer></script>
+  <script src="{{ url_for('static', filename='js/code_highlight.js', v=app_asset_revision) }}" defer></script>
+  <script src="{{ url_for('static', filename='js/student_form.js', v=app_asset_revision) }}" defer></script>
+  <script src="{{ url_for('static', filename='js/mobile_ui.js', v=app_asset_revision) }}" defer></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% block body %}
