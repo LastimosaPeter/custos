@@ -1,17 +1,27 @@
 {% extends "base.html" %}
-{% block title %}Custos - IDE Coming Soon{% endblock %}
+{% block title %}Custos - Caudex IDE{% endblock %}
 {% block breadcrumbs %}{% endblock %}
 {% block content %}
-<div class="coming-soon-wrap">
-  <section class="coming-soon-card" aria-labelledby="coming-soon-title">
+<div class="coming-soon-wrap caudex-coming-soon-wrap">
+  <section class="coming-soon-card caudex-coming-soon-card" aria-labelledby="coming-soon-title">
     <div class="work-zone-sign" aria-hidden="true">
       <span class="work-zone-icon">🚧</span>
       <strong>CAUTION</strong>
       <small>MEN AT WORK</small>
     </div>
+
     <div class="eyebrow">CUSTOS · PROGRAMMING ENVIRONMENT</div>
     <h1 id="coming-soon-title">IDE is under construction.</h1>
-    <p>The secure Custos programming environment is being prepared for a future release. Student access is currently disabled while the editor, code runner, and assessment workflow are being finalized.</p>
+    <p class="coming-soon-copy">The secure Custos programming environment is being prepared for a future release. Student access is currently disabled while the editor, code runner, and assessment workflow are being finalized.</p>
+
+    <div class="caudex-introduction" aria-labelledby="caudex-brand-title">
+      <p class="caudex-intro-label">Allow us to introduce you to</p>
+      <div class="caudex-brand-lockup">
+        <img class="caudex-logo" src="{{ url_for('static', filename='img/caudex-logo.png') }}" alt="Caudex IDE logo">
+        <h2 id="caudex-brand-title" class="caudex-wordmark"><em>Caudex</em> <span>IDE</span></h2>
+      </div>
+    </div>
+
     <div class="coming-soon-stripe" aria-hidden="true"></div>
     <a class="primary button-link" href="{{ url_for('index') }}">Return to Custos</a>
   </section>
