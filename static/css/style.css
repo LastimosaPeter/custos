@@ -3358,3 +3358,59 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
   .custom-section-picker{gap:10px 14px}
   .assessment-hub-card{padding:15px}
 }
+
+/* =========================================================
+   Assessment Catalog alignment fix
+   Keep info, status badges, and expand control in stable columns.
+   ========================================================= */
+.workspace-assessment-record > summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 220px 24px;
+  align-items: center;
+  column-gap: 16px;
+}
+
+.workspace-assessment-record > summary > div:first-child {
+  min-width: 0;
+}
+
+.workspace-assessment-record .workspace-assessment-meta {
+  margin-left: 0;
+  justify-self: start;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.workspace-assessment-record > summary::after {
+  margin-left: 0;
+  justify-self: end;
+  width: 24px;
+  text-align: center;
+}
+
+@media (max-width: 760px) {
+  .workspace-assessment-record > summary {
+    grid-template-columns: minmax(0, 1fr) 24px;
+    grid-template-areas:
+      "info expand"
+      "meta meta";
+    row-gap: 9px;
+    align-items: start;
+  }
+
+  .workspace-assessment-record > summary > div:first-child {
+    grid-area: info;
+  }
+
+  .workspace-assessment-record .workspace-assessment-meta {
+    grid-area: meta;
+    justify-self: start;
+  }
+
+  .workspace-assessment-record > summary::after {
+    grid-area: expand;
+    align-self: start;
+  }
+}
