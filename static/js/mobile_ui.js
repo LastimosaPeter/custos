@@ -57,16 +57,9 @@
     });
   }
 
-  function setupHistoryNav() {
-    const back = document.querySelector('[data-history-back]');
-    const forward = document.querySelector('[data-history-forward]');
-    back?.addEventListener('click', () => window.history.back());
-    forward?.addEventListener('click', () => window.history.forward());
-  }
 
   document.addEventListener('DOMContentLoaded', () => {
     enhanceTables();
     setupMobileNav();
-    setupHistoryNav();
   });
 })();

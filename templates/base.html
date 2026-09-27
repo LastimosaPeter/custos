@@ -48,10 +48,7 @@
   </header>
   <main class="page-shell">
     <div class="page-shell-inner">
-      <nav class="body-history-nav" aria-label="Page history navigation">
-        <button type="button" class="body-history-btn" data-history-back aria-label="Go back" title="Back">‹</button>
-        <button type="button" class="body-history-btn" data-history-forward aria-label="Go forward" title="Forward">›</button>
-      </nav>
+      {% block breadcrumbs %}{% include "_breadcrumbs.html" %}{% endblock %}
       {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
           <div class="flash-stack">

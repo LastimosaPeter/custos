@@ -2841,3 +2841,108 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
 :root[data-theme="dark"] .instructor-chat-card .chat-message.student{background:#202b3a;color:#e3ebf7;border-color:#39485b}
 :root[data-theme="dark"] .messages-page .chat-message.instructor,
 :root[data-theme="dark"] .instructor-chat-card .chat-message.instructor{background:#347fe7;color:#fff;border-color:#347fe7}
+
+/* =========================================================
+   Breadcrumb navigation + iOS Custos brand visibility
+   2026-09-27
+   ========================================================= */
+.body-history-nav,.body-history-btn{display:none!important}
+
+.breadcrumb-nav{
+  display:flex;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+  min-height:24px;
+  margin:0 0 18px;
+  padding-top:10px;
+  color:var(--muted);
+  font-size:12px;
+  line-height:1.35;
+  font-weight:650;
+}
+.breadcrumb-nav a{
+  color:var(--muted);
+  text-decoration:none;
+  transition:color .15s ease;
+}
+.breadcrumb-nav a:hover{color:var(--accent);text-decoration:none}
+.breadcrumb-separator{color:#a6b0bf;font-size:15px;line-height:1;user-select:none}
+.breadcrumb-current{color:var(--ink);font-weight:800}
+:root[data-theme="dark"] .breadcrumb-nav a{color:#9eabc0}
+:root[data-theme="dark"] .breadcrumb-nav a:hover{color:#83baff}
+:root[data-theme="dark"] .breadcrumb-separator{color:#607087}
+:root[data-theme="dark"] .breadcrumb-current{color:#eef4ff}
+
+/* The Custos product mark always wins horizontal-space negotiation.
+   Subject branding scales first on narrow iOS/PWA headers. */
+.site-header .brand-lockup{overflow:visible}
+.site-header .custos-wordmark{
+  display:inline-flex!important;
+  flex:0 0 auto!important;
+  min-width:max-content;
+  visibility:visible!important;
+  opacity:1!important;
+}
+.site-header .custos-header-orb{
+  display:grid!important;
+  flex:0 0 40px!important;
+  width:40px!important;
+  height:40px!important;
+  min-width:40px!important;
+  visibility:visible!important;
+  opacity:1!important;
+  overflow:visible;
+}
+.site-header .custos-header-orb .custos-mark{
+  display:block!important;
+  width:28px!important;
+  height:28px!important;
+  min-width:28px!important;
+  visibility:visible!important;
+  opacity:1!important;
+}
+.site-header .subject-brand-logo{min-width:0;flex:0 1 auto}
+
+@media(max-width:700px){
+  .breadcrumb-nav{padding-top:12px;margin-bottom:15px;font-size:11px;gap:5px}
+  .breadcrumb-separator{font-size:14px}
+  .site-header .brand-lockup{gap:7px!important;flex:0 1 auto!important}
+  .site-header .custos-wordmark{flex:0 0 34px!important;min-width:34px!important}
+  .site-header .custos-header-orb{width:34px!important;height:34px!important;min-width:34px!important;flex-basis:34px!important}
+  .site-header .custos-header-orb .custos-mark{width:24px!important;height:24px!important;min-width:24px!important}
+  .site-header .brand-divider{display:block!important;flex:0 0 1px!important}
+  .site-header .subject-brand-logo{width:104px!important;max-width:29vw!important}
+}
+
+@media(max-width:440px){
+  .breadcrumb-nav{padding-top:14px;margin-bottom:14px}
+  .site-header .subject-brand-logo{width:92px!important;max-width:25vw!important}
+  .site-header .brand-lockup{min-width:145px!important}
+}
+
+@media(max-width:1024px){
+  html.pwa-standalone body:not(.exam-page) .breadcrumb-nav{
+    padding-top:14px;
+  }
+  html.pwa-standalone body:not(.exam-page) .site-header .custos-wordmark,
+  html.pwa-standalone body:not(.exam-page) .site-header .custos-header-orb,
+  html.pwa-standalone body:not(.exam-page) .site-header .custos-header-orb .custos-mark{
+    display:inline-grid!important;
+    visibility:visible!important;
+    opacity:1!important;
+  }
+  html.pwa-standalone body:not(.exam-page) .site-header .custos-header-orb .custos-mark{display:block!important}
+}
+@media(max-width:700px){
+  .site-header .custos-wordmark>span:last-child{
+    display:inline!important;
+    font-size:14px;
+    line-height:1;
+  }
+  .site-header .custos-wordmark{gap:6px!important;flex-basis:auto!important;min-width:max-content!important}
+}
+@media(max-width:360px){
+  .site-header .subject-brand-logo{width:78px!important;max-width:24vw!important}
+  .site-header .custos-wordmark>span:last-child{font-size:13px}
+}

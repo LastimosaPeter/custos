@@ -1,0 +1,86 @@
+{% set ep = request.endpoint or '' %}
+{% set active_assessment = (assessment if assessment is defined else admin_assessment)|default('posttest') %}
+{% set assessment_label = 'Post-test' if active_assessment == 'posttest' else 'Midterm' %}
+<nav class="breadcrumb-nav" aria-label="Breadcrumb">
+  {% if ep == 'index' %}
+    <span class="breadcrumb-current" aria-current="page">Home</span>
+  {% elif ep in ['student_login', 'instructions', 'result'] %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    {% if ep == 'student_login' %}
+      <span class="breadcrumb-current" aria-current="page">Student View</span>
+    {% else %}
+      <a href="{{ url_for('student_login') }}">Student View</a>
+      <span class="breadcrumb-separator" aria-hidden="true">›</span>
+      <span class="breadcrumb-current" aria-current="page">{{ 'Instructions' if ep == 'instructions' else 'Result' }}</span>
+    {% endif %}
+  {% elif ep == 'admin_login' %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <span class="breadcrumb-current" aria-current="page">Instructor View</span>
+  {% elif ep == 'nextgen.workspace' %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <span>Instructor</span>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <span class="breadcrumb-current" aria-current="page">Workspace</span>
+  {% elif ep in ['admin_dashboard','admin_batch','admin_monitor','admin_analysis','admin_analysis_item','admin_questions','admin_question_edit','admin_testing','admin_session'] %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <a href="{{ url_for('nextgen.workspace') }}">Workspace</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    {% if ep == 'admin_dashboard' %}
+      <span class="breadcrumb-current" aria-current="page">{{ assessment_label }} Dashboard</span>
+    {% elif ep == 'admin_batch' %}
+      <a href="{{ url_for('admin_dashboard', assessment=active_assessment) }}">{{ assessment_label }} Dashboard</a>
+      <span class="breadcrumb-separator" aria-hidden="true">›</span>
+      <span class="breadcrumb-current" aria-current="page">Configure Set</span>
+    {% elif ep == 'admin_monitor' %}
+      <span class="breadcrumb-current" aria-current="page">Live Monitor</span>
+    {% elif ep in ['admin_analysis','admin_analysis_item'] %}
+      {% if ep == 'admin_analysis_item' %}<a href="{{ url_for('admin_analysis', assessment=active_assessment) }}">Item Analysis</a><span class="breadcrumb-separator" aria-hidden="true">›</span>{% endif %}
+      <span class="breadcrumb-current" aria-current="page">{{ 'Item Review' if ep == 'admin_analysis_item' else 'Item Analysis' }}</span>
+    {% elif ep in ['admin_questions','admin_question_edit'] %}
+      {% if ep == 'admin_question_edit' %}<a href="{{ url_for('admin_questions', assessment=active_assessment) }}">Question Banks</a><span class="breadcrumb-separator" aria-hidden="true">›</span>{% endif %}
+      <span class="breadcrumb-current" aria-current="page">{{ 'Edit Question' if ep == 'admin_question_edit' else 'Question Banks' }}</span>
+    {% elif ep == 'admin_testing' %}
+      <span class="breadcrumb-current" aria-current="page">Testing</span>
+    {% elif ep == 'admin_session' %}
+      <a href="{{ url_for('admin_monitor', assessment=active_assessment) }}">Live Monitor</a>
+      <span class="breadcrumb-separator" aria-hidden="true">›</span>
+      <span class="breadcrumb-current" aria-current="page">Session Review</span>
+    {% endif %}
+  {% elif ep == 'admin_messages' %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <a href="{{ url_for('nextgen.workspace') }}">Workspace</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <span class="breadcrumb-current" aria-current="page">Messages</span>
+  {% elif ep in ['nextgen.admin_ide','nextgen.admin_ide_lab','nextgen.admin_ide_session'] %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <a href="{{ url_for('nextgen.workspace') }}">Workspace</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    {% if ep == 'nextgen.admin_ide' %}
+      <span class="breadcrumb-current" aria-current="page">IDE</span>
+    {% else %}
+      <a href="{{ url_for('nextgen.admin_ide') }}">IDE</a>
+      <span class="breadcrumb-separator" aria-hidden="true">›</span>
+      <span class="breadcrumb-current" aria-current="page">{{ 'Programming Lab' if ep == 'nextgen.admin_ide_lab' else 'Coding Session Review' }}</span>
+    {% endif %}
+  {% elif ep in ['nextgen.ide_coming_soon','nextgen.ide_login','nextgen.ide_instructions','nextgen.ide_result'] %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    {% if ep in ['nextgen.ide_instructions','nextgen.ide_result'] %}
+      <a href="{{ url_for('nextgen.ide_login') }}">IDE</a>
+      <span class="breadcrumb-separator" aria-hidden="true">›</span>
+      <span class="breadcrumb-current" aria-current="page">{{ 'Terms' if ep == 'nextgen.ide_instructions' else 'Result' }}</span>
+    {% else %}
+      <span class="breadcrumb-current" aria-current="page">{{ 'IDE · Coming Soon' if ep == 'nextgen.ide_coming_soon' else 'IDE' }}</span>
+    {% endif %}
+  {% else %}
+    <a href="{{ url_for('index') }}">Home</a>
+    <span class="breadcrumb-separator" aria-hidden="true">›</span>
+    <span class="breadcrumb-current" aria-current="page">Current Page</span>
+  {% endif %}
+</nav>
