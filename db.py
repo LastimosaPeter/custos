@@ -146,6 +146,7 @@ CREATE TABLE IF NOT EXISTS session_questions (
     q_order INTEGER NOT NULL,
     option_order TEXT NOT NULL,
     selected_option TEXT,
+    marked_for_review INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(session_id) REFERENCES exam_sessions(id) ON DELETE CASCADE,
     FOREIGN KEY(question_id) REFERENCES questions(id)
 );
@@ -458,6 +459,10 @@ def migrate_schema(conn):
     }.items():
         if name not in admin_cols:
             conn.execute(f"ALTER TABLE admins ADD COLUMN {name} {definition}")
+
+    session_question_cols = _table_columns(conn, "session_questions") if "session_questions" in _table_names(conn) else set()
+    if session_question_cols and "marked_for_review" not in session_question_cols:
+        conn.execute("ALTER TABLE session_questions ADD COLUMN marked_for_review INTEGER NOT NULL DEFAULT 0")
 
     session_cols = _table_columns(conn, "exam_sessions")
     session_additions = {

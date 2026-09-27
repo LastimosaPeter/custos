@@ -25,7 +25,7 @@
   <div class="exam-workspace">
     <aside class="question-nav" id="questionNavigator">
       <div class="mobile-question-nav-header"><div class="nav-title">Question Navigator</div><button type="button" id="questionNavClose" class="question-nav-close" aria-label="Close question navigator">×</button></div>
-      <div class="nav-legend"><span class="dot answered"></span> Answered <span class="dot current"></span> Current</div>
+      <div class="nav-legend"><span class="dot answered"></span> Answered <span class="dot current"></span> Current <span class="dot review"></span> Flagged</div>
 
       <section class="question-part-block" aria-label="Part I questions">
         <div class="question-part-heading">
@@ -34,7 +34,7 @@
         </div>
         <div class="question-grid" id="questionGridPart1">
           {% for q in questions if q.part == 1 %}
-            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %} {% if (q.q_order - 1) == resume_index %}current{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
+            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %} {% if q.marked_for_review %}review-flagged{% endif %} {% if (q.q_order - 1) == resume_index %}current{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
           {% endfor %}
         </div>
       </section>
@@ -46,7 +46,7 @@
         </div>
         <div class="question-grid" id="questionGridPart2">
           {% for q in questions if q.part == 2 %}
-            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %} {% if (q.q_order - 1) == resume_index %}current{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
+            <button type="button" class="qnav {% if q.selected_option %}answered{% endif %} {% if q.marked_for_review %}review-flagged{% endif %} {% if (q.q_order - 1) == resume_index %}current{% endif %}" data-index="{{ q.q_order - 1 }}">{{ q.q_order }}</button>
           {% endfor %}
         </div>
       </section>
@@ -57,14 +57,16 @@
       <div class="stage-topline">
         <span id="questionPosition">Question {{ resume_index + 1 }} of {{ total_count|default(questions|length) }}</span>
         <strong id="currentPartIndicator" class="current-part-indicator">Part I · Code Tracing / Inspection</strong>
-        <span id="saveStatus" class="save-status">Ready</span>
+        <div class="stage-topline-actions">
+          <button type="button" id="reviewFlagBtn" class="review-flag-btn" aria-pressed="false" title="Mark this item so you can return to it later">Flag for Review</button>
+          <span id="saveStatus" class="save-status">Ready</span>
+        </div>
       </div>
 
       {% for q in questions %}
-      <section class="question-panel {% if loop.index0 != resume_index %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}">
+      <section class="question-panel {% if loop.index0 != resume_index %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}" data-review-flagged="{{ 1 if q.marked_for_review else 0 }}">
         <div class="part-label">
           <span>{{ 'Part I · Code Tracing / Inspection' if q.part == 1 else 'Part II · Programming Logic / Code Selection' }}</span>
-          <small>{{ q.topic }}</small>
         </div>
         <h1>{{ q.prompt }}</h1>
         {% if q.code %}
@@ -87,6 +89,8 @@
           <span><strong>Answered</strong> <span id="answeredStatus">0/{{ questions|length }}</span></span>
           <span class="footer-status-separator">·</span>
           <span><strong>Unanswered</strong> <span id="unansweredStatus">{{ questions|length }}</span></span>
+          <span class="footer-status-separator">·</span>
+          <span><strong>Flagged</strong> <span id="flaggedStatus">0</span></span>
           <span class="footer-status-separator">·</span>
           <span><strong>Time</strong> <span id="timer" class="footer-timer">{{ 'Untimed' if exam_session.untimed else '--:--:--' }}</span></span>
         </div>

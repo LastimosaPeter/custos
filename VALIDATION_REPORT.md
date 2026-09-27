@@ -1,55 +1,28 @@
-# Custos Next — UI/UX & Workspace Revision Validation
+# Custos Next — Validation Report
 
 Validation date: 2026-09-27
 
-## Static validation
+## Repairs in this revision
 
-- Python syntax compilation: **PASS** (`app.py`, `db.py`, `workspace.py`, `code_runner.py`, `item_analysis.py`, `init_db.py`)
-- JavaScript syntax: **PASS** for all files under `static/js/`
-- Jinja template parse: **PASS** — 28 templates
-- Fresh SQLite schema creation with dependency stubs: **PASS** — 22 tables
-- Migration from the previous Custos Next SQLite schema: **PASS**
-- New `exam_sessions` fields verified: `first_name`, `last_name`, `monitor_done`
-- New `coding_sessions` fields verified: `first_name`, `last_name`
+- Fixed Assessment sub-navigation HTTP 500 errors caused by duplicate Flask function declarations for `admin_dashboard`, `admin_testing`, and `admin_questions`. The decorators had been attached to one-line stub functions that returned `None`; the real implementations are now the registered routes.
+- Removed student-visible question `topic` text from the live exam interface so internal labels such as “Spot the Error - Semicolon” cannot reveal the answer strategy.
+- Added persistent student **Flag for Review** state on assigned exam questions (`session_questions.marked_for_review`).
+- Added `/api/question-review` for saving/removing review flags without changing answers or proctoring counts.
+- Question Navigator now distinguishes Answered, Current, and Flagged items. The exam footer also reports the current flagged count.
+- On the final item, Review returns the student to the first flagged item, then the first unanswered item, before falling back to the navigator.
+- Corrected instructor chat alignment: student messages are incoming on the left in gray; instructor replies are on the right in blue. Student-side chat retains its self/outgoing presentation.
+- Added iOS-style Back / Forward controls to the standard Custos header. The secure live-exam header is intentionally excluded.
+- Bumped the PWA static cache to `custos-static-v098-next3` so installed clients refresh the changed CSS/JS.
 
-## UI/UX changes validated structurally
+## Validation
 
-- Single reusable instructor navigation macro across instructor pages
-- Workspace promoted to the primary instructor destination
-- Assessment tools grouped beneath one Assessment navigation menu
-- Dedicated Messages center added
-- Session chat replies use AJAX and no longer require a page reload
-- Answer Audit and Proctoring Event Log use a two-column desktop layout
-- Live Monitor supports Clear Lock and non-destructive Mark Done actions
-- Live Monitor activity dot has fixed square dimensions / circular radius
-- Custos-first header lockup followed by subject logo
-- Compact IDE Custos logo treatment
-- IDE public entry replaced by Coming Soon page while feature flag is off
-- PWA icons regenerated on white backgrounds
-- PWA cache version incremented to force updated shell assets
-- iPad landscape desktop-like overrides included
-- Installed-app status converted to green boxed treatment
-- Theme icon uses emoji sun/moon pair
+- Python syntax compilation: PASS (`app.py`, `db.py`, `workspace.py`, `code_runner.py`, `item_analysis.py`)
+- JavaScript syntax: PASS (`exam.js`, `mobile_ui.js`, `sw.js`)
+- Jinja template syntax: PASS — all 28 templates parsed
+- Route static check: PASS — no Flask route-decorated function is left without a return path due to duplicate stub declarations
+- SQLite fresh schema: PASS — `session_questions.marked_for_review` exists
+- SQLite initialization smoke test: PASS
 
-## IDE release safety
+## Database migration
 
-Public student IDE access defaults to disabled through:
-
-```env
-STUDENT_IDE_ENABLED=0
-```
-
-Direct public `/ide` entry redirects to the Coming Soon page. Instructor management and preview remain available. `render.yaml` explicitly keeps the feature disabled.
-
-## Database compatibility
-
-Custos remains dual-mode:
-
-- PostgreSQL when `DATABASE_URL` is configured
-- SQLite fallback for local development
-
-The schema changes are additive and the old `student_name` field is retained for compatibility.
-
-## Environment limitation
-
-A full Flask HTTP integration test was not run in the packaging container because the system Python does not include Flask/Werkzeug. Python/Jinja/JavaScript syntax and SQLite schema/migration behavior were validated independently. Install `requirements.txt` in the project virtual environment for the normal local run.
+Existing SQLite/PostgreSQL installations are additive-migrated at startup. `marked_for_review INTEGER NOT NULL DEFAULT 0` is added to `session_questions` if missing. Existing answers, sessions, scores, proctoring events, and question-bank data are preserved.

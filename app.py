@@ -607,7 +607,7 @@ def exam():
         return redirect(url_for("result"))
 
     rows = conn.execute(
-        """SELECT sq.q_order, sq.option_order, sq.selected_option,
+        """SELECT sq.q_order, sq.option_order, sq.selected_option, COALESCE(sq.marked_for_review,0) AS marked_for_review,
                   q.id AS question_id, q.part, q.topic, q.prompt, q.code,
                   q.option_a, q.option_b, q.option_c, q.option_d
            FROM session_questions sq
@@ -674,6 +674,37 @@ def save_question_position():
     conn.commit()
     conn.close()
     return jsonify({"ok": True, "index": index})
+
+
+@app.route("/api/question-review", methods=["POST"])
+@student_session_required
+def set_question_review_flag():
+    require_csrf()
+    sid = session["student_session_id"]
+    data = request.get_json(silent=True) or {}
+    try:
+        qid = int(data.get("question_id"))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Invalid question"}), 400
+    flagged = 1 if bool(data.get("flagged")) else 0
+
+    conn = connect()
+    ex = conn.execute("SELECT status FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    if not ex:
+        conn.close()
+        return jsonify({"ok": False, "error": "session_not_found"}), 404
+    if ex["status"] != "in_progress":
+        conn.close()
+        return jsonify({"ok": False, "error": "Exam is not active"}), 409
+    cur = conn.execute(
+        "UPDATE session_questions SET marked_for_review=? WHERE session_id=? AND question_id=?",
+        (flagged, sid, qid),
+    )
+    conn.commit()
+    conn.close()
+    if cur.rowcount != 1:
+        return jsonify({"ok": False, "error": "Question not assigned to session"}), 404
+    return jsonify({"ok": True, "flagged": bool(flagged)})
 
 
 @app.route("/api/answer", methods=["POST"])
@@ -1021,7 +1052,6 @@ def admin_logout():
 @admin_required
 def admin_dashboard():
     assessment = request.args.get("assessment", "posttest").strip().lower()
-def admin_dashboard():
     assessment = request.args.get("assessment", "posttest").strip().lower()
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"
@@ -1339,7 +1369,6 @@ def admin_message_thread(sid):
 @admin_required
 def admin_testing():
     assessment = request.args.get("assessment", "posttest").strip().lower()
-def admin_testing():
     assessment = request.args.get("assessment", "posttest").strip().lower()
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"
@@ -1623,7 +1652,6 @@ def admin_monitor_action(sid):
 @admin_required
 def admin_questions():
     assessment = request.args.get("assessment", "posttest").strip().lower()
-def admin_questions():
     assessment = request.args.get("assessment", "posttest").strip().lower()
     if assessment not in {"midterm", "posttest"}:
         assessment = "posttest"

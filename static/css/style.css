@@ -2776,3 +2776,38 @@ body:not(.exam-page) th{overflow-wrap:anywhere}
   html.pwa-standalone .table-wrap tbody td::before{display:none!important;content:none!important}
   html.pwa-standalone .monitor-student-list{grid-template-columns:repeat(2,minmax(0,1fr))!important}
 }
+
+/* 2026-09-27 navigation, review flags, and instructor messaging corrections */
+.history-nav{display:flex;align-items:center;gap:2px;flex:0 0 auto;margin-right:8px}
+.history-nav-btn{width:30px;height:34px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--ink);font-size:26px;font-weight:500;line-height:1;display:grid;place-items:center;cursor:pointer}
+.history-nav-btn:hover,.history-nav-btn:focus-visible{background:#edf3fb;color:var(--accent);outline:none}
+:root[data-theme="dark"] .history-nav-btn{color:#dce5f2}
+:root[data-theme="dark"] .history-nav-btn:hover,:root[data-theme="dark"] .history-nav-btn:focus-visible{background:#1d2a3b;color:#83baff}
+@media(max-width:620px){.history-nav{margin-right:3px;gap:0}.history-nav-btn{width:27px;height:32px;font-size:23px}.site-header{gap:4px}}
+
+/* Student review flags are intentionally distinct from proctoring/security flags. */
+.dot.review{background:#f4a000}
+.qnav.review-flagged{position:relative;border-color:#e5a329;background:#fff8e7}
+.qnav.review-flagged::after{content:"";position:absolute;right:3px;top:3px;width:6px;height:6px;border-radius:50%;background:#f4a000;box-shadow:0 0 0 2px #fff}
+.qnav.review-flagged.current{border-color:var(--accent)}
+.stage-topline-actions{display:flex;align-items:center;justify-content:flex-end;gap:10px;min-width:0}
+.review-flag-btn{padding:7px 10px;border:1px solid #d7b362;background:#fffaf0;color:#805900;border-radius:8px;font-size:11px;font-weight:850;white-space:nowrap}
+.review-flag-btn:hover{background:#fff2cf}
+.review-flag-btn.active{background:#f4a000;border-color:#f4a000;color:#1b1b1b}
+.review-flag-btn:disabled{opacity:.6;cursor:wait}
+:root[data-theme="dark"] .qnav.review-flagged{background:#3a2b13;border-color:#a97920}
+:root[data-theme="dark"] .qnav.review-flagged::after{box-shadow:0 0 0 2px #172231}
+:root[data-theme="dark"] .review-flag-btn{background:#30250f;border-color:#8b6a28;color:#ffd475}
+:root[data-theme="dark"] .review-flag-btn.active{background:#d5961f;border-color:#d5961f;color:#111}
+@media(max-width:760px){.stage-topline-actions{gap:6px}.review-flag-btn{max-width:145px;overflow:hidden;text-overflow:ellipsis}.stage-topline #saveStatus{display:none}}
+@media(max-width:430px){.review-flag-btn{font-size:10px;padding:6px 8px;max-width:122px}.nav-legend{line-height:1.8}}
+
+/* Instructor point of view: student messages are incoming (left/gray), instructor replies are outgoing (right/blue). */
+.messages-page .chat-message.student,
+.instructor-chat-card .chat-message.student{justify-self:start;background:#eef1f5;color:#25344b;border:1px solid #d8dee7;border-bottom-left-radius:4px;border-bottom-right-radius:12px}
+.messages-page .chat-message.instructor,
+.instructor-chat-card .chat-message.instructor{justify-self:end;background:#1769e0;color:#fff;border:1px solid #1769e0;border-bottom-right-radius:4px;border-bottom-left-radius:12px}
+:root[data-theme="dark"] .messages-page .chat-message.student,
+:root[data-theme="dark"] .instructor-chat-card .chat-message.student{background:#202b3a;color:#e3ebf7;border-color:#39485b}
+:root[data-theme="dark"] .messages-page .chat-message.instructor,
+:root[data-theme="dark"] .instructor-chat-card .chat-message.instructor{background:#347fe7;color:#fff;border-color:#347fe7}

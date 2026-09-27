@@ -28,6 +28,8 @@
   const questionNavClose = document.getElementById('questionNavClose');
   const questionNavBackdrop = document.getElementById('questionNavBackdrop');
   const secureModeDescription = document.getElementById('secureModeDescription');
+  const reviewFlagBtn = document.getElementById('reviewFlagBtn');
+  const flaggedStatus = document.getElementById('flaggedStatus');
 
   const securityOverlay = document.getElementById('securityLockOverlay');
   const securityTitle = document.getElementById('securityLockTitle');
@@ -88,6 +90,18 @@
     postJSON('/api/question-position', {index}).catch(() => {});
   }
 
+  function flaggedCount() {
+    return panels.filter(p => p.dataset.reviewFlagged === '1').length;
+  }
+
+  function updateReviewFlagUI() {
+    if (!reviewFlagBtn || !panels[current]) return;
+    const flagged = panels[current].dataset.reviewFlagged === '1';
+    reviewFlagBtn.classList.toggle('active', flagged);
+    reviewFlagBtn.setAttribute('aria-pressed', flagged ? 'true' : 'false');
+    reviewFlagBtn.textContent = flagged ? 'Flagged for Review' : 'Flag for Review';
+  }
+
   function showQuestion(index, persist = true) {
     current = Math.max(0, Math.min(index, panels.length - 1));
     panels.forEach((p, i) => p.classList.toggle('hidden', i !== current));
@@ -102,6 +116,7 @@
     prevBtn.disabled = current === 0;
     nextBtn.textContent = current === panels.length - 1 ? 'Review' : 'Next';
     panels[current].scrollTop = 0;
+    updateReviewFlagUI();
     if (persist) persistQuestionPosition(current);
     if (isInstalledAppMode() && window.matchMedia('(max-width: 1024px)').matches) setQuestionNavOpen(false);
   }
@@ -118,7 +133,19 @@
 
   navButtons.forEach(btn => btn.addEventListener('click', () => showQuestion(Number(btn.dataset.index))));
   prevBtn.addEventListener('click', () => showQuestion(current - 1));
-  nextBtn.addEventListener('click', () => showQuestion(current + 1));
+  nextBtn.addEventListener('click', () => {
+    if (current < panels.length - 1) {
+      showQuestion(current + 1);
+      return;
+    }
+    const flaggedIndex = panels.findIndex(p => p.dataset.reviewFlagged === '1');
+    if (flaggedIndex >= 0) showQuestion(flaggedIndex);
+    else {
+      const unansweredIndex = panels.findIndex(p => !p.querySelector('input:checked') && !(p.querySelector('.bonus-answer-input')?.value.trim()));
+      if (unansweredIndex >= 0) showQuestion(unansweredIndex);
+      else setQuestionNavOpen(true);
+    }
+  });
 
   function answeredCount() {
     return panels.filter(p => p.querySelector('input:checked') || (p.querySelector('.bonus-answer-input')?.value.trim())).length;
@@ -128,7 +155,31 @@
     const answered = answeredCount();
     if (answeredStatus) answeredStatus.textContent = `${answered}/${panels.length}`;
     if (unansweredStatus) unansweredStatus.textContent = String(panels.length - answered);
+    if (flaggedStatus) flaggedStatus.textContent = String(flaggedCount());
   }
+
+  reviewFlagBtn?.addEventListener('click', async () => {
+    const panel = panels[current];
+    if (!panel?.dataset.questionId) return;
+    const nextFlagged = panel.dataset.reviewFlagged !== '1';
+    reviewFlagBtn.disabled = true;
+    try {
+      const res = await postJSON('/api/question-review', {question_id: Number(panel.dataset.questionId), flagged: nextFlagged});
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) throw new Error('review flag save failed');
+      panel.dataset.reviewFlagged = data.flagged ? '1' : '0';
+      navButtons[current]?.classList.toggle('review-flagged', Boolean(data.flagged));
+      updateReviewFlagUI();
+      updateFooterStatus();
+      saveStatus.textContent = data.flagged ? 'Flagged for review' : 'Review flag removed';
+      saveStatus.className = 'save-status saved';
+    } catch (_) {
+      saveStatus.textContent = 'Could not save review flag';
+      saveStatus.className = 'save-status error';
+    } finally {
+      reviewFlagBtn.disabled = false;
+    }
+  });
 
   document.querySelectorAll('.answer-choice input').forEach(input => {
     input.addEventListener('change', async () => {
@@ -203,7 +254,8 @@
 
   submitBtn.addEventListener('click', () => {
     const answered = answeredCount();
-    document.getElementById('submitSummary').textContent = `${answered} of ${panels.length} questions are answered. Unanswered questions will be marked incorrect. Submission cannot be undone.`;
+    const flagged = flaggedCount();
+    document.getElementById('submitSummary').textContent = `${answered} of ${panels.length} questions are answered.${flagged ? ` ${flagged} item${flagged === 1 ? '' : 's'} still flagged for review.` : ''} Unanswered questions will be marked incorrect. Submission cannot be undone.`;
     submitOverlay.classList.add('active');
   });
   cancelSubmit.addEventListener('click', () => submitOverlay.classList.remove('active'));
