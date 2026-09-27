@@ -1,84 +1,96 @@
 {% extends "base.html" %}
-{% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Testing Sessions{% endblock %}
+{% block title %}Custos - {{ selected_assessment.title }} Testing{% endblock %}
 {% block header_right %}
 {% from "_admin_nav.html" import admin_nav %}
-{{ admin_nav(assessment) }}
+{{ admin_nav(selected_assessment.assessment_type) }}
 {% endblock %}
 {% block content %}
-<div class="dashboard-heading">
-  <div><div class="eyebrow">INSTRUCTOR VIEW · TEST LAB</div><h1>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Testing Sessions</h1><p class="subtle">Run the real student interface without contaminating student scores or item statistics.</p></div>
-</div>
-<div class="assessment-tabs">
-  <a class="{% if assessment == 'posttest' %}active{% endif %}" href="{{ url_for('admin_testing', assessment='posttest') }}">Monday Post-test</a>
-  <a class="{% if assessment == 'midterm' %}active{% endif %}" href="{{ url_for('admin_testing', assessment='midterm') }}">Midterm</a>
-</div>
+{% from "_assessment_picker.html" import assessment_picker %}
+{{ assessment_picker(assessment_options, selected_assessment, 'admin_testing') }}
 
+<div class="dashboard-heading">
+  <div>
+    <div class="eyebrow">INSTRUCTOR VIEW · TEST LAB</div>
+    <h1>{{ selected_assessment.title }} Testing</h1>
+    <p class="subtle">Run the real student interface for this assessment without adding instructor trials to class scores or item statistics.</p>
+  </div>
+  <div class="heading-actions">
+    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=selected_assessment.id) }}">Question Bank</a>
+    <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=selected_assessment.id) }}">Item Analysis</a>
+  </div>
+</div>
 
 <div class="content-card preview-account-card">
-  <div class="section-heading"><div><div class="eyebrow">INSTRUCTOR STUDENT VIEW</div><h2>Your Preview Identity</h2><p class="subtle">Open the real student interface under a dedicated instructor-only test identity. It is untimed and excluded from student analytics.</p></div>
-  <form method="post" action="{{ url_for('admin_student_preview') }}" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Open Student View</button></form></div>
-  <div class="preview-identity"><span>Preview account</span><code>custos.instructor.preview@test.only</code><small>Access is protected by your Instructor login; no public password or session key is exposed.</small></div>
-</div>
-
-{% if dryrun %}
-<div class="content-card dryrun-card">
-  <div class="section-heading"><div><div class="eyebrow">DEPLOYMENT REHEARSAL</div><h2>Public Dry Run</h2><p class="subtle">Share this with selected users before deployment. Dry-run attempts are separate from Midterm/Post-test analytics.</p></div><span class="status submitted">Ready</span></div>
-  <div class="dryrun-grid"><div><span>Student session key</span><code>{{ dryrun.access_code }}</code></div><div><span>Question set</span><strong>60 items · cloned from Post-test Set 1</strong></div><div><span>Time limit</span><strong>{{ dryrun.duration_minutes }} minutes</strong></div></div>
-  <p class="micro">Students enter through Student View using their normal identity fields and this key. The dry-run batch has no start/end window unless you configure one directly in the database.</p>
-  {% if dryrun_sessions %}
-  <div class="dryrun-session-list">
-    <h3>Recent Dry-run Participants</h3>
-    <div class="table-wrap"><table><thead><tr><th>Student</th><th>Status</th><th>Score</th><th>Security</th><th></th></tr></thead><tbody>
-      {% for s in dryrun_sessions %}<tr><td><strong>{% if s.last_name or s.first_name %}{{ s.last_name or '' }}{% if s.last_name and s.first_name %}, {% endif %}{{ s.first_name or '' }}{% else %}{{ s.student_name or s.email }}{% endif %}</strong><br><small>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.email }}</small></td><td><span class="status {{ s.status }}">{{ s.status|replace('_',' ') }}</span></td><td>{{ s.auto_total if s.status == 'submitted' else '—' }}/50</td><td>{{ s.violation_count or 0 }}/3 violations · {{ s.flagged_count or 0 }} flags</td><td><a class="secondary button-link table-action-btn" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review</a></td></tr>{% endfor %}
-    </tbody></table></div>
+  <div class="section-heading">
+    <div>
+      <div class="eyebrow">INSTRUCTOR STUDENT VIEW</div>
+      <h2>Preview this Assessment</h2>
+      <p class="subtle">Open the actual student flow using an instructor-only test identity. The preview is untimed and excluded from real-student analytics.</p>
+    </div>
+    <form method="post" action="{{ url_for('admin_student_preview') }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <input type="hidden" name="assessment_id" value="{{ selected_assessment.id }}">
+      <button class="primary" type="submit" {% if not batches %}disabled{% endif %}>Open Student View</button>
+    </form>
   </div>
-  {% endif %}
+  <div class="preview-identity">
+    <span>Preview identity</span>
+    <code>custos.instructor.preview.*@test.only</code>
+    <small>Maximum score: {{ max_score }} · No public session key is required for instructor preview.</small>
+  </div>
+  {% if not batches %}<div class="info-strip"><strong>No delivery set yet.</strong> Configure this assessment before opening the student preview.</div>{% endif %}
 </div>
-{% endif %}
 
 <div class="content-card test-launch-card">
   <h2>Launch a Student-Side Test</h2>
-  <p class="subtle">Choose one of the eight {{ 'post-test' if assessment == 'posttest' else 'midterm' }} banks. It uses the actual {{ '60-question assignment' if assessment == 'posttest' else '60-question + 5-item bonus assignment' }}, timer, fullscreen prompts, autosave, scoring, and logs.</p>
+  <p class="subtle">Choose a delivery set and run the same timer, fullscreen/PWA security, autosave, scoring, navigation, chat, and event logging used by students.</p>
+  {% if batches %}
   <form method="post" action="{{ url_for('admin_testing_start') }}" class="testing-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <label>Question bank
+    <label>Delivery set
       <select name="batch_id" required>
-        {% for b in batches %}<option value="{{ b.id }}">{{ b.name }} · {{ 'Set ' ~ (b.slot - 8) if assessment == 'posttest' else 'Slot ' ~ b.slot }}</option>{% endfor %}
+        {% for b in batches %}<option value="{{ b.id }}">{{ b.name }}</option>{% endfor %}
       </select>
     </label>
-    <label>Test label <input name="test_label" placeholder="e.g., Monday dry run"></label>
+    <label>Test label <input name="test_label" placeholder="e.g., Orientation rehearsal"></label>
     <div class="trial-launch-actions">
       <button class="primary" type="submit" name="untimed" value="0">Launch Timed Test</button>
       <button class="secondary" type="submit" name="untimed" value="1">Launch Untimed Trial</button>
     </div>
   </form>
-  <div class="info-strip"><strong>Untimed Trial:</strong> no student session key, no batch start/end window, and no countdown. It stays open until you submit it yourself. All instructor tests remain excluded from real student counts, class averages, and item analysis.</div>
+  {% else %}
+  <div class="empty-state compact-empty">No delivery set is attached to this assessment.</div>
+  {% endif %}
+  <div class="info-strip"><strong>Instructor trials are isolated:</strong> they remain available for review but are excluded from real student counts, class averages, and item analysis.</div>
 </div>
 
 <div class="content-card testing-history-card">
-  <h2>Previous {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Testing Sessions</h2>
+  <div class="section-heading">
+    <div><h2>Previous Testing Sessions</h2><p class="subtle">Trials for {{ selected_assessment.title }} only.</p></div>
+    <span class="status">{{ tests|length }} shown</span>
+  </div>
   <div class="table-wrap testing-table-wrap">
     <table class="testing-history-table">
       <colgroup>
         <col class="col-label"><col class="col-batch"><col class="col-status"><col class="col-score"><col class="col-flags"><col class="col-started"><col class="col-actions">
       </colgroup>
-      <thead><tr><th>Label</th><th>Batch</th><th>Status</th><th>Score</th><th>Flags</th><th>Started</th><th>Actions</th></tr></thead>
+      <thead><tr><th>Label</th><th>Delivery set</th><th>Status</th><th>Score</th><th>Flags</th><th>Started</th><th>Actions</th></tr></thead>
       <tbody>
         {% for t in tests %}
         <tr>
           <td class="testing-label-cell"><strong>{{ t.test_label or 'Instructor Test' }}</strong><small>{{ t.email }}</small></td>
           <td>{{ t.batch_name }}</td>
           <td><span class="status {{ t.status }}">{{ t.status|replace('_', ' ') }}</span>{% if t.untimed %}<small class="cell-note">Untimed trial</small>{% endif %}</td>
-          <td class="numeric-cell">{% if t.status == 'submitted' %}{{ t.auto_total }}/{{ 55 if assessment == 'midterm' else 50 }}{% else %}—{% endif %}</td>
-          <td class="numeric-cell">{{ t.flagged_count }}</td>
-          <td class="started-cell">{{ t.started_at[:16]|replace('T', ' ') }}</td>
+          <td class="numeric-cell">{% if t.status == 'submitted' %}{{ t.auto_total }}/{{ max_score }}{% else %}—{% endif %}</td>
+          <td class="numeric-cell">{{ t.flagged_count or 0 }}</td>
+          <td class="started-cell">{{ (t.started_at or '')[:16]|replace('T', ' ') }}</td>
           <td class="testing-actions-cell">
             <div class="table-actions compact-actions">
               {% if t.status == 'in_progress' %}
               <form method="post" action="{{ url_for('admin_testing_resume', sid=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary table-action-btn" type="submit">Resume</button></form>
               {% endif %}
               <a class="secondary button-link table-action-btn" href="{{ url_for('admin_session_detail', sid=t.id) }}">Review</a>
-              <form method="post" action="{{ url_for('admin_testing_delete', sid=t.id) }}" onsubmit="return confirm('Delete this testing session?');">
+              <form method="post" action="{{ url_for('admin_testing_delete', sid=t.id) }}" onsubmit="return confirm('Delete this instructor testing session?');">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-ghost table-action-btn" type="submit">Delete</button>
               </form>
             </div>

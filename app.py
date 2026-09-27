@@ -1162,13 +1162,14 @@ def admin_dashboard():
                       (SELECT AVG(e.auto_total) FROM exam_sessions e WHERE e.assessment_id=a.id AND COALESCE(e.is_test,0)=0 AND e.status='submitted') AS avg_score,
                       (SELECT COUNT(*) FROM coding_sessions cs JOIN programming_labs pl ON pl.id=cs.lab_id WHERE pl.assessment_id=a.id) AS coding_attempt_count
                FROM assessments a JOIN subjects s ON s.id=a.subject_id
+               WHERE a.deleted_at IS NULL
                ORDER BY a.active DESC, a.created_at DESC, a.id DESC"""
         ).fetchall()
         subjects = conn.execute("SELECT * FROM subjects WHERE active=1 ORDER BY code,name").fetchall()
         totals = conn.execute(
             """SELECT COUNT(*) AS assessment_count,
                       SUM(CASE WHEN active=1 THEN 1 ELSE 0 END) AS active_count
-               FROM assessments"""
+               FROM assessments WHERE deleted_at IS NULL"""
         ).fetchone()
         active_sessions = conn.execute(
             "SELECT COUNT(*) AS c FROM exam_sessions WHERE status='in_progress' AND COALESCE(is_test,0)=0"
@@ -1508,63 +1509,87 @@ def admin_message_thread(sid):
     return jsonify({"ok": True, "student": dict(ex), "messages": [dict(r) for r in rows]})
 
 
+@app.post("/admin/messages/<int:sid>/delete")
+@admin_required
+def admin_message_delete(sid):
+    require_csrf()
+    conn = connect()
+    ex = conn.execute("SELECT id FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    if not ex:
+        conn.close(); return jsonify({"ok": False, "error": "Session not found."}), 404
+    count = conn.execute("SELECT COUNT(*) FROM exam_messages WHERE session_id=?", (sid,)).fetchone()[0]
+    conn.execute("DELETE FROM exam_messages WHERE session_id=?", (sid,))
+    conn.commit(); conn.close()
+    return jsonify({"ok": True, "deleted": int(count or 0)})
+
+
 @app.route("/admin/testing")
 @admin_required
 def admin_testing():
-    assessment = request.args.get("assessment", "posttest").strip().lower()
-    assessment = request.args.get("assessment", "posttest").strip().lower()
-    if assessment not in {"midterm", "posttest"}:
-        assessment = "posttest"
-    session["admin_assessment"] = assessment
     conn = connect()
-    batches = conn.execute("SELECT * FROM batches WHERE assessment_type=? ORDER BY slot", (assessment,)).fetchall()
+    assessment_options, selected_assessment = _resolve_admin_assessment(conn)
+    if not selected_assessment:
+        conn.close(); abort(404)
+    assessment_id = int(selected_assessment["id"])
+    max_score = _assessment_max_score(conn, selected_assessment)
+    if selected_assessment["assessment_type"] == "programming_lab":
+        lab = conn.execute(
+            "SELECT id,title FROM programming_labs WHERE assessment_id=? LIMIT 1",
+            (assessment_id,),
+        ).fetchone()
+        conn.close()
+        return render_template(
+            "admin_testing_programming.html", assessment_options=assessment_options,
+            selected_assessment=selected_assessment, assessment="", max_score=max_score, lab=lab
+        )
+    batches = conn.execute("SELECT * FROM batches WHERE assessment_id=? ORDER BY slot", (assessment_id,)).fetchall()
     tests = conn.execute(
         """SELECT e.*, b.name AS batch_name FROM exam_sessions e
            JOIN batches b ON b.id=e.batch_id
-           WHERE COALESCE(e.is_test,0)=1 AND b.assessment_type=? ORDER BY e.id DESC LIMIT 50""",
-        (assessment,),
-    ).fetchall()
-    dryrun = conn.execute("SELECT * FROM batches WHERE assessment_type='dryrun' ORDER BY slot LIMIT 1").fetchone()
-    dryrun_sessions = conn.execute(
-        """SELECT e.*, b.name AS batch_name FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
-           WHERE COALESCE(e.is_test,0)=0 AND b.assessment_type='dryrun' ORDER BY e.id DESC LIMIT 25"""
+           WHERE COALESCE(e.is_test,0)=1 AND e.assessment_id=? ORDER BY e.id DESC LIMIT 50""",
+        (assessment_id,),
     ).fetchall()
     conn.close()
-    return render_template("admin_testing.html", batches=batches, tests=tests, assessment=assessment, dryrun=dryrun, dryrun_sessions=dryrun_sessions)
+    return render_template(
+        "admin_testing.html", batches=batches, tests=tests, assessment=selected_assessment["assessment_type"],
+        selected_assessment=selected_assessment, assessment_options=assessment_options, max_score=max_score
+    )
 
 
 @app.route("/admin/student-preview", methods=["POST"])
 @admin_required
 def admin_student_preview():
-    """Open a dedicated instructor-only student identity in an untimed test session."""
+    """Open the real student UI for the selected objective assessment using an instructor-only test identity."""
     require_csrf()
+    raw_id = request.form.get("assessment_id", "").strip()
+    if not raw_id.isdigit():
+        abort(400)
     conn = connect()
-    batch = conn.execute("SELECT * FROM batches WHERE assessment_type='posttest' ORDER BY slot LIMIT 1").fetchone()
+    assessment_row = conn.execute("SELECT * FROM assessments WHERE id=? AND deleted_at IS NULL", (int(raw_id),)).fetchone()
+    if not assessment_row or assessment_row["assessment_type"] == "programming_lab":
+        conn.close(); abort(404)
+    batch = conn.execute("SELECT * FROM batches WHERE assessment_id=? ORDER BY slot LIMIT 1", (int(raw_id),)).fetchone()
     if not batch:
-        conn.close()
-        abort(404)
-    preview_email = "custos.instructor.preview@test.only"
-    existing = conn.execute(
-        """SELECT * FROM exam_sessions WHERE email=? AND batch_id=? AND COALESCE(is_test,0)=1
-           AND status='in_progress' ORDER BY id DESC LIMIT 1""",
-        (preview_email, batch["id"]),
-    ).fetchone()
-    if existing:
-        sid = existing["id"]
-    else:
-        cur = conn.execute(
-            """INSERT INTO exam_sessions(email,student_name,program,class_section,batch_id,assessment_id,started_at,ip_address,user_agent,is_test,test_label,untimed,terms_accepted_at)
-               VALUES(?,?,?,?,?,?,?,?,?,1,?,1,?) RETURNING id""",
-            (preview_email, "Instructor Preview", "ZT", "11", batch["id"], batch["assessment_id"], iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], "Instructor Student View · Scarabs", iso_now()),
-        )
-        sid = cur.fetchone()[0]
+        conn.close(); abort(404)
+    stamp = datetime.now(APP_TZ).strftime("%Y%m%d%H%M%S%f")
+    preview_email = f"custos.instructor.preview.{raw_id}.{stamp}@test.only"
+    cur = conn.execute(
+        """INSERT INTO exam_sessions(email,first_name,last_name,student_name,program,class_section,batch_id,assessment_id,started_at,ip_address,user_agent,is_test,test_label,untimed,terms_accepted_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?,1,?,1,?) RETURNING id""",
+        (preview_email, "Instructor", "Preview", "Instructor Preview", "ZT", "11", batch["id"], batch["assessment_id"], iso_now(), request.remote_addr, request.headers.get("User-Agent", "")[:500], f"Instructor Preview · {assessment_row['title']}", iso_now()),
+    )
+    sid = cur.fetchone()[0]
+    try:
         assign_questions_to_session(conn, sid, batch["slot"])
-        conn.execute(
-            "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
-            (sid, "instructor_student_preview", "Instructor opened the dedicated Student View preview identity.", iso_now()),
-        )
-        conn.commit()
-    conn.close()
+    except ValueError as exc:
+        conn.execute("DELETE FROM exam_sessions WHERE id=?", (sid,)); conn.commit(); conn.close()
+        flash(str(exc), "error")
+        return redirect(url_for("admin_questions", assessment_id=raw_id))
+    conn.execute(
+        "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
+        (sid, "instructor_student_preview", "Instructor opened the selected assessment through Student View preview.", iso_now()),
+    )
+    conn.commit(); conn.close()
     session["student_session_id"] = sid
     return redirect(url_for("exam"))
 
@@ -1599,7 +1624,7 @@ def admin_testing_start():
         conn.commit()
         conn.close()
         flash(str(exc), "error")
-        return redirect(url_for("admin_questions", assessment=batch["assessment_type"], batch_slot=batch["slot"]))
+        return redirect(url_for("admin_questions", assessment_id=batch["assessment_id"], batch_slot=batch["slot"]))
     conn.execute(
         "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
         (sid, "test_session_started", "Instructor launched an untimed trial" if untimed else "Instructor launched a testing session", iso_now()),
@@ -1616,7 +1641,7 @@ def admin_testing_resume(sid):
     require_csrf()
     conn = connect()
     row = conn.execute(
-        """SELECT e.id, e.is_test, e.status, b.assessment_type
+        """SELECT e.id, e.is_test, e.status, e.assessment_id, b.assessment_type
            FROM exam_sessions e JOIN batches b ON b.id=e.batch_id WHERE e.id=?""",
         (sid,),
     ).fetchone()
@@ -1625,7 +1650,7 @@ def admin_testing_resume(sid):
         abort(404)
     if row["status"] == "submitted":
         flash("That trial has already been submitted. Launch a new trial to continue testing.", "error")
-        return redirect(url_for("admin_testing", assessment=row["assessment_type"]))
+        return redirect(url_for("admin_testing", assessment_id=row["assessment_id"]))
     session["student_session_id"] = sid
     return redirect(url_for("exam"))
 
@@ -1636,11 +1661,11 @@ def admin_testing_delete(sid):
     require_csrf()
     conn = connect()
     row = conn.execute(
-        """SELECT e.is_test, b.assessment_type FROM exam_sessions e
+        """SELECT e.is_test, e.assessment_id, b.assessment_type FROM exam_sessions e
            JOIN batches b ON b.id=e.batch_id WHERE e.id=?""",
         (sid,),
     ).fetchone()
-    assessment = row["assessment_type"] if row else "midterm"
+    assessment_id = row["assessment_id"] if row else None
     if row and row["is_test"]:
         conn.execute("DELETE FROM exam_sessions WHERE id=?", (sid,))
         conn.commit()
@@ -1648,7 +1673,7 @@ def admin_testing_delete(sid):
             session.pop("student_session_id", None)
         flash("Testing session deleted.", "success")
     conn.close()
-    return redirect(url_for("admin_testing", assessment=assessment))
+    return redirect(url_for("admin_testing", assessment_id=assessment_id) if assessment_id else url_for("admin_testing"))
 
 
 @app.route("/admin/testing/return", methods=["POST"])
@@ -1656,16 +1681,16 @@ def admin_testing_delete(sid):
 def admin_testing_return():
     require_csrf()
     sid = session.get("student_session_id")
-    assessment = "midterm"
+    assessment_id = None
     if sid:
         conn = connect()
         ex = conn.execute(
-            """SELECT e.is_test, b.assessment_type FROM exam_sessions e
+            """SELECT e.is_test, e.assessment_id, b.assessment_type FROM exam_sessions e
                JOIN batches b ON b.id=e.batch_id WHERE e.id=?""",
             (sid,),
         ).fetchone()
         if ex:
-            assessment = ex["assessment_type"]
+            assessment_id = ex["assessment_id"]
         if ex and ex["is_test"]:
             conn.execute(
                 "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
@@ -1674,14 +1699,14 @@ def admin_testing_return():
             conn.commit()
         conn.close()
         session.pop("student_session_id", None)
-    return redirect(url_for("admin_testing", assessment=assessment))
+    return redirect(url_for("admin_testing", assessment_id=assessment_id) if assessment_id else url_for("admin_testing"))
 
 
 def _live_monitor_payload(conn):
     rows = conn.execute(
         """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,e.started_at,
                   e.flagged_count,e.violation_count,e.security_locked,e.temp_locked_until,e.pending_blackout,e.monitor_done,
-                  b.name AS batch_name,b.assessment_type,
+                  e.assessment_id, a.title AS assessment_title, b.name AS batch_name,b.assessment_type,
                   (SELECT COUNT(*) FROM exam_messages m WHERE m.session_id=e.id AND m.sender='student' AND m.read_at IS NULL) AS unread_messages,
                   (SELECT pe.event_type FROM proctor_events pe WHERE pe.session_id=e.id ORDER BY pe.id DESC LIMIT 1) AS last_event,
                   (SELECT pe.detail FROM proctor_events pe WHERE pe.session_id=e.id ORDER BY pe.id DESC LIMIT 1) AS last_event_detail,
@@ -1689,6 +1714,7 @@ def _live_monitor_payload(conn):
                   (SELECT COUNT(*) FROM session_questions sq WHERE sq.session_id=e.id AND sq.selected_option IS NOT NULL) AS answered_mcq,
                   (SELECT COUNT(*) FROM session_questions sq WHERE sq.session_id=e.id) AS total_mcq
            FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+           LEFT JOIN assessments a ON a.id=e.assessment_id
            WHERE e.status='in_progress' AND COALESCE(e.is_test,0)=0 AND COALESCE(e.monitor_done,0)=0
            ORDER BY e.id DESC"""
     ).fetchall()
@@ -1736,10 +1762,11 @@ def _live_monitor_payload(conn):
 def admin_monitor():
     conn=connect()
     students=_live_monitor_payload(conn)
+    assessment_options=_admin_assessment_options(conn)
     conn.close()
     attention_count=sum(1 for s in students if s["attention_level"] in {"high","locked"})
     locked_count=sum(1 for s in students if s["attention_level"] == "locked")
-    return render_template("admin_monitor.html", students=students, assessment=session.get("admin_assessment", "posttest"), attention_count=attention_count, locked_count=locked_count)
+    return render_template("admin_monitor.html", students=students, assessment=session.get("admin_assessment", "posttest"), assessment_options=assessment_options, attention_count=attention_count, locked_count=locked_count)
 
 
 @app.route("/admin/monitor/data")
@@ -1791,75 +1818,170 @@ def admin_monitor_action(sid):
     return jsonify({"ok": True, "message": message})
 
 
+
+def _admin_assessment_options(conn):
+    return conn.execute(
+        """SELECT a.*, s.code AS subject_code, s.name AS subject_name,
+                  (SELECT COUNT(*) FROM questions q WHERE q.assessment_id=a.id AND COALESCE(q.active,1)=1) AS question_count
+           FROM assessments a JOIN subjects s ON s.id=a.subject_id
+           WHERE a.deleted_at IS NULL
+           ORDER BY a.active DESC,
+                    CASE WHEN a.assessment_type='programming_lab' THEN 1 ELSE 0 END,
+                    a.created_at DESC, a.id DESC"""
+    ).fetchall()
+
+
+def _resolve_admin_assessment(conn):
+    options = _admin_assessment_options(conn)
+    if not options:
+        return options, None
+    raw_id = request.args.get("assessment_id", "").strip()
+    selected = None
+    if raw_id.isdigit():
+        selected = next((row for row in options if int(row["id"]) == int(raw_id)), None)
+    if selected is None:
+        legacy = request.args.get("assessment", "").strip().lower()
+        if legacy:
+            selected = next((row for row in options if row["assessment_type"] == legacy), None)
+    if selected is None:
+        remembered = session.get("admin_assessment_id")
+        if remembered:
+            selected = next((row for row in options if int(row["id"]) == int(remembered)), None)
+    if selected is None:
+        selected = next((row for row in options if row["assessment_type"] != "programming_lab"), options[0])
+    session["admin_assessment_id"] = int(selected["id"])
+    if selected["assessment_type"] in {"midterm", "posttest"}:
+        session["admin_assessment"] = selected["assessment_type"]
+    return options, selected
+
+
+def _assessment_max_score(conn, assessment_row):
+    if not assessment_row:
+        return 0
+    atype = assessment_row["assessment_type"]
+    if atype == "midterm":
+        return 55
+    if atype == "posttest":
+        return 50
+    if atype == "programming_lab":
+        row = conn.execute(
+            """SELECT COALESCE(SUM(t.points),0) AS total
+               FROM programming_tasks t JOIN programming_labs pl ON pl.id=t.lab_id
+               WHERE pl.assessment_id=? AND COALESCE(t.active,1)=1""",
+            (assessment_row["id"],),
+        ).fetchone()
+        return float(row["total"] or 0)
+    point_rows = conn.execute(
+        "SELECT COALESCE(points,1) AS points FROM questions WHERE assessment_id=? AND COALESCE(active,1)=1 ORDER BY COALESCE(points,1) DESC",
+        (assessment_row["id"],),
+    ).fetchall()
+    points = [float(row["points"] or 1) for row in point_rows]
+    limit = int(assessment_row["question_limit"] or 0) if "question_limit" in assessment_row.keys() else 0
+    if limit > 0:
+        points = points[:limit]
+    total = sum(points)
+    return int(total) if float(total).is_integer() else round(total, 2)
+
 @app.route("/admin/questions")
 @admin_required
 def admin_questions():
-    assessment = request.args.get("assessment", "posttest").strip().lower()
-    assessment = request.args.get("assessment", "posttest").strip().lower()
-    if assessment not in {"midterm", "posttest"}:
-        assessment = "posttest"
-    session["admin_assessment"] = assessment
     conn = connect()
+    assessment_options, selected_assessment = _resolve_admin_assessment(conn)
+    if not selected_assessment:
+        conn.close(); abort(404)
+
+    assessment_id = int(selected_assessment["id"])
+    atype = selected_assessment["assessment_type"]
+    search = re.sub(r"\s+", " ", request.args.get("q", "").strip())[:120]
+    status_filter = request.args.get("status", "all").strip().lower()
+    if status_filter not in {"all", "active", "disabled"}:
+        status_filter = "all"
+
+    if atype == "programming_lab":
+        tasks = conn.execute(
+            """SELECT t.* FROM programming_tasks t JOIN programming_labs pl ON pl.id=t.lab_id
+               WHERE pl.assessment_id=? ORDER BY t.position,t.id""",
+            (assessment_id,),
+        ).fetchall()
+        conn.close()
+        return render_template(
+            "admin_questions_lab.html", assessment_options=assessment_options,
+            selected_assessment=selected_assessment, tasks=tasks, assessment=""
+        )
+
+    if atype == "custom" or atype == "dryrun":
+        params = [assessment_id]
+        where = ["q.assessment_id=?"]
+        if search:
+            term = f"%{search}%"
+            where.append("(q.topic LIKE ? OR q.prompt LIKE ? OR q.code LIKE ?)")
+            params.extend([term, term, term])
+        if status_filter == "active":
+            where.append("COALESCE(q.active,1)=1")
+        elif status_filter == "disabled":
+            where.append("COALESCE(q.active,1)=0")
+        questions = conn.execute(
+            f"""SELECT q.* FROM questions q WHERE {' AND '.join(where)}
+                 ORDER BY COALESCE(q.position,q.id),q.id""",
+            params,
+        ).fetchall()
+        counts = conn.execute(
+            """SELECT COUNT(*) AS total,
+                      SUM(CASE WHEN COALESCE(active,1)=1 THEN 1 ELSE 0 END) AS active_count,
+                      COALESCE(SUM(CASE WHEN COALESCE(active,1)=1 THEN COALESCE(points,1) ELSE 0 END),0) AS active_points
+               FROM questions WHERE assessment_id=?""",
+            (assessment_id,),
+        ).fetchone()
+        conn.close()
+        return render_template(
+            "admin_questions_custom.html", assessment_options=assessment_options,
+            selected_assessment=selected_assessment, questions=questions, counts=counts,
+            search=search, status_filter=status_filter, assessment=""
+        )
+
+    assessment = atype if atype in {"midterm", "posttest"} else "posttest"
     batches = conn.execute(
-        "SELECT slot,name FROM batches WHERE assessment_type=? ORDER BY slot", (assessment,)
+        "SELECT slot,name FROM batches WHERE assessment_id=? ORDER BY slot", (assessment_id,)
     ).fetchall()
     if not batches:
-        conn.close()
-        abort(404)
+        conn.close(); abort(404)
     requested_slot = request.args.get("batch_slot", "").strip()
     selected_slot = int(requested_slot) if requested_slot.isdigit() else batches[0]["slot"]
     valid_slots = {b["slot"] for b in batches}
     if selected_slot not in valid_slots:
         selected_slot = batches[0]["slot"]
 
-    search = re.sub(r"\s+", " ", request.args.get("q", "").strip())[:120]
-    status_filter = request.args.get("status", "all").strip().lower()
     source_filter = request.args.get("source", "all").strip().lower()
-    if status_filter not in {"all", "active", "disabled"}:
-        status_filter = "all"
     if source_filter not in {"all", "builtin", "instructor"}:
         source_filter = "all"
-
     params = [selected_slot]
     where = ["q.batch_slot=?"]
     if search:
         where.append("(q.topic LIKE ? OR q.prompt LIKE ? OR q.code LIKE ?)")
-        term = f"%{search}%"
-        params.extend([term, term, term])
-    if status_filter == "active":
-        where.append("COALESCE(q.active,1)=1")
-    elif status_filter == "disabled":
-        where.append("COALESCE(q.active,1)=0")
-    if source_filter == "instructor":
-        where.append("q.created_by='instructor'")
-    elif source_filter == "builtin":
-        where.append("q.created_by!='instructor'")
-
+        term = f"%{search}%"; params.extend([term,term,term])
+    if status_filter == "active": where.append("COALESCE(q.active,1)=1")
+    elif status_filter == "disabled": where.append("COALESCE(q.active,1)=0")
+    if source_filter == "instructor": where.append("q.created_by='instructor'")
+    elif source_filter == "builtin": where.append("q.created_by!='instructor'")
     rows = conn.execute(
-        f"""SELECT q.*, b.name AS batch_name FROM questions q
-             JOIN batches b ON b.slot=q.batch_slot
-             WHERE {' AND '.join(where)} ORDER BY q.part, q.id""",
-        params,
+        f"""SELECT q.*, b.name AS batch_name FROM questions q JOIN batches b ON b.slot=q.batch_slot
+             WHERE {' AND '.join(where)} ORDER BY q.part,q.id""", params
     ).fetchall()
-    questions = [dict(r) for r in rows]
-    part1_questions = [q for q in questions if q["part"] == 1]
-    part2_questions = [q for q in questions if q["part"] == 2]
-    counts = conn.execute(
-        """SELECT part, COUNT(*) AS total,
-                  SUM(CASE WHEN COALESCE(active,1)=1 THEN 1 ELSE 0 END) AS active_count
-           FROM questions WHERE batch_slot=? GROUP BY part ORDER BY part""",
-        (selected_slot,),
+    questions=[dict(r) for r in rows]
+    part1_questions=[q for q in questions if q["part"]==1]
+    part2_questions=[q for q in questions if q["part"]==2]
+    counts=conn.execute(
+        """SELECT part,COUNT(*) AS total,SUM(CASE WHEN COALESCE(active,1)=1 THEN 1 ELSE 0 END) AS active_count
+           FROM questions WHERE batch_slot=? GROUP BY part ORDER BY part""", (selected_slot,)
     ).fetchall()
-    bonus = conn.execute(
-        "SELECT * FROM bonus_questions WHERE assessment_type='midterm' ORDER BY position"
-    ).fetchall() if assessment == "midterm" else []
+    bonus=conn.execute("SELECT * FROM bonus_questions WHERE assessment_type='midterm' ORDER BY position").fetchall() if assessment=="midterm" else []
     conn.close()
     return render_template(
-        "admin_questions.html", assessment=assessment, batches=batches,
-        selected_slot=selected_slot, questions=questions,
-        part1_questions=part1_questions, part2_questions=part2_questions,
-        counts={r["part"]: dict(r) for r in counts}, bonus=bonus,
-        search=search, status_filter=status_filter, source_filter=source_filter
+        "admin_questions.html", assessment=assessment, assessment_options=assessment_options,
+        selected_assessment=selected_assessment, batches=batches, selected_slot=selected_slot,
+        questions=questions, part1_questions=part1_questions, part2_questions=part2_questions,
+        counts={r["part"]:dict(r) for r in counts}, bonus=bonus, search=search,
+        status_filter=status_filter, source_filter=source_filter
     )
 
 
@@ -2006,32 +2128,62 @@ def admin_bonus_edit(qid):
 @app.route("/admin/analysis")
 @admin_required
 def admin_analysis():
-    assessment = request.args.get("assessment", "posttest").strip().lower()
-    if assessment not in {"midterm", "posttest"}:
-        assessment = "posttest"
-    session["admin_assessment"] = assessment
+    conn = connect()
+    assessment_options, selected_assessment = _resolve_admin_assessment(conn)
+    if not selected_assessment:
+        conn.close(); abort(404)
+    assessment_id = int(selected_assessment["id"])
+    atype = selected_assessment["assessment_type"]
+    max_score = _assessment_max_score(conn, selected_assessment)
+
+    if atype == "programming_lab":
+        lab = conn.execute("SELECT * FROM programming_labs WHERE assessment_id=?", (assessment_id,)).fetchone()
+        task_stats = []
+        if lab:
+            task_stats = conn.execute(
+                """SELECT t.id,t.position,t.title,t.points,
+                          COUNT(DISTINCT CASE WHEN COALESCE(cs.is_test,0)=0 THEN cs.id END) AS students,
+                          AVG(CASE WHEN COALESCE(cs.is_test,0)=0 THEN ctp.score END) AS avg_score,
+                          AVG(CASE WHEN COALESCE(cs.is_test,0)=0 THEN ctp.run_count END) AS avg_runs,
+                          SUM(CASE WHEN COALESCE(cs.is_test,0)=0 AND ctp.score>=t.points THEN 1 ELSE 0 END) AS full_score_count
+                   FROM programming_tasks t
+                   LEFT JOIN coding_task_progress ctp ON ctp.task_id=t.id
+                   LEFT JOIN coding_sessions cs ON cs.id=ctp.session_id
+                   WHERE t.lab_id=? AND COALESCE(t.active,1)=1
+                   GROUP BY t.id ORDER BY t.position,t.id""",
+                (lab["id"],),
+            ).fetchall()
+        summary = conn.execute(
+            """SELECT COUNT(*) AS attempts,
+                      SUM(CASE WHEN status='submitted' AND COALESCE(is_test,0)=0 THEN 1 ELSE 0 END) AS submitted,
+                      AVG(CASE WHEN status='submitted' AND COALESCE(is_test,0)=0 THEN total_score END) AS avg_score
+               FROM coding_sessions WHERE lab_id=? AND COALESCE(is_test,0)=0""",
+            (lab["id"],),
+        ).fetchone() if lab else {"attempts":0,"submitted":0,"avg_score":None}
+        conn.close()
+        return render_template(
+            "admin_analysis_programming.html", assessment_options=assessment_options,
+            selected_assessment=selected_assessment, task_stats=task_stats, summary=summary,
+            max_score=max_score, assessment=""
+        )
+
     batch_slot = request.args.get("batch_slot", "").strip()
     part = request.args.get("part", "").strip()
     topic = request.args.get("topic", "").strip()
-    conn = connect()
     analysis = build_item_analysis(
-        conn,
-        batch_slot=int(batch_slot) if batch_slot.isdigit() else None,
-        part=int(part) if part in {"1", "2"} else None,
-        topic=topic or None,
-        assessment=assessment,
+        conn, batch_slot=int(batch_slot) if batch_slot.isdigit() else None,
+        part=int(part) if part in {"1","2"} else None, topic=topic or None,
+        assessment_id=assessment_id, assessment=atype,
     )
-    batches = conn.execute("SELECT slot,name FROM batches WHERE assessment_type=? ORDER BY slot", (assessment,)).fetchall()
-    topics = conn.execute(
-        """SELECT DISTINCT q.topic FROM questions q JOIN batches b ON b.slot=q.batch_slot
-           WHERE b.assessment_type=? ORDER BY q.topic""",
-        (assessment,),
-    ).fetchall()
+    batches = conn.execute("SELECT slot,name FROM batches WHERE assessment_id=? ORDER BY slot", (assessment_id,)).fetchall()
+    topics = conn.execute("SELECT DISTINCT topic FROM questions WHERE assessment_id=? ORDER BY topic", (assessment_id,)).fetchall()
     conn.close()
-    template_name = "admin_analysis_placeholder.html" if analysis.get("submitted_students", 0) == 0 else "admin_analysis.html"
+    template_name = "admin_analysis_placeholder.html" if analysis.get("submitted_students",0)==0 else "admin_analysis.html"
     return render_template(
         template_name, analysis=analysis, batches=batches, topics=topics,
-        selected_batch=batch_slot, selected_part=part, selected_topic=topic, assessment=assessment
+        selected_batch=batch_slot, selected_part=part, selected_topic=topic,
+        assessment=atype, assessment_options=assessment_options, selected_assessment=selected_assessment,
+        max_score=max_score, is_legacy=atype in {"midterm","posttest"}
     )
 
 
@@ -2041,35 +2193,42 @@ def admin_analysis_item(qid):
     conn = connect()
     question = conn.execute("SELECT * FROM questions WHERE id=?", (qid,)).fetchone()
     if not question:
-        conn.close()
-        abort(404)
-    batch_meta = conn.execute("SELECT assessment_type FROM batches WHERE slot=?", (question["batch_slot"],)).fetchone()
-    assessment = batch_meta["assessment_type"] if batch_meta else "midterm"
-    analysis = build_item_analysis(conn, assessment=assessment)
+        conn.close(); abort(404)
+    selected_assessment = conn.execute(
+        """SELECT a.*,s.code AS subject_code,s.name AS subject_name
+           FROM assessments a JOIN subjects s ON s.id=a.subject_id
+           WHERE a.id=? AND a.deleted_at IS NULL""",
+        (question["assessment_id"],),
+    ).fetchone()
+    if not selected_assessment:
+        conn.close(); abort(404)
+    analysis = build_item_analysis(conn, assessment_id=selected_assessment["id"], assessment=selected_assessment["assessment_type"])
     item = next((i for i in analysis["items"] if i["question_id"] == qid), None)
     conn.close()
-    return render_template("admin_analysis_item.html", item=item, question=question, assessment=assessment)
+    return render_template(
+        "admin_analysis_item.html", item=item, question=question, assessment=selected_assessment["assessment_type"],
+        selected_assessment=selected_assessment, is_legacy=selected_assessment["assessment_type"] in {"midterm","posttest"}
+    )
 
 
 @app.route("/admin/analysis.csv")
 @admin_required
 def export_item_analysis():
-    assessment = request.args.get("assessment", "midterm").strip().lower()
-    if assessment not in {"midterm", "posttest"}:
-        assessment = "midterm"
     conn = connect()
-    analysis = build_item_analysis(conn, assessment=assessment)
+    assessment_options, selected_assessment = _resolve_admin_assessment(conn)
+    if not selected_assessment:
+        conn.close(); abort(404)
+    if selected_assessment["assessment_type"] == "programming_lab":
+        conn.close(); abort(400, "Use the on-screen Caudex task analytics for programming labs.")
+    analysis = build_item_analysis(conn, assessment_id=selected_assessment["id"], assessment=selected_assessment["assessment_type"])
     conn.close()
     sio = io.StringIO()
     writer = csv.writer(sio)
-    writer.writerow(["question_id","batch_slot","part","topic","responses","correct","percent_correct","omitted","discrimination_r","A","B","C","D","correct_key","flags"])
-    for i in analysis["items"]:
-        writer.writerow([
-            i["question_id"], i["batch_slot"], i["part"], i["topic"], i["n"], i["correct"], i["p_pct"],
-            i["omitted"], i["r_pb_display"], i["option_counts"]["A"], i["option_counts"]["B"],
-            i["option_counts"]["C"], i["option_counts"]["D"], i["correct_option"], "; ".join(i["flags"])
-        ])
-    return Response(sio.getvalue(), mimetype="text/csv", headers={"Content-Disposition":f"attachment; filename=csdc101_{assessment}_item_analysis.csv"})
+    writer.writerow(["assessment","question_id","batch_slot","part","topic","responses","correct","percent_correct","omitted","discrimination_r","A","B","C","D","correct_key","flags"])
+    for item in analysis["items"]:
+        writer.writerow([selected_assessment["title"],item["question_id"],item["batch_slot"],item["part"],item["topic"],item["n"],item["correct"],item["p_pct"],item["omitted"],item["r_pb_display"],item["option_counts"]["A"],item["option_counts"]["B"],item["option_counts"]["C"],item["option_counts"]["D"],item["correct_option"]," | ".join(item["flags"])])
+    safe = re.sub(r"[^A-Za-z0-9_-]+", "-", selected_assessment["title"]).strip("-") or "assessment"
+    return Response(sio.getvalue(), mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={safe}-item-analysis.csv"})
 
 
 @app.route("/admin/export/session-keys.csv")

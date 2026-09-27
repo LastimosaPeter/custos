@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ selected_assessment.title }} Question Bank{% endblock %}
+{% block header_right %}{% from "_admin_nav.html" import admin_nav %}{{ admin_nav('') }}{% endblock %}
+{% block content %}
+{% from "_assessment_picker.html" import assessment_picker %}
+{{ assessment_picker(assessment_options, selected_assessment, 'admin_questions') }}
+<div class="dashboard-heading">
+  <div><div class="eyebrow">INSTRUCTOR VIEW · QUESTION BANKS</div><h1>{{ selected_assessment.title }}</h1><p class="subtle">Every objective assessment uses the same question-bank workspace. Custom tests are no longer separated from Midterm and Post-test administration.</p></div>
+  {% if selected_assessment.assessment_type == 'custom' %}<a class="primary button-link" href="{{ url_for('nextgen.custom_assessment', assessment_id=selected_assessment.id) }}">Open Assessment Builder</a>{% else %}<a class="primary button-link" href="{{ url_for('admin_testing') }}">Open Testing</a>{% endif %}
+</div>
+<div class="stat-row three">
+  <div class="stat-card"><span>Questions</span><strong>{{ counts.total or 0 }}</strong><small>stored items</small></div>
+  <div class="stat-card"><span>Active</span><strong>{{ counts.active_count or 0 }}</strong><small>eligible for delivery</small></div>
+  <div class="stat-card"><span>Active Points</span><strong>{{ counts.active_points or 0 }}</strong><small>before any question limit</small></div>
+</div>
+<div class="content-card question-bank-toolbar">
+  <form method="get" class="bank-filter-bar">
+    <input type="hidden" name="assessment_id" value="{{ selected_assessment.id }}">
+    <label>Search<input type="search" name="q" value="{{ search }}" placeholder="Topic, prompt, or code"></label>
+    <label>Status<select name="status"><option value="all" {% if status_filter=='all' %}selected{% endif %}>All</option><option value="active" {% if status_filter=='active' %}selected{% endif %}>Active</option><option value="disabled" {% if status_filter=='disabled' %}selected{% endif %}>Disabled</option></select></label>
+    <button class="secondary" type="submit">Filter</button>
+    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=selected_assessment.id) }}">Reset</a>
+  </form>
+</div>
+<div class="content-card">
+  <div class="section-heading"><div><h2>Question Bank</h2><p class="subtle">Edit, import, disable, or delete questions through the Assessment Builder.</p></div></div>
+  <div class="table-wrap"><table class="question-bank-table"><thead><tr><th>#</th><th>Topic</th><th>Question</th><th>Points</th><th>Key</th><th>Status</th></tr></thead><tbody>
+    {% for q in questions %}<tr class="{% if not q.active %}disabled-row{% endif %}"><td>{{ q.position or loop.index }}</td><td>{{ q.topic }}</td><td><strong>{{ q.prompt }}</strong>{% if q.code %}<small class="mono-small question-code-preview">{{ q.code.split('\n')[0] }}{% if '\n' in q.code %} …{% endif %}</small>{% endif %}</td><td>{{ q.points or 1 }}</td><td><strong>{{ q.correct_option }}</strong></td><td>{% if q.active %}<span class="ok-pill">Active</span>{% else %}<span class="review-pill">Disabled</span>{% endif %}</td></tr>
+    {% else %}<tr><td colspan="6" class="empty-cell">No questions match the current filters.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

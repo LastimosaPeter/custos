@@ -70,7 +70,7 @@
 
 <section class="content-card">
   <div class="section-heading">
-    <div><h2>All Assessments</h2><p class="subtle">Legacy exams, custom tests, practice activities, and programming labs are shown together.</p></div>
+    <div><h2>All Assessments</h2><p class="subtle">Every assessment in Custos is shown together with the same access to monitoring, question banks, and analytics.</p></div>
   </div>
   <div class="assessment-hub-grid">
     {% for a in assessments %}
@@ -94,14 +94,30 @@
         {% if a.access_code %}<div class="assessment-key-line"><span>Session key</span><code>{{ a.access_code }}</code></div>{% endif %}
         <div class="assessment-hub-actions">
           {% if a.assessment_type == 'custom' %}
-            <a class="primary button-link" href="{{ url_for('nextgen.custom_assessment', assessment_id=a.id) }}">Build & Configure</a>
+            <a class="primary button-link" href="{{ url_for('nextgen.custom_assessment', assessment_id=a.id) }}">Open Assessment</a>
+            <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
+            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
+            <a class="secondary button-link" href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Monitor</a>
+            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
           {% elif a.assessment_type in ['midterm','posttest'] %}
-            <a class="primary button-link" href="{{ url_for('admin_dashboard', assessment=a.assessment_type) }}">Open Legacy Dashboard</a>
+            <a class="primary button-link" href="{{ url_for('admin_dashboard', assessment=a.assessment_type) }}">Open Assessment</a>
+            <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
+            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
+            <a class="secondary button-link" href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Monitor</a>
+            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
           {% elif a.assessment_type == 'programming_lab' %}
             <a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Open Caudex IDE</a>
+            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Analytics</a>
+            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
           {% else %}
-            <a class="secondary button-link" href="{{ url_for('nextgen.workspace') }}">Manage in Workspace</a>
+            <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=a.id) }}">Question Bank</a>
+            <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Item Analysis</a>
+            <a class="secondary button-link" href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Monitor</a>
+            <a class="secondary button-link" href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
           {% endif %}
+          <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=a.id) }}" class="assessment-delete-inline" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-ghost" type="submit">Delete</button>
+          </form>
         </div>
       </article>
     {% else %}

@@ -1,6 +1,7 @@
 {% macro admin_nav(assessment='posttest') -%}
 {% set ep = request.endpoint or '' %}
 {% set current_assessment = assessment if assessment in ['midterm', 'posttest'] else 'posttest' %}
+{% set current_assessment_id = request.args.get('assessment_id') or session.get('admin_assessment_id') %}
 {% set assessment_active = ep in ['admin_dashboard','admin_batch','admin_monitor','admin_session_detail'] or ep.startswith('admin_analysis') or ep.startswith('admin_questions') or ep.startswith('admin_testing') or ep.startswith('nextgen.custom_') %}
 <nav class="admin-nav" aria-label="Instructor navigation">
   <a class="workspace-link {% if ep.startswith('nextgen.workspace') or ep.startswith('nextgen.subject_') or ep.startswith('nextgen.instructor_') or ep.startswith('nextgen.assessment_') %}active{% endif %}" href="{{ url_for('nextgen.workspace') }}">Workspace</a>
@@ -9,9 +10,9 @@
     <div class="admin-nav-dropdown-menu">
       <a class="{% if ep == 'admin_dashboard' or ep.startswith('nextgen.custom_') %}active{% endif %}" href="{{ url_for('admin_dashboard') }}">Dashboard</a>
       <a class="{% if ep in ['admin_monitor','admin_session_detail'] %}active{% endif %}" href="{{ url_for('admin_monitor') }}">Live Monitor</a>
-      <a class="{% if ep.startswith('admin_analysis') %}active{% endif %}" href="{{ url_for('admin_analysis', assessment=current_assessment) }}">Item Analysis</a>
-      <a class="{% if ep.startswith('admin_questions') or ep == 'admin_question_edit' %}active{% endif %}" href="{{ url_for('admin_questions', assessment=current_assessment) }}">Question Banks</a>
-      <a class="{% if ep.startswith('admin_testing') %}active{% endif %}" href="{{ url_for('admin_testing', assessment=current_assessment) }}">Testing</a>
+      <a class="{% if ep.startswith('admin_analysis') %}active{% endif %}" href="{{ url_for('admin_analysis', assessment_id=current_assessment_id) if current_assessment_id else url_for('admin_analysis') }}">Item Analysis</a>
+      <a class="{% if ep.startswith('admin_questions') or ep == 'admin_question_edit' %}active{% endif %}" href="{{ url_for('admin_questions', assessment_id=current_assessment_id) if current_assessment_id else url_for('admin_questions') }}">Question Banks</a>
+      <a class="{% if ep.startswith('admin_testing') %}active{% endif %}" href="{{ url_for('admin_testing', assessment_id=current_assessment_id) if current_assessment_id else url_for('admin_testing') }}">Testing</a>
     </div>
   </details>
   <a class="{% if ep == 'admin_messages' %}active{% endif %}" href="{{ url_for('admin_messages') }}">Messages</a>

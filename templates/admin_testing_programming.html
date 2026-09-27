@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ selected_assessment.title }} Testing{% endblock %}
+{% block header_right %}
+{% from "_admin_nav.html" import admin_nav %}
+{{ admin_nav('programming_lab') }}
+{% endblock %}
+{% block content %}
+{% from "_assessment_picker.html" import assessment_picker %}
+{{ assessment_picker(assessment_options, selected_assessment, 'admin_testing') }}
+<div class="dashboard-heading">
+  <div>
+    <div class="eyebrow">INSTRUCTOR VIEW · TEST LAB</div>
+    <h1>{{ selected_assessment.title }} Testing</h1>
+    <p class="subtle">Programming assessments use Caudex IDE's isolated instructor preview rather than the multiple-choice testing launcher.</p>
+  </div>
+</div>
+<div class="content-card">
+  <div class="section-heading">
+    <div>
+      <div class="eyebrow">CAUDEX IDE</div>
+      <h2>Programming Assessment Preview</h2>
+      <p class="subtle">Preview tasks, code execution, autosave, hidden-test submission, and security behavior without creating a real student record.</p>
+    </div>
+    {% if lab %}
+    <form method="post" action="{{ url_for('nextgen.admin_ide_preview', lab_id=lab.id) }}" class="inline-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <button class="primary" type="submit">Open Caudex Preview</button>
+    </form>
+    {% endif %}
+  </div>
+  <div class="summary-grid compact-summary-grid">
+    <div class="metric-card"><span>Assessment</span><strong>{{ selected_assessment.title }}</strong></div>
+    <div class="metric-card"><span>Maximum score</span><strong>{{ max_score }}</strong></div>
+    <div class="metric-card"><span>Student access</span><strong>Private</strong></div>
+  </div>
+  <div class="button-row">
+    <a class="secondary button-link" href="{{ url_for('nextgen.admin_ide') }}">Caudex IDE</a>
+    <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=selected_assessment.id) }}">Analytics</a>
+    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=selected_assessment.id) }}">Task Bank</a>
+  </div>
+  {% if not lab %}<div class="info-strip"><strong>Lab configuration missing.</strong> Open Caudex IDE to configure this programming assessment.</div>{% endif %}
+</div>
+{% endblock %}

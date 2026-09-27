@@ -18,14 +18,17 @@
   </div>
 
   <div class="monitor-toolbar">
-    <label>Show<select id="monitorFilter"><option value="all">All active students</option><option value="attention">Needs attention</option><option value="locked">Locked only</option><option value="clear">Clear only</option></select></label>
+    <div class="monitor-filter-group">
+      <label>Show<select id="monitorFilter"><option value="all">All active students</option><option value="attention">Needs attention</option><option value="locked">Locked only</option><option value="clear">Clear only</option></select></label>
+      <label>Assessment<select id="monitorAssessmentFilter"><option value="all">All assessments</option>{% for a in assessment_options %}<option value="{{ a.id }}" {% if request.args.get('assessment_id')|string == a.id|string %}selected{% endif %}>{{ a.subject_code }} · {{ a.title }}</option>{% endfor %}</select></label>
+    </div>
     <div class="monitor-toolbar-actions"><a class="secondary button-link" href="{{ url_for('admin_messages') }}">Messages</a><button type="button" class="secondary" id="monitorRefresh">Refresh now</button></div>
   </div>
 
   <div class="monitor-student-list" id="monitorStudentList">
     {% for s in students %}
     <article class="monitor-student-card attention-{{ s.attention_level }}" data-level="{{ s.attention_level }}" data-session-id="{{ s.id }}">
-      <div class="monitor-card-top"><div><strong>{% if s.last_name or s.first_name %}{{ s.last_name or '' }}{% if s.last_name and s.first_name %}, {% endif %}{{ s.first_name or '' }}{% else %}{{ s.student_name or s.email }}{% endif %}</strong><span>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.batch_name }}</span></div><span class="monitor-attention-badge {{ s.attention_level }}">{{ s.attention_label }}</span></div>
+      <div class="monitor-card-top"><div><strong>{% if s.last_name or s.first_name %}{{ s.last_name or '' }}{% if s.last_name and s.first_name %}, {% endif %}{{ s.first_name or '' }}{% else %}{{ s.student_name or s.email }}{% endif %}</strong><span>{{ s.program or '—' }} {{ s.class_section or '' }} · {{ s.assessment_title or s.batch_name }}</span></div><span class="monitor-attention-badge {{ s.attention_level }}">{{ s.attention_label }}</span></div>
       <div class="monitor-card-metrics"><div><span>Violations</span><strong>{{ s.violation_count or 0 }}/3</strong></div><div><span>Flags</span><strong>{{ s.flagged_count or 0 }}</strong></div><div><span>Answered</span><strong>{{ s.answered }}/{{ s.total }}</strong></div><div><span>Chat</span><strong>{{ s.unread_messages or 0 }}</strong></div></div>
       <div class="monitor-last-event"><span>Latest event</span><strong>{{ (s.last_event or 'No event yet')|replace('_',' ') }}</strong>{% if s.last_event_detail %}<small>{{ s.last_event_detail }}</small>{% endif %}</div>
       <div class="monitor-card-actions">

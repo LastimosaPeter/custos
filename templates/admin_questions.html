@@ -1,17 +1,15 @@
 {% extends "base.html" %}
-{% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Question Banks{% endblock %}
+{% block title %}Custos - {{ selected_assessment.title }} Question Bank{% endblock %}
 {% block header_right %}
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav(assessment) }}
 {% endblock %}
 {% block content %}
+{% from "_assessment_picker.html" import assessment_picker %}
+{{ assessment_picker(assessment_options, selected_assessment, 'admin_questions') }}
 <div class="dashboard-heading">
-  <div><div class="eyebrow">INSTRUCTOR VIEW · QUESTION BANKS</div><h1>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Question Banks</h1><p class="subtle">Review Part I and Part II separately, filter the bank, and edit items without leaving this page.</p></div>
+  <div><div class="eyebrow">INSTRUCTOR VIEW · QUESTION BANKS</div><h1>{{ selected_assessment.title }}</h1><p class="subtle">All Custos objective assessments share this Question Banks area. This assessment retains its Part I / Part II structure.</p></div>
   <a class="secondary button-link" href="{{ url_for('export_questions', assessment=assessment) }}">Export Question Bank</a>
-</div>
-<div class="assessment-tabs" aria-label="Assessment selector">
-  <a class="{% if assessment == 'posttest' %}active{% endif %}" href="{{ url_for('admin_questions', assessment='posttest') }}">Monday Post-test</a>
-  <a class="{% if assessment == 'midterm' %}active{% endif %}" href="{{ url_for('admin_questions', assessment='midterm') }}">Midterm</a>
 </div>
 
 <div class="content-card private-bank-loader">
@@ -26,13 +24,13 @@
 
 <div class="content-card question-bank-toolbar">
   <form method="get" class="bank-filter-bar">
-    <input type="hidden" name="assessment" value="{{ assessment }}">
+    <input type="hidden" name="assessment" value="{{ assessment }}"><input type="hidden" name="assessment_id" value="{{ selected_assessment.id }}">
     <label>Question bank<select name="batch_slot" onchange="this.form.submit()">{% for b in batches %}<option value="{{ b.slot }}" {% if b.slot == selected_slot %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label>
     <label>Search<input type="search" name="q" value="{{ search }}" placeholder="Topic, prompt, or code"></label>
     <label>Status<select name="status"><option value="all" {% if status_filter == 'all' %}selected{% endif %}>All</option><option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option><option value="disabled" {% if status_filter == 'disabled' %}selected{% endif %}>Disabled</option></select></label>
     <label>Source<select name="source"><option value="all" {% if source_filter == 'all' %}selected{% endif %}>All</option><option value="builtin" {% if source_filter == 'builtin' %}selected{% endif %}>Built-in</option><option value="instructor" {% if source_filter == 'instructor' %}selected{% endif %}>Instructor-added</option></select></label>
     <button class="secondary" type="submit">Filter</button>
-    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment=assessment, batch_slot=selected_slot) }}">Reset</a>
+    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=selected_assessment.id, batch_slot=selected_slot) }}">Reset</a>
   </form>
   <div class="bank-health-row">
     <div><span>Part I active pool</span><strong>{{ counts.get(1, {}).get('active_count', 0) }}</strong><small>40 required per attempt</small></div>

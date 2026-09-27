@@ -255,6 +255,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     allowed_sections TEXT NOT NULL DEFAULT '',
     question_limit INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
+    deleted_at TEXT,
     created_by_instructor_id INTEGER,
     created_at TEXT NOT NULL,
     FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
@@ -548,6 +549,7 @@ def migrate_schema(conn):
         "shuffle_options": "INTEGER NOT NULL DEFAULT 1",
         "allowed_sections": "TEXT NOT NULL DEFAULT ''",
         "question_limit": "INTEGER NOT NULL DEFAULT 0",
+        "deleted_at": "TEXT",
     }.items():
         if assessment_cols and name not in assessment_cols:
             conn.execute(f"ALTER TABLE assessments ADD COLUMN {name} {definition}")

@@ -13,7 +13,10 @@
   </div>
   <div class="button-row compact">
     <a class="secondary button-link" href="{{ url_for('admin_dashboard') }}">All Assessments</a>
+    <a class="secondary button-link" href="{{ url_for('admin_questions', assessment_id=assessment.id) }}">Question Bank</a>
+    <a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=assessment.id) }}">Item Analysis</a>
     <a class="secondary button-link" href="{{ url_for('admin_monitor') }}">Live Monitor</a>
+    <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=assessment.id) }}" class="assessment-delete-inline" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger-ghost" type="submit">Delete</button></form>
   </div>
 </div>
 

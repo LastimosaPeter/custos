@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ selected_assessment.title }} Analytics{% endblock %}
+{% block header_right %}{% from "_admin_nav.html" import admin_nav %}{{ admin_nav('') }}{% endblock %}
+{% block content %}
+{% from "_assessment_picker.html" import assessment_picker %}
+{{ assessment_picker(assessment_options, selected_assessment, 'admin_analysis') }}
+<div class="dashboard-heading"><div><div class="eyebrow">INSTRUCTOR VIEW · PROGRAMMING ANALYTICS</div><h1>{{ selected_assessment.title }}</h1><p class="subtle">Caudex task-level performance is shown here so Programming Labs participate in the same assessment analytics area.</p></div><a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Open Caudex IDE</a></div>
+<div class="stat-row three"><div class="stat-card"><span>Attempts</span><strong>{{ summary.attempts or 0 }}</strong><small>real coding sessions</small></div><div class="stat-card"><span>Submitted</span><strong>{{ summary.submitted or 0 }}</strong><small>completed sessions</small></div><div class="stat-card"><span>Mean Score</span><strong>{{ summary.avg_score|round(2) if summary.avg_score is not none else '—' }}</strong><small>out of {{ max_score }}</small></div></div>
+<div class="content-card"><div class="section-heading"><div><h2>Task Performance</h2><p class="subtle">Average score, run count, and full-score completion by programming task.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Task</th><th>Points</th><th>Students</th><th>Avg Score</th><th>Avg Runs</th><th>Full Score</th></tr></thead><tbody>{% for t in task_stats %}<tr><td>{{ t.position }}</td><td><strong>{{ t.title }}</strong></td><td>{{ t.points }}</td><td>{{ t.students or 0 }}</td><td>{{ t.avg_score|round(2) if t.avg_score is not none else '—' }}</td><td>{{ t.avg_runs|round(2) if t.avg_runs is not none else '—' }}</td><td>{{ t.full_score_count or 0 }}</td></tr>{% else %}<tr><td colspan="7" class="empty-cell">No programming tasks yet.</td></tr>{% endfor %}</tbody></table></div></div>
+{% endblock %}

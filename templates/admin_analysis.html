@@ -1,72 +1,45 @@
 {% extends "base.html" %}
-{% block title %}Custos - {{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Item Analysis{% endblock %}
-{% block header_right %}
-{% from "_admin_nav.html" import admin_nav %}
-{{ admin_nav(assessment) }}
-{% endblock %}
+{% block title %}Custos - {{ selected_assessment.title }} Item Analysis{% endblock %}
+{% block header_right %}{% from "_admin_nav.html" import admin_nav %}{{ admin_nav(assessment) }}{% endblock %}
 {% block content %}
+{% from "_assessment_picker.html" import assessment_picker %}
+{{ assessment_picker(assessment_options, selected_assessment, 'admin_analysis') }}
 <div class="dashboard-heading">
-  <div><div class="eyebrow">INSTRUCTOR VIEW · ASSESSMENT ANALYTICS</div><h1>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Item Analysis</h1><p class="subtle">Only submitted, non-testing student sessions from this assessment are included.</p></div>
-  <a class="secondary button-link" href="{{ url_for('export_item_analysis', assessment=assessment) }}">Export Analysis CSV</a>
+  <div><div class="eyebrow">INSTRUCTOR VIEW · ASSESSMENT ANALYTICS</div><h1>{{ selected_assessment.title }} · Item Analysis</h1><p class="subtle">Submitted, non-testing student sessions from this assessment only.</p></div>
+  <a class="secondary button-link" href="{{ url_for('export_item_analysis', assessment_id=selected_assessment.id) }}">Export Analysis CSV</a>
 </div>
-<div class="assessment-tabs">
-  <a class="{% if assessment == 'posttest' %}active{% endif %}" href="{{ url_for('admin_analysis', assessment='posttest') }}">Monday Post-test</a>
-  <a class="{% if assessment == 'midterm' %}active{% endif %}" href="{{ url_for('admin_analysis', assessment='midterm') }}">Midterm</a>
-</div>
-
 <div class="stat-row four">
   <div class="stat-card"><span>Submitted Students</span><strong>{{ analysis.submitted_students }}</strong><small>real sessions only</small></div>
-  <div class="stat-card"><span>Mean Score</span><strong>{{ analysis.mean_score if analysis.mean_score is not none else '—' }}</strong><small>out of {{ 55 if assessment == 'midterm' else 50 }}</small></div>
+  <div class="stat-card"><span>Mean Score</span><strong>{{ analysis.mean_score if analysis.mean_score is not none else '—' }}</strong><small>out of {{ max_score }}</small></div>
   <div class="stat-card"><span>Analyzed Items</span><strong>{{ analysis.items|length }}</strong><small>after filters</small></div>
   <div class="stat-card"><span>Review Flags</span><strong>{{ analysis.flagged_items }}</strong><small>items worth checking</small></div>
 </div>
-
 <div class="content-card">
   <h2>Filter</h2>
   <form method="get" class="filter-grid">
-    <input type="hidden" name="assessment" value="{{ assessment }}">
-    <label>Batch<select name="batch_slot"><option value="">All 8 sets</option>{% for b in batches %}<option value="{{ b.slot }}" {% if selected_batch == b.slot|string %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label>
-    <label>Part<select name="part"><option value="">Both parts</option><option value="1" {% if selected_part=='1' %}selected{% endif %}>Part I</option><option value="2" {% if selected_part=='2' %}selected{% endif %}>Part II</option></select></label>
+    <input type="hidden" name="assessment_id" value="{{ selected_assessment.id }}">
+    {% if batches|length > 1 %}<label>Set / Batch<select name="batch_slot"><option value="">All sets</option>{% for b in batches %}<option value="{{ b.slot }}" {% if selected_batch == b.slot|string %}selected{% endif %}>{{ b.name }}</option>{% endfor %}</select></label>{% endif %}
+    {% if is_legacy %}<label>Part<select name="part"><option value="">Both parts</option><option value="1" {% if selected_part=='1' %}selected{% endif %}>Part I</option><option value="2" {% if selected_part=='2' %}selected{% endif %}>Part II</option></select></label>{% endif %}
     <label>Topic<select name="topic"><option value="">All topics</option>{% for t in topics %}<option value="{{ t.topic }}" {% if selected_topic==t.topic %}selected{% endif %}>{{ t.topic }}</option>{% endfor %}</select></label>
-    <div class="filter-actions"><button class="primary" type="submit">Apply</button><a class="secondary button-link" href="{{ url_for('admin_analysis', assessment=assessment) }}">Clear</a></div>
+    <div class="filter-actions"><button class="primary" type="submit">Apply</button><a class="secondary button-link" href="{{ url_for('admin_analysis', assessment_id=selected_assessment.id) }}">Clear</a></div>
   </form>
 </div>
-
 <div class="content-card">
   <div class="section-heading"><div><h2>Topic Performance</h2><p class="subtle">Sorted from lowest to highest percent correct so topics that may need reinforcement appear first.</p></div></div>
-  {% if analysis.topic_summary %}
-  <div class="topic-bars">
-    {% for t in analysis.topic_summary %}
-      <div class="topic-row"><div><strong>Part {{ t.part }} · {{ t.topic }}</strong><small>{{ t.correct }}/{{ t.attempts }} correct responses</small></div><div class="meter"><span style="width:{{ t.pct }}%"></span></div><strong>{{ t.pct }}%</strong></div>
-    {% endfor %}
-  </div>
-  {% else %}<p class="empty-cell">No submitted student data yet for this assessment.</p>{% endif %}
+  {% if analysis.topic_summary %}<div class="topic-bars">{% for t in analysis.topic_summary %}<div class="topic-row"><div><strong>{% if is_legacy %}Part {{ t.part }} · {% endif %}{{ t.topic }}</strong><small>{{ t.correct }}/{{ t.attempts }} correct responses</small></div><div class="meter"><span style="width:{{ t.pct }}%"></span></div><strong>{{ t.pct }}%</strong></div>{% endfor %}</div>{% else %}<p class="empty-cell">No submitted student data yet for this assessment.</p>{% endif %}
 </div>
-
 <div class="content-card">
-  <h2>Set Summary</h2>
-  <div class="table-wrap"><table><thead><tr><th>Set / Batch</th><th>Submitted</th><th>Avg Score /{{ 55 if assessment == 'midterm' else 50 }}</th><th>Avg Part I Raw /40</th><th>Avg Part II /20</th><th>Avg Flags</th></tr></thead><tbody>
-    {% for b in analysis.batch_summary %}<tr><td>{{ b.name }}</td><td>{{ b.n }}</td><td>{{ b.avg_score if b.avg_score is not none else '—' }}</td><td>{{ b.avg_p1_raw if b.avg_p1_raw is not none else '—' }}</td><td>{{ b.avg_p2_raw if b.avg_p2_raw is not none else '—' }}</td><td>{{ b.avg_flags if b.avg_flags is not none else '—' }}</td></tr>{% endfor %}
+  <h2>Delivery Summary</h2>
+  <div class="table-wrap"><table><thead><tr><th>Set / Delivery Group</th><th>Submitted</th><th>Avg Score / {{ max_score }}</th>{% if is_legacy %}<th>Avg Part I Raw</th><th>Avg Part II</th>{% endif %}<th>Avg Flags</th></tr></thead><tbody>
+    {% for b in analysis.batch_summary %}<tr><td>{{ b.name }}</td><td>{{ b.n }}</td><td>{{ b.avg_score if b.avg_score is not none else '—' }}</td>{% if is_legacy %}<td>{{ b.avg_p1_raw if b.avg_p1_raw is not none else '—' }}</td><td>{{ b.avg_p2_raw if b.avg_p2_raw is not none else '—' }}</td>{% endif %}<td>{{ b.avg_flags if b.avg_flags is not none else '—' }}</td></tr>{% else %}<tr><td colspan="{% if is_legacy %}6{% else %}4{% endif %}" class="empty-cell">No delivery data yet.</td></tr>{% endfor %}
   </tbody></table></div>
 </div>
-
 <div class="content-card">
-  <div class="section-heading"><div><h2>Per-Item Analysis</h2><p class="subtle">Percent correct shows performance on the item; discrimination checks whether stronger overall performers were also more likely to answer it correctly.</p></div></div>
-  <div class="analysis-legend"><span><strong>Low correct rate</strong> &lt;40%</span><span><strong>Moderate</strong> 40–80%</span><span><strong>High</strong> &gt;80%</span><span><strong>Discrimination</strong> is shown only when estimable.</span></div>
-  <div class="table-wrap"><table class="analysis-table">
-    <thead><tr><th>Item</th><th>Set</th><th>Part / Topic</th><th>N</th><th>% Correct</th><th>Responses A/B/C/D</th><th>Disc. r</th><th>Interpretation</th><th>Review</th></tr></thead>
-    <tbody>
-      {% for i in analysis.items %}
-      <tr class="{% if i.flags %}review-row{% endif %}">
-        <td><a href="{{ url_for('admin_analysis_item', qid=i.question_id) }}">Q{{ i.question_id }}</a></td><td>{{ i.batch_slot - 8 if assessment == 'posttest' else i.batch_slot }}</td><td>Part {{ i.part }}<br><small>{{ i.topic }}</small></td><td>{{ i.n }}</td>
-        <td><strong>{{ i.p_pct }}%</strong><br><small>{{ i.correct_rate_band }}</small></td>
-        <td class="mono-small">{{ i.option_pct.A }} / {{ i.option_pct.B }} / {{ i.option_pct.C }} / {{ i.option_pct.D }}%</td>
-        <td><strong>{{ i.r_pb_display }}</strong></td><td>{{ i.discrimination_band }}</td>
-        <td>{% if i.flags %}<span class="review-pill">{{ i.flags|length }} flag{% if i.flags|length != 1 %}s{% endif %}</span>{% else %}<span class="ok-pill">OK</span>{% endif %}</td>
-      </tr>
-      {% else %}<tr><td colspan="9" class="empty-cell">No item data for the selected filters.</td></tr>{% endfor %}
-    </tbody>
-  </table></div>
-  <p class="micro">Interpret discrimination cautiously for small classes. The system requires at least 5 responses before displaying an estimate.</p>
+  <div class="section-heading"><div><h2>Per-Item Analysis</h2><p class="subtle">Correct rate, distractor behavior, and discrimination are calculated consistently for legacy and custom objective assessments.</p></div></div>
+  <div class="analysis-legend"><span><strong>Low correct rate</strong> &lt;40%</span><span><strong>Moderate</strong> 40–80%</span><span><strong>High</strong> &gt;80%</span><span><strong>Discrimination</strong> requires enough responses.</span></div>
+  <div class="table-wrap"><table class="analysis-table"><thead><tr><th>Item</th>{% if is_legacy %}<th>Set</th><th>Part / Topic</th>{% else %}<th>Topic</th><th>Points</th>{% endif %}<th>N</th><th>% Correct</th><th>Responses A/B/C/D</th><th>Disc. r</th><th>Interpretation</th><th>Review</th></tr></thead><tbody>
+    {% for i in analysis.items %}<tr class="{% if i.flags %}review-row{% endif %}"><td><a href="{{ url_for('admin_analysis_item', qid=i.question_id) }}">Q{{ i.question_id }}</a></td>{% if is_legacy %}<td>{{ i.batch_slot }}</td><td>Part {{ i.part }}<br><small>{{ i.topic }}</small></td>{% else %}<td>{{ i.topic }}</td><td>{{ i.points }}</td>{% endif %}<td>{{ i.n }}</td><td><strong>{{ i.p_pct }}%</strong><br><small>{{ i.correct_rate_band }}</small></td><td class="mono-small">{{ i.option_pct.A }} / {{ i.option_pct.B }} / {{ i.option_pct.C }} / {{ i.option_pct.D }}%</td><td><strong>{{ i.r_pb_display }}</strong></td><td>{{ i.discrimination_band }}</td><td>{% if i.flags %}<span class="review-pill">{{ i.flags|length }} flag{% if i.flags|length != 1 %}s{% endif %}</span>{% else %}<span class="ok-pill">OK</span>{% endif %}</td></tr>{% else %}<tr><td colspan="9" class="empty-cell">No item data for the selected filters.</td></tr>{% endfor %}
+  </tbody></table></div>
+  <p class="micro">Interpret discrimination cautiously for small classes. Custos requires at least five responses before displaying an estimate.</p>
 </div>
 {% endblock %}

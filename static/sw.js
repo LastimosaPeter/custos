@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v098-next12-catalog-align';
+const CACHE_NAME = 'custos-static-v098-next13-unified-assessments';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',

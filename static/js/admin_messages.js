@@ -7,6 +7,7 @@
   const nameEl = document.getElementById('messageStudentName');
   const metaEl = document.getElementById('messageStudentMeta');
   const review = document.getElementById('messageReviewLink');
+  const deleteButton = document.getElementById('messageDeleteButton');
   const form = document.getElementById('messageReplyForm');
   const input = document.getElementById('messageReplyInput');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
@@ -38,6 +39,7 @@
       metaEl.textContent = `${data.student.program || '—'} ${data.student.class_section || ''} · ${data.student.batch_name || ''}`;
       review.href = `/admin/session/${currentSid}`;
       review.classList.remove('hidden');
+      deleteButton?.classList.remove('hidden');
       form.hidden = false;
       renderMessages(data.messages || []);
       const btn = list.querySelector(`[data-session-id="${currentSid}"]`);
@@ -85,6 +87,32 @@
         await refreshThreads();
       }
     } catch (_) {} finally { button.disabled = false; input.focus(); }
+  });
+
+
+  deleteButton?.addEventListener('click', async () => {
+    if (!currentSid) return;
+    if (!window.confirm('Delete all messages in this student conversation? The exam session, answers, and proctoring history will be kept.')) return;
+    deleteButton.disabled = true;
+    try {
+      const res = await fetch(`/admin/messages/${currentSid}/delete`, {
+        method:'POST', credentials:'same-origin',
+        headers:{'Accept':'application/json','X-CSRFToken':csrf}
+      });
+      const data = await res.json();
+      if (!data.ok) return;
+      body.innerHTML = '<div class="chat-empty">Messages deleted.</div>';
+      messageSignature = '';
+      currentSid = 0;
+      nameEl.textContent = 'Select a student';
+      metaEl.textContent = '';
+      review.classList.add('hidden');
+      deleteButton.classList.add('hidden');
+      form.hidden = true;
+      await refreshThreads();
+      const first = list.querySelector('[data-session-id]');
+      if (first) loadThread(first.dataset.sessionId);
+    } catch (_) {} finally { deleteButton.disabled = false; }
   });
 
   if (currentSid) loadThread(currentSid);

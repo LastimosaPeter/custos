@@ -1,0 +1,17 @@
+{% extends "base.html" %}
+{% block title %}Custos - {{ selected_assessment.title }} Tasks{% endblock %}
+{% block header_right %}{% from "_admin_nav.html" import admin_nav %}{{ admin_nav('') }}{% endblock %}
+{% block content %}
+{% from "_assessment_picker.html" import assessment_picker %}
+{{ assessment_picker(assessment_options, selected_assessment, 'admin_questions') }}
+<div class="dashboard-heading">
+  <div><div class="eyebrow">INSTRUCTOR VIEW · QUESTION BANKS</div><h1>{{ selected_assessment.title }}</h1><p class="subtle">Programming Lab assessments use Caudex tasks rather than multiple-choice questions.</p></div>
+  <a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Manage in Caudex IDE</a>
+</div>
+<div class="content-card">
+  <div class="section-heading"><div><h2>Programming Tasks</h2><p class="subtle">These tasks are the programming-assessment equivalent of a question bank.</p></div><span class="question-count-chip">{{ tasks|length }} task{{ '' if tasks|length==1 else 's' }}</span></div>
+  <div class="table-wrap"><table><thead><tr><th>#</th><th>Task</th><th>Points</th><th>Status</th></tr></thead><tbody>
+  {% for t in tasks %}<tr><td>{{ t.position }}</td><td><strong>{{ t.title }}</strong><br><small>{{ t.prompt }}</small></td><td>{{ t.points }}</td><td>{% if t.active %}<span class="ok-pill">Active</span>{% else %}<span class="review-pill">Disabled</span>{% endif %}</td></tr>{% else %}<tr><td colspan="4" class="empty-cell">No Caudex tasks yet.</td></tr>{% endfor %}
+  </tbody></table></div>
+</div>
+{% endblock %}

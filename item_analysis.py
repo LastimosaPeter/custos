@@ -42,10 +42,25 @@ def _discrimination_band(r, n):
     return "Strong"
 
 
-def build_item_analysis(conn, batch_slot=None, part=None, topic=None, assessment="midterm"):
+def build_item_analysis(
+    conn,
+    batch_slot=None,
+    part=None,
+    topic=None,
+    assessment="midterm",
+    assessment_id=None,
+):
+    """Build item statistics for either a legacy assessment family or one assessment record.
+
+    `assessment_id` is the preferred future-proof selector. `assessment` remains for
+    compatibility with the original Midterm/Post-test routes.
+    """
     clauses = ["e.status='submitted'", "COALESCE(e.is_test,0)=0"]
     params = []
-    if assessment:
+    if assessment_id is not None:
+        clauses.append("e.assessment_id=?")
+        params.append(int(assessment_id))
+    elif assessment:
         clauses.append("b.assessment_type=?")
         params.append(assessment)
     if batch_slot:
@@ -63,24 +78,24 @@ def build_item_analysis(conn, batch_slot=None, part=None, topic=None, assessment
         f"""
         SELECT q.id AS question_id, q.part, q.batch_slot, q.topic, q.prompt, q.code,
                q.option_a, q.option_b, q.option_c, q.option_d, q.correct_option,
-               sq.selected_option, e.id AS session_id,
-               (e.part1_correct + e.part2_correct) AS raw_total
+               COALESCE(q.points,1) AS points, sq.selected_option, e.id AS session_id,
+               COALESCE(e.auto_total,0) AS overall_total
         FROM session_questions sq
         JOIN questions q ON q.id=sq.question_id
         JOIN exam_sessions e ON e.id=sq.session_id
         JOIN batches b ON b.id=e.batch_id
         WHERE {where}
-        ORDER BY q.batch_slot, q.part, q.id, e.id
+        ORDER BY q.batch_slot, q.part, COALESCE(q.position,q.id), q.id, e.id
         """,
         params,
     ).fetchall()
 
     grouped = defaultdict(list)
     question_meta = {}
-    for r in rows:
-        qid = r["question_id"]
-        grouped[qid].append(r)
-        question_meta[qid] = r
+    for row in rows:
+        qid = row["question_id"]
+        grouped[qid].append(row)
+        question_meta[qid] = row
 
     items = []
     for qid, attempts in grouped.items():
@@ -91,17 +106,20 @@ def build_item_analysis(conn, batch_slot=None, part=None, topic=None, assessment
         correct = 0
         xs = []
         ys = []
-        for r in attempts:
-            selected = r["selected_option"]
-            is_correct = 1 if selected == r["correct_option"] else 0
+        item_points = float(meta["points"] or 1)
+        for row in attempts:
+            selected = row["selected_option"]
+            is_correct = 1 if selected == row["correct_option"] else 0
             correct += is_correct
             if selected in option_counts:
                 option_counts[selected] += 1
             else:
                 omitted += 1
-            # Use rest-of-test score to reduce part-whole inflation.
             xs.append(is_correct)
-            ys.append((r["raw_total"] or 0) - is_correct)
+            # Use the score outside this item. This works for weighted custom tests
+            # while remaining compatible with the legacy score model.
+            earned_here = item_points if is_correct else 0
+            ys.append(float(row["overall_total"] or 0) - earned_here)
 
         p = correct / n if n else None
         response_rate = (n - omitted) / n if n else None
@@ -135,7 +153,11 @@ def build_item_analysis(conn, batch_slot=None, part=None, topic=None, assessment
             "topic": meta["topic"],
             "prompt": meta["prompt"],
             "code": meta["code"],
-            "options": {"A": meta["option_a"], "B": meta["option_b"], "C": meta["option_c"], "D": meta["option_d"]},
+            "points": item_points,
+            "options": {
+                "A": meta["option_a"], "B": meta["option_b"],
+                "C": meta["option_c"], "D": meta["option_d"],
+            },
             "correct_option": meta["correct_option"],
             "n": n,
             "correct": correct,
@@ -157,18 +179,29 @@ def build_item_analysis(conn, batch_slot=None, part=None, topic=None, assessment
 
     topic_groups = defaultdict(lambda: {"correct": 0, "attempts": 0, "omitted": 0})
     for item in items:
-        g = topic_groups[(item["part"], item["topic"])]
-        g["correct"] += item["correct"]
-        g["attempts"] += item["n"]
-        g["omitted"] += item["omitted"]
+        group = topic_groups[(item["part"], item["topic"])]
+        group["correct"] += item["correct"]
+        group["attempts"] += item["n"]
+        group["omitted"] += item["omitted"]
     topic_summary = []
-    for (pnum, t), g in topic_groups.items():
-        pct = (g["correct"] / g["attempts"] * 100) if g["attempts"] else 0
-        topic_summary.append({"part": pnum, "topic": t, **g, "pct": round(pct, 1)})
+    for (pnum, topic_name), group in topic_groups.items():
+        pct = (group["correct"] / group["attempts"] * 100) if group["attempts"] else 0
+        topic_summary.append({"part": pnum, "topic": topic_name, **group, "pct": round(pct, 1)})
     topic_summary.sort(key=lambda x: (x["pct"], x["part"], x["topic"]))
 
+    if assessment_id is not None:
+        batch_filter = "b.assessment_id=?"
+        batch_params = (int(assessment_id),)
+        session_filter = "e.assessment_id=?"
+        session_params = (int(assessment_id),)
+    else:
+        batch_filter = "(? IS NULL OR b.assessment_type=?)"
+        batch_params = (assessment, assessment)
+        session_filter = "(? IS NULL OR b.assessment_type=?)"
+        session_params = (assessment, assessment)
+
     batch_rows = conn.execute(
-        """
+        f"""
         SELECT b.slot, b.name,
                COUNT(e.id) AS n,
                AVG(e.auto_total) AS avg_score,
@@ -178,27 +211,25 @@ def build_item_analysis(conn, batch_slot=None, part=None, topic=None, assessment
         FROM batches b
         LEFT JOIN exam_sessions e ON e.batch_id=b.id
              AND e.status='submitted' AND COALESCE(e.is_test,0)=0
-        WHERE (? IS NULL OR b.assessment_type=?)
+        WHERE {batch_filter}
         GROUP BY b.id ORDER BY b.slot
         """,
-        (assessment, assessment),
+        batch_params,
     ).fetchall()
     batch_summary = [dict(r) for r in batch_rows]
-    for b in batch_summary:
-        b["avg_score"] = round(b["avg_score"], 2) if b["avg_score"] is not None else None
-        b["avg_p1_raw"] = round(b["avg_p1_raw"], 2) if b["avg_p1_raw"] is not None else None
-        b["avg_p2_raw"] = round(b["avg_p2_raw"], 2) if b["avg_p2_raw"] is not None else None
-        b["avg_flags"] = round(b["avg_flags"], 2) if b["avg_flags"] is not None else None
+    for batch in batch_summary:
+        for key in ("avg_score", "avg_p1_raw", "avg_p2_raw", "avg_flags"):
+            batch[key] = round(batch[key], 2) if batch[key] is not None else None
 
     submitted_students = conn.execute(
-        """SELECT COUNT(*) FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
-           WHERE e.status='submitted' AND COALESCE(e.is_test,0)=0 AND (? IS NULL OR b.assessment_type=?)""",
-        (assessment, assessment),
+        f"""SELECT COUNT(*) FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+             WHERE e.status='submitted' AND COALESCE(e.is_test,0)=0 AND {session_filter}""",
+        session_params,
     ).fetchone()[0]
     mean_score = conn.execute(
-        """SELECT AVG(e.auto_total) FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
-           WHERE e.status='submitted' AND COALESCE(e.is_test,0)=0 AND (? IS NULL OR b.assessment_type=?)""",
-        (assessment, assessment),
+        f"""SELECT AVG(e.auto_total) FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+             WHERE e.status='submitted' AND COALESCE(e.is_test,0)=0 AND {session_filter}""",
+        session_params,
     ).fetchone()[0]
 
     return {
@@ -207,6 +238,7 @@ def build_item_analysis(conn, batch_slot=None, part=None, topic=None, assessment
         "batch_summary": batch_summary,
         "submitted_students": submitted_students,
         "mean_score": round(mean_score, 2) if mean_score is not None else None,
-        "flagged_items": sum(1 for i in items if i["flags"]),
+        "flagged_items": sum(1 for item in items if item["flags"]),
         "assessment": assessment,
+        "assessment_id": assessment_id,
     }

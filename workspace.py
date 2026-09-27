@@ -174,7 +174,7 @@ def workspace():
     conn = connect()
     subjects = conn.execute(
         """SELECT s.*,
-                  (SELECT COUNT(*) FROM assessments a WHERE a.subject_id=s.id) AS assessment_count,
+                  (SELECT COUNT(*) FROM assessments a WHERE a.subject_id=s.id AND a.deleted_at IS NULL) AS assessment_count,
                   (SELECT COUNT(*) FROM subject_instructors si WHERE si.subject_id=s.id) AS instructor_count
            FROM subjects s ORDER BY s.active DESC, s.code, s.school_year DESC"""
     ).fetchall()
@@ -188,6 +188,7 @@ def workspace():
         """SELECT a.*, s.code AS subject_code,
                   (SELECT COUNT(*) FROM programming_labs pl WHERE pl.assessment_id=a.id) AS has_lab
            FROM assessments a JOIN subjects s ON s.id=a.subject_id
+           WHERE a.deleted_at IS NULL
            ORDER BY a.active DESC, s.code, a.created_at DESC"""
     ).fetchall()
     conn.close()
@@ -489,10 +490,34 @@ def assessment_edit(assessment_id):
     return redirect(url_for("nextgen.workspace"))
 
 
+
+@bp.post("/admin/workspace/assessment/<int:assessment_id>/delete")
+@admin_required
+def assessment_delete(assessment_id):
+    """Soft-delete an assessment while preserving historical attempts and analytics data."""
+    require_csrf()
+    conn = connect()
+    row = conn.execute("SELECT * FROM assessments WHERE id=? AND deleted_at IS NULL", (assessment_id,)).fetchone()
+    if not row:
+        conn.close(); abort(404)
+    try:
+        now = iso_now()
+        conn.execute("UPDATE assessments SET active=0, deleted_at=? WHERE id=?", (now, assessment_id))
+        conn.execute("UPDATE batches SET active=0 WHERE assessment_id=?", (assessment_id,))
+        if row["assessment_type"] == "programming_lab":
+            conn.execute("UPDATE programming_labs SET active=0 WHERE assessment_id=?", (assessment_id,))
+        conn.commit()
+        flash(f"{row['title']} was removed from active Custos assessments. Historical attempts were preserved.", "success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not delete assessment: {exc}", "error")
+    finally:
+        conn.close()
+    return redirect(url_for("admin_dashboard"))
+
 def _custom_assessment_or_404(conn, assessment_id):
     row = conn.execute(
         """SELECT a.*,s.code AS subject_code,s.name AS subject_name
-           FROM assessments a JOIN subjects s ON s.id=a.subject_id WHERE a.id=?""",
+           FROM assessments a JOIN subjects s ON s.id=a.subject_id WHERE a.id=? AND a.deleted_at IS NULL""",
         (assessment_id,),
     ).fetchone()
     if not row or row["assessment_type"] != "custom":

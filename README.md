@@ -152,3 +152,26 @@ item_number, topic, code, explanation, points
 A sample orientation bank is included at `samples/custos_orientation_practice_test_10_items.csv`, and a blank browser-downloadable template is available at `static/samples/custom_assessment_template.csv`.
 
 The legacy CSDC101 Midterm and Post-test dashboards continue to work unchanged and remain available from the unified Assessments dashboard.
+
+## Unified assessment administration update
+
+This build treats objective assessments as first-class assessment records across Dashboard, Question Banks, Item Analysis, Live Monitor, and Messages. Midterm/Post-test retain their existing specialized delivery rules but are surfaced alongside custom quizzes/practice tests instead of being isolated from the newer assessment model.
+
+Additional instructor controls in this update:
+
+- soft-delete assessments from Dashboard/Workspace while preserving historical attempts and analytics
+- unified assessment picker in Question Banks and Item Analysis
+- custom assessment item analysis using the same distractor/discrimination engine
+- Caudex Programming Lab task analytics inside Item Analysis
+- assessment filter in Live Monitor
+- full-card attention borders in Live Monitor
+- hard-delete stored chat messages for a student conversation without deleting the exam attempt
+- compact/bold field labels in the Custom Test creator
+
+Deleted assessments are hidden from active administration and their delivery batches are disabled. Existing submissions, answer data, proctor events, and scores remain available in the database for audit/history.
+
+## Unified assessment administration
+
+Custos now treats Midterm, Post-test, Dry Run, custom objective tests, and Caudex Programming Labs as assessment records visible from the same Dashboard. Question Banks, Item Analysis, Testing, and Live Monitor are assessment-aware rather than being limited to the original Midterm/Post-test pair.
+
+Deleting an assessment from Dashboard or Workspace soft-deletes it: delivery is disabled and the assessment disappears from active administration, but historical attempts and analytics remain in PostgreSQL. Student-message conversations can be hard-deleted independently to reclaim message storage without deleting exam attempts, answers, or proctoring logs.

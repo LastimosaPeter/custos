@@ -1,0 +1,15 @@
+{% macro assessment_picker(options, selected, endpoint) -%}
+<div class="assessment-context-bar">
+  <div>
+    <span class="assessment-context-label">Assessment</span>
+    <strong>{{ selected.title if selected else 'Select an assessment' }}</strong>
+  </div>
+  <form method="get" action="{{ url_for(endpoint) }}">
+    <select name="assessment_id" aria-label="Select assessment" onchange="this.form.submit()">
+      {% for a in options %}
+      <option value="{{ a.id }}" {% if selected and a.id == selected.id %}selected{% endif %}>{{ a.subject_code }} · {{ a.title }}{% if not a.active %} · Disabled{% endif %}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+{%- endmacro %}

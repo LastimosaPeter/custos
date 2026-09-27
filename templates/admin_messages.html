@@ -26,7 +26,7 @@
     <section class="message-conversation" aria-live="polite">
       <header class="message-conversation-head">
         <div><strong id="messageStudentName">{% if threads %}{{ threads[0].student_name or threads[0].email }}{% else %}Select a student{% endif %}</strong><span id="messageStudentMeta">{% if threads %}{{ threads[0].program or '—' }} {{ threads[0].class_section or '' }} · {{ threads[0].batch_name }}{% endif %}</span></div>
-        <a id="messageReviewLink" class="secondary button-link {% if not threads %}hidden{% endif %}" href="{% if threads %}{{ url_for('admin_session_detail', sid=threads[0].id) }}{% else %}#{% endif %}">Open Session Review</a>
+        <div class="message-head-actions"><button id="messageDeleteButton" type="button" class="danger-ghost {% if not threads %}hidden{% endif %}">Delete Messages</button><a id="messageReviewLink" class="secondary button-link {% if not threads %}hidden{% endif %}" href="{% if threads %}{{ url_for('admin_session_detail', sid=threads[0].id) }}{% else %}#{% endif %}">Open Session Review</a></div>
       </header>
       <div id="messageConversationBody" class="message-conversation-body"><div class="chat-empty">{% if threads %}Loading conversation…{% else %}Messages from students will appear here.{% endif %}</div></div>
       <form id="messageReplyForm" class="message-reply-form" {% if not threads %}hidden{% endif %}>
