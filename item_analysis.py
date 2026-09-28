@@ -267,8 +267,12 @@ def build_item_analysis(
     session_clauses = ["e.status='submitted'", "COALESCE(e.is_test,0)=0"]
     session_params = []
     if assessment_id is not None:
-        session_clauses.append("e.assessment_id=?")
-        session_params.append(assessment_id)
+        # Scope through the delivery/batch instead of exam_sessions.assessment_id.
+        # This keeps analytics compatible with attempts created by older Custos
+        # builds where the session-level assessment_id column may be absent or
+        # not yet backfilled.
+        session_clauses.append("(b.assessment_id=? OR (b.assessment_id IS NULL AND b.assessment_type=?))")
+        session_params.extend([assessment_id, assessment])
     elif assessment:
         session_clauses.append("b.assessment_type=?")
         session_params.append(assessment)
@@ -276,7 +280,7 @@ def build_item_analysis(
 
     sessions = conn.execute(
         f"""
-        SELECT e.id,e.auto_total,e.flagged_count,e.batch_id,e.assessment_id,
+        SELECT e.id,e.auto_total,e.flagged_count,e.batch_id,
                b.slot AS delivery_slot,b.name AS batch_name,b.assessment_type
         FROM exam_sessions e
         JOIN batches b ON b.id=e.batch_id
@@ -290,8 +294,8 @@ def build_item_analysis(
     row_clauses = ["e.status='submitted'", "COALESCE(e.is_test,0)=0"]
     row_params = []
     if assessment_id is not None:
-        row_clauses.append("e.assessment_id=?")
-        row_params.append(assessment_id)
+        row_clauses.append("(b.assessment_id=? OR (b.assessment_id IS NULL AND b.assessment_type=?))")
+        row_params.extend([assessment_id, assessment])
     elif assessment:
         row_clauses.append("b.assessment_type=?")
         row_params.append(assessment)
@@ -331,7 +335,7 @@ def build_item_analysis(
         bonus_params = []
         bonus_clauses = ["e.status='submitted'", "COALESCE(e.is_test,0)=0", "bq.assessment_type='midterm'"]
         if assessment_id is not None:
-            bonus_clauses.append("e.assessment_id=?")
+            bonus_clauses.append("(b.assessment_id=? OR (b.assessment_id IS NULL AND b.assessment_type='midterm'))")
             bonus_params.append(assessment_id)
         bonus_rows = conn.execute(
             f"""

@@ -42,7 +42,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r2")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r3")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -2376,6 +2376,32 @@ def admin_bonus_edit(qid):
 @app.route("/admin/analysis")
 @admin_required
 def admin_analysis():
+    try:
+        return _admin_analysis_impl()
+    except Exception as exc:
+        # Analytics is an instructor-only diagnostic page. If a deployment is
+        # carrying an older schema, repair it once and retry instead of surfacing
+        # a generic Vercel 500 page. The original traceback is still written to
+        # Vercel logs for diagnosis.
+        app.logger.exception("Item Analysis failed; attempting one schema repair retry")
+        try:
+            ensure_db_initialized(
+                admin_username=os.getenv("ADMIN_USERNAME", "admin"),
+                admin_password=_admin_password,
+                force=True,
+            )
+            return _admin_analysis_impl()
+        except Exception:
+            app.logger.exception("Item Analysis retry failed")
+            # Do not expose database credentials, SQL, or a traceback in the UI.
+            return render_template(
+                "admin_analysis_error.html",
+                error_type=type(exc).__name__,
+                assessment=session.get("admin_assessment", "posttest"),
+            ), 500
+
+
+def _admin_analysis_impl():
     conn = connect()
     assessment_options, selected_assessment = _resolve_admin_assessment(conn)
     if not selected_assessment:
@@ -2408,11 +2434,23 @@ def admin_analysis():
         assessment=atype,
         max_score=max_score,
     )
+    # Keep filter metadata compatible with both current and older databases.
+    # Legacy attempts are identified by assessment type when their historical
+    # assessment_id link has not yet been populated.
     batches = conn.execute(
-        "SELECT slot,name FROM batches WHERE assessment_id=? ORDER BY slot", (assessment_id,)
+        """SELECT slot,name FROM batches
+           WHERE assessment_id=? OR (assessment_id IS NULL AND assessment_type=?)
+           ORDER BY slot""",
+        (assessment_id, atype),
     ).fetchall()
     topics = [dict(r) for r in conn.execute(
-        "SELECT DISTINCT topic FROM questions WHERE assessment_id=? AND topic IS NOT NULL AND topic<>'' ORDER BY topic", (assessment_id,)
+        """SELECT DISTINCT q.topic
+           FROM questions q
+           LEFT JOIN batches b ON b.slot=q.batch_slot
+           WHERE (q.assessment_id=? OR (q.assessment_id IS NULL AND b.assessment_type=?))
+             AND q.topic IS NOT NULL AND q.topic<>''
+           ORDER BY q.topic""",
+        (assessment_id, atype),
     ).fetchall()]
     if atype == "midterm":
         known_topics = {str(r.get("topic") or "") for r in topics}
@@ -2425,7 +2463,12 @@ def admin_analysis():
                 known_topics.add(value)
         topics.sort(key=lambda row: str(row.get("topic") or "").casefold())
     parts = [int(r[0]) for r in conn.execute(
-        "SELECT DISTINCT part FROM questions WHERE assessment_id=? ORDER BY part", (assessment_id,)
+        """SELECT DISTINCT q.part
+           FROM questions q
+           LEFT JOIN batches b ON b.slot=q.batch_slot
+           WHERE q.assessment_id=? OR (q.assessment_id IS NULL AND b.assessment_type=?)
+           ORDER BY q.part""",
+        (assessment_id, atype),
     ).fetchall()]
     if atype == "midterm" and 3 not in parts:
         parts.append(3)
