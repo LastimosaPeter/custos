@@ -9,7 +9,7 @@
   <div>
     <div class="eyebrow">INSTRUCTOR VIEW · ITEM ANALYSIS</div>
     <h1>{{ selected_assessment.title }}</h1>
-    <p class="subtle">Classical item analysis for submitted student attempts. Instructor testing sessions are excluded automatically.</p>
+    <p class="subtle">PowerBI-style assessment analytics for real student submissions. Instructor testing sessions are excluded automatically.</p>
   </div>
   <a class="secondary button-link" href="{{ url_for('export_item_analysis', assessment_id=selected_assessment.id) }}">Export Analysis CSV</a>
 </div>
@@ -25,77 +25,118 @@
 {% endif %}
 
 <section class="analysis-metric-grid" aria-label="Assessment statistics">
-  <article class="analysis-metric-card">
+  <article class="analysis-metric-card analysis-kpi-card">
     <span>Submitted</span>
     <strong>{{ analysis.submitted_students }}</strong>
     <small>real student attempts</small>
   </article>
-  <article class="analysis-metric-card">
+  <article class="analysis-metric-card analysis-kpi-card">
     <span>Mean Score</span>
     <strong>{{ analysis.score_summary.mean if analysis.score_summary.mean is not none else '—' }}</strong>
     <small>{% if max_score %}out of {{ max_score }}{% else %}recorded score{% endif %}</small>
   </article>
-  <article class="analysis-metric-card">
+  <article class="analysis-metric-card analysis-kpi-card">
     <span>Mean Percentage</span>
     <strong>{{ (analysis.score_summary.mean_pct|string ~ '%') if analysis.score_summary.mean_pct is not none else '—' }}</strong>
     <small>across submitted attempts</small>
   </article>
-  <article class="analysis-metric-card">
+  <article class="analysis-metric-card analysis-kpi-card">
     <span>Score SD</span>
     <strong>{{ analysis.score_summary.sd if analysis.score_summary.sd is not none else '—' }}</strong>
     <small>score spread</small>
   </article>
-  <article class="analysis-metric-card">
+  <article class="analysis-metric-card analysis-kpi-card">
     <span>{{ analysis.reliability.label }}</span>
     <strong>{{ analysis.reliability.value if analysis.reliability.value is not none else '—' }}</strong>
     <small>{{ analysis.reliability.band }}</small>
   </article>
-  <article class="analysis-metric-card {% if analysis.flagged_items %}needs-review{% endif %}">
+  <article class="analysis-metric-card analysis-kpi-card {% if analysis.flagged_items %}needs-review{% endif %}">
     <span>Items for Review</span>
     <strong>{{ analysis.flagged_items }}</strong>
     <small>automatic review signals</small>
   </article>
 </section>
 
-<div class="analysis-two-column">
-  <section class="content-card analysis-card">
-    <div class="section-heading compact">
-      <div><h2>Score Distribution</h2><p class="subtle">Submitted attempts grouped by percentage score.</p></div>
+<div class="analysis-story-grid">
+  <section class="content-card analysis-card analysis-chart-card">
+    <div class="section-heading compact analysis-card-head">
+      <div><h2>Score Distribution</h2><p class="subtle">Histogram of submitted attempts grouped by percentage score.</p></div>
+      <div class="analysis-chip">Distribution View</div>
     </div>
     {% if analysis.submitted_students %}
-    <div class="analysis-distribution">
-      {% for bucket in analysis.score_summary.distribution %}
-      <div class="analysis-distribution-row">
-        <span>{{ bucket.label }}</span>
-        <div class="analysis-bar"><span style="width:{{ bucket.pct }}%"></span></div>
-        <strong>{{ bucket.count }}</strong>
+    {% set ns = namespace(max_bucket=0) %}
+    {% for bucket in analysis.score_summary.distribution %}
+      {% if bucket.count > ns.max_bucket %}{% set ns.max_bucket = bucket.count %}{% endif %}
+    {% endfor %}
+    <div class="analysis-histogram-wrap">
+      <div class="analysis-histogram" role="img" aria-label="Score distribution histogram">
+        {% for bucket in analysis.score_summary.distribution %}
+        {% set height = ((bucket.count / ns.max_bucket) * 100) if ns.max_bucket else 0 %}
+        <div class="analysis-histogram-col">
+          <div class="analysis-histogram-meta">{{ bucket.count }}</div>
+          <div class="analysis-histogram-bar-zone">
+            <div class="analysis-histogram-bar" style="height:{{ height|round(0, 'floor') }}%"></div>
+          </div>
+          <div class="analysis-histogram-label">{{ bucket.label }}</div>
+        </div>
+        {% endfor %}
       </div>
-      {% endfor %}
     </div>
-    <div class="analysis-mini-stats">
+    <div class="analysis-mini-stats analysis-mini-stats-4up">
       <span><strong>{{ analysis.score_summary.minimum if analysis.score_summary.minimum is not none else '—' }}</strong> Min</span>
       <span><strong>{{ analysis.score_summary.median if analysis.score_summary.median is not none else '—' }}</strong> Median</span>
       <span><strong>{{ analysis.score_summary.maximum if analysis.score_summary.maximum is not none else '—' }}</strong> Max</span>
+      <span><strong>{{ analysis.submitted_students }}</strong> Attempts</span>
     </div>
     {% else %}<p class="empty-cell">No score distribution is available yet.</p>{% endif %}
   </section>
 
-  <section class="content-card analysis-card">
-    <div class="section-heading compact">
-      <div><h2>Measurement Diagnostics</h2><p class="subtle">Reliability is only estimated when the administered forms permit a defensible calculation.</p></div>
-    </div>
-    <div class="analysis-diagnostic-list">
-      <div><span>Internal consistency</span><strong>{{ analysis.reliability.value if analysis.reliability.value is not none else '—' }}</strong></div>
-      <div><span>Interpretation</span><strong>{{ analysis.reliability.band }}</strong></div>
-      <div><span>Standard error of measurement</span><strong>{{ analysis.reliability.sem if analysis.reliability.sem is not none else '—' }}</strong></div>
-      <div><span>Analyzed items</span><strong>{{ analysis["items"]|length }}</strong></div>
-    </div>
-    {% if analysis.reliability.note %}<p class="analysis-note">{{ analysis.reliability.note }}</p>{% endif %}
-  </section>
+  <div class="analysis-side-stack">
+    <section class="content-card analysis-card">
+      <div class="section-heading compact analysis-card-head">
+        <div><h2>Measurement Diagnostics</h2><p class="subtle">Reliability and form quality indicators.</p></div>
+      </div>
+      <div class="analysis-diagnostic-list analysis-diagnostic-panels">
+        <div><span>Internal consistency</span><strong>{{ analysis.reliability.value if analysis.reliability.value is not none else '—' }}</strong></div>
+        <div><span>Interpretation</span><strong>{{ analysis.reliability.band }}</strong></div>
+        <div><span>Standard error of measurement</span><strong>{{ analysis.reliability.sem if analysis.reliability.sem is not none else '—' }}</strong></div>
+        <div><span>Analyzed items</span><strong>{{ analysis["items"]|length }}</strong></div>
+      </div>
+      {% if analysis.reliability.note %}<p class="analysis-note">{{ analysis.reliability.note }}</p>{% endif %}
+    </section>
+
+    <section class="content-card analysis-card">
+      <div class="section-heading compact analysis-card-head">
+        <div><h2>Executive Summary</h2><p class="subtle">Quick interpretation of the current assessment.</p></div>
+      </div>
+      <div class="analysis-summary-callouts">
+        <article>
+          <span>Average Performance</span>
+          <strong>{{ (analysis.score_summary.mean_pct|string ~ '%') if analysis.score_summary.mean_pct is not none else '—' }}</strong>
+          <small>class-wide average percentage</small>
+        </article>
+        <article>
+          <span>Reliability Band</span>
+          <strong>{{ analysis.reliability.band }}</strong>
+          <small>{{ analysis.reliability.label }}</small>
+        </article>
+        <article>
+          <span>Review Signals</span>
+          <strong>{{ analysis.flagged_items }}</strong>
+          <small>flagged items needing inspection</small>
+        </article>
+        <article>
+          <span>Coverage</span>
+          <strong>{{ analysis["items"]|length }}</strong>
+          <small>items included in the analysis</small>
+        </article>
+      </div>
+    </section>
+  </div>
 </div>
 
 <section class="content-card analysis-card">
-  <div class="section-heading compact">
+  <div class="section-heading compact analysis-card-head">
     <div><h2>Analysis Filters</h2><p class="subtle">Narrow the table without changing the underlying assessment data.</p></div>
   </div>
   <form method="get" class="analysis-filter-grid">
@@ -111,42 +152,44 @@
   </form>
 </section>
 
-<section class="content-card analysis-card">
-  <div class="section-heading compact">
-    <div><h2>Topic Diagnostics</h2><p class="subtle">Topics are ordered from lowest to highest correct rate to make weak areas easier to inspect.</p></div>
-  </div>
-  {% if analysis.topic_summary %}
-  <div class="analysis-topic-list">
-    {% for t in analysis.topic_summary %}
-    <div class="analysis-topic-row">
-      <div class="analysis-topic-label"><strong>{% if is_legacy %}Part {{ t.part }} · {% endif %}{{ t.topic }}</strong><small>{{ t["items"] }} item{% if t["items"] != 1 %}s{% endif %} · {{ t.correct }}/{{ t.attempts }} correct</small></div>
-      <div class="analysis-bar"><span style="width:{{ t.pct }}%"></span></div>
-      <strong>{{ t.pct }}%</strong>
-      <small class="analysis-topic-disc">Avg r: {{ t.avg_discrimination if t.avg_discrimination is not none else '—' }}</small>
+<div class="analysis-two-column analysis-insight-grid">
+  <section class="content-card analysis-card">
+    <div class="section-heading compact analysis-card-head">
+      <div><h2>Topic Diagnostics</h2><p class="subtle">Topics are ordered from lowest to highest correct rate to make weak areas easier to inspect.</p></div>
     </div>
-    {% endfor %}
-  </div>
-  {% else %}<p class="empty-cell">No item responses match the current filters.</p>{% endif %}
-</section>
+    {% if analysis.topic_summary %}
+    <div class="analysis-topic-list">
+      {% for t in analysis.topic_summary %}
+      <div class="analysis-topic-row">
+        <div class="analysis-topic-label"><strong>{% if is_legacy %}Part {{ t.part }} · {% endif %}{{ t.topic }}</strong><small>{{ t["items"] }} item{% if t["items"] != 1 %}s{% endif %} · {{ t.correct }}/{{ t.attempts }} correct</small></div>
+        <div class="analysis-bar"><span style="width:{{ t.pct }}%"></span></div>
+        <strong>{{ t.pct }}%</strong>
+        <small class="analysis-topic-disc">Avg r: {{ t.avg_discrimination if t.avg_discrimination is not none else '—' }}</small>
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}<p class="empty-cell">No item responses match the current filters.</p>{% endif %}
+  </section>
+
+  <section class="content-card analysis-card">
+    <div class="section-heading compact analysis-card-head">
+      <div><h2>Delivery / Form Summary</h2><p class="subtle">Compare submitted groups and inspect form-level reliability when estimable.</p></div>
+    </div>
+    <div class="table-wrap">
+      <table class="analysis-summary-table">
+        <thead><tr><th>Set / Delivery</th><th>N</th><th>Mean</th><th>Median</th><th>SD</th><th>Avg Flags</th><th>α / KR-20</th></tr></thead>
+        <tbody>
+        {% for b in analysis.batch_summary %}
+        <tr><td><strong>{{ b.name }}</strong></td><td>{{ b.n }}</td><td>{{ b.avg_score if b.avg_score is not none else '—' }}</td><td>{{ b.median_score if b.median_score is not none else '—' }}</td><td>{{ b.sd_score if b.sd_score is not none else '—' }}</td><td>{{ b.avg_flags if b.avg_flags is not none else '—' }}</td><td title="{{ b.alpha_note or '' }}">{{ b.alpha if b.alpha is not none else '—' }}</td></tr>
+        {% else %}<tr><td colspan="7" class="empty-cell">No submitted delivery data yet.</td></tr>{% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
 
 <section class="content-card analysis-card">
-  <div class="section-heading compact">
-    <div><h2>Delivery / Form Summary</h2><p class="subtle">Compare submitted groups and inspect form-level reliability when estimable.</p></div>
-  </div>
-  <div class="table-wrap">
-    <table class="analysis-summary-table">
-      <thead><tr><th>Set / Delivery</th><th>N</th><th>Mean</th><th>Median</th><th>SD</th><th>Avg Flags</th><th>α / KR-20</th></tr></thead>
-      <tbody>
-      {% for b in analysis.batch_summary %}
-      <tr><td><strong>{{ b.name }}</strong></td><td>{{ b.n }}</td><td>{{ b.avg_score if b.avg_score is not none else '—' }}</td><td>{{ b.median_score if b.median_score is not none else '—' }}</td><td>{{ b.sd_score if b.sd_score is not none else '—' }}</td><td>{{ b.avg_flags if b.avg_flags is not none else '—' }}</td><td title="{{ b.alpha_note or '' }}">{{ b.alpha if b.alpha is not none else '—' }}</td></tr>
-      {% else %}<tr><td colspan="7" class="empty-cell">No submitted delivery data yet.</td></tr>{% endfor %}
-      </tbody>
-    </table>
-  </div>
-</section>
-
-<section class="content-card analysis-card">
-  <div class="section-heading compact">
+  <div class="section-heading compact analysis-card-head">
     <div><h2>Per-Item Diagnostics</h2><p class="subtle">Difficulty, corrected item-total discrimination, top/bottom 27% separation, omissions, and distractor functioning.</p></div>
   </div>
   <div class="analysis-guide">
