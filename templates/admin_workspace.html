@@ -4,6 +4,7 @@
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav(admin_assessment|default("posttest")) }}
 {% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
 <div class="dashboard-heading future-heading">
   <div><div class="eyebrow">INSTRUCTOR VIEW · PRIMARY WORKSPACE</div><h1>Workspace</h1><p class="subtle">Manage subjects, assessments, and instructor access from one place. Assessment dashboards and monitoring stay contextual to the activity being delivered.</p></div>
@@ -105,6 +106,11 @@
 <section class="content-card" id="classroom-classes">
   <div class="section-heading"><div><h2>{% if session.get('admin_role') == 'owner' %}Google Classroom classes{% else %}My Google Classroom classes{% endif %}</h2>
     <p class="subtle">Filled in from the Classroom name (e.g. <code>2026-1 CSDC100.ZC11Am</code>) when you sign in. Fix anything missing or wrong here; your edits are kept on later sign-ins.</p></div></div>
+  <div class="google-signin-block classroom-sync" data-google-instructor-signin data-client-id="{{ google_client_id }}"
+       data-scopes="{{ instructor_signin_scopes }}" data-endpoint="{{ url_for('google.instructor_google_signin') }}" data-csrf="{{ csrf_token() }}">
+    <button type="button" class="secondary" data-google-instructor-button>Sync my Google Classroom classes</button>
+    <p class="google-error" data-google-error hidden></p>
+  </div>
   {% if classroom_classes %}
   <div class="classroom-class-list">
   {% for c in classroom_classes %}

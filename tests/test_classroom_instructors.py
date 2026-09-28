@@ -500,3 +500,16 @@ def test_merging_into_existing_subject_moves_assessments_and_rosters(client, goo
     assert _course("i2")["subject_id"] == target and moved == target and old_active == 0
     assert tuple(roster) == ("ZT", "12")
     assert client.get(f"/admin/assessment/{quiz}").status_code == 200  # still theirs
+
+
+
+def test_owner_can_sync_their_own_classroom_classes(client, google):
+    google["people"]["tok-owner2-alias"][2] = [{"id": "o1", "name": "2026-2 CSDC100.ZC11Am"}]
+    owner_login(client)
+    page = client.get("/admin/workspace").get_data(as_text=True)
+    assert "Sync my Google Classroom classes" in page and "accounts.google.com/gsi/client" in page
+    r = sign_in(client, "tok-owner2-alias")  # the Sync button uses the same Classroom sign-in
+    assert r.status_code == 200 and r.get_json()["role"] == "owner" and r.get_json()["courses"] == 1
+    c = _course("o1")
+    assert (c["code"], c["term"], c["school_year"], c["program"], c["class_section"]) == ("CSDC100", "2nd Semester", "2026-2027", "ZC", "11")
+    assert "2026-2 CSDC100.ZC11Am" in client.get("/admin/workspace").get_data(as_text=True)
