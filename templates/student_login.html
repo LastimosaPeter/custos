@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Custos - Student Login{% endblock %}
 {% block breadcrumbs %}{% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
 <div class="center-card auth-card branded-auth-card">
   <div class="security-orb small custos-portal-mark" aria-hidden="true">
@@ -8,17 +9,41 @@
   </div>
   <div class="eyebrow">STUDENT VIEW · CSDC101 ASSESSMENT</div>
   <h1>Enter Exam Session</h1>
+  {% if google_enabled %}
+  <p class="lead">Sign in with your school Google account, then enter the <strong>session key announced by your instructor</strong>.</p>
+  {% if google_student %}
+  <div class="google-identity" data-google-identity>
+    <span>Signed in as <strong>{{ google_student.name or google_student.email }}</strong> · {{ google_student.email }}</span>
+    <button type="button" class="secondary" data-google-signout data-endpoint="{{ url_for('google.student_google_signout') }}" data-csrf="{{ csrf_token() }}">Not you? Switch account</button>
+  </div>
+  {% else %}
+  <div class="google-signin-block" data-google-signin data-client-id="{{ google_client_id }}"
+       data-endpoint="{{ url_for('google.student_google_signin') }}" data-csrf="{{ csrf_token() }}">
+    <div data-google-button></div>
+    <p class="micro">Use your {% for d in google_allowed_domains %}@{{ d }}{% if not loop.last %} or {% endif %}{% endfor %} Google account.</p>
+    <p class="google-error" data-google-error hidden></p>
+  </div>
+  {% endif %}
+  {% else %}
   <p class="lead">Use your Ateneo de Naga University email address and the <strong>session key announced by your instructor</strong> for your assigned set.</p>
+  {% endif %}
+  {% if not google_enabled or google_student or not google_student_required %}
   <form method="post" class="form-grid" data-student-identity-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if not google_student %}
     <div class="student-name-grid">
       <label>First Name
-        <input type="text" name="first_name" placeholder="e.g., Juan" value="{{ request.form.get('first_name', '') }}" required maxlength="60" autocomplete="given-name">
+        <input type="text" name="first_name" placeholder="e.g., Juan" value="{{ request.form.get('first_name', google_student.given_name if google_student else '') }}" required maxlength="60" autocomplete="given-name">
       </label>
       <label>Last Name
-        <input type="text" name="last_name" placeholder="e.g., Dela Cruz" value="{{ request.form.get('last_name', '') }}" required maxlength="60" autocomplete="family-name">
+        <input type="text" name="last_name" placeholder="e.g., Dela Cruz" value="{{ request.form.get('last_name', google_student.family_name if google_student else '') }}" required maxlength="60" autocomplete="family-name">
       </label>
     </div>
+    {% endif %}
+    {% if need_section %}
+    <p class="flash">This assessment isn't linked to Google Classroom yet. Choose your program and section to continue.</p>
+    {% endif %}
+    {% if not google_student or need_section %}
     <div class="student-class-grid">
       <label>Program
         <select name="program" required data-program-select>
@@ -30,14 +55,18 @@
         <select name="class_section" required data-section-select data-selected-section="{{ request.form.get('class_section', '11') }}"></select>
       </label>
     </div>
+    {% endif %}
+    {% if not google_student %}
     <label>Email address
       <input type="email" name="email" placeholder="student@{{ domain }}" value="{{ request.form.get('email', '') }}" required autocomplete="username">
     </label>
+    {% endif %}
     <label>Session key
-      <input type="password" name="session_key" placeholder="Enter instructor-issued session key" required autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <input type="password" name="session_key" placeholder="Enter instructor-issued session key" value="{{ session_key_value or '' }}" required autocomplete="off" autocapitalize="characters" spellcheck="false"{% if google_student and not need_section %} autofocus{% endif %}>
     </label>
     <button class="primary wide" type="submit">Verify Key & Continue</button>
   </form>
+  {% endif %}
   <p class="micro">The key identifies the exact assessment your instructor has opened for you. Keys may be changed by the instructor at any time.</p>
   <div class="student-alt-path"><span>Programming activities</span><a class="secondary button-link disabled-feature-link" href="{{ url_for('nextgen.ide_coming_soon') }}" title="Coming soon">IDE · Coming Soon</a></div><a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
 </div>

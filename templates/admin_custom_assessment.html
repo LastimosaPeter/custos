@@ -4,6 +4,7 @@
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav('') }}
 {% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
 <div class="dashboard-heading custom-builder-heading">
   <div>
@@ -33,6 +34,8 @@
   <div class="stat-card"><span>Submissions</span><strong>{{ summary.submitted or 0 }}</strong><small>of {{ summary.attempts or 0 }} attempts</small></div>
   <div class="stat-card"><span>Class Mean</span><strong>{{ '%.2f'|format(summary.avg_score) if summary.avg_score is not none else '—' }}</strong><small>automatic score</small></div>
 </div>
+
+{% set assessment_id = assessment.id %}{% include "_classroom_card.html" %}
 
 <div class="custom-builder-grid">
   <section class="content-card custom-delivery-card">

@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r3"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r4-google"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -377,6 +377,37 @@ CREATE TABLE IF NOT EXISTS coding_events (
     FOREIGN KEY(session_id) REFERENCES coding_sessions(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_coding_events_session ON coding_events(session_id, id);
+
+CREATE TABLE IF NOT EXISTS classroom_rosters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL,
+    course_id TEXT NOT NULL,
+    course_name TEXT NOT NULL DEFAULT '',
+    course_section TEXT NOT NULL DEFAULT '',
+    program TEXT NOT NULL,
+    class_section TEXT NOT NULL,
+    imported_by_admin_id INTEGER,
+    imported_at TEXT NOT NULL,
+    student_count INTEGER NOT NULL DEFAULT 0,
+    coursework_id TEXT,
+    coursework_title TEXT,
+    max_points REAL,
+    last_synced_at TEXT,
+    last_sync_summary TEXT,
+    UNIQUE(assessment_id, course_id),
+    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS classroom_roster_students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    roster_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    first_name TEXT NOT NULL DEFAULT '',
+    last_name TEXT NOT NULL DEFAULT '',
+    google_user_id TEXT NOT NULL DEFAULT '',
+    UNIQUE(roster_id, email),
+    FOREIGN KEY(roster_id) REFERENCES classroom_rosters(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_classroom_roster_students_email ON classroom_roster_students(email);
 """
 
 # PostgreSQL uses SERIAL for auto-incrementing integer primary keys.
@@ -569,10 +600,23 @@ def migrate_schema(conn):
         "admin_bonus_score": "REAL",
         "last_question_index": "INTEGER NOT NULL DEFAULT 0",
         "assessment_id": "INTEGER",
+        "auth_method": "TEXT",
+        "google_sub": "TEXT",
     }
     for name, definition in session_additions.items():
         if name not in session_cols:
             conn.execute(f"ALTER TABLE exam_sessions ADD COLUMN {name} {definition}")
+
+    roster_cols = _table_columns(conn, "classroom_rosters") if "classroom_rosters" in _table_names(conn) else set()
+    for name, definition in {
+        "coursework_id": "TEXT",
+        "coursework_title": "TEXT",
+        "max_points": "REAL",
+        "last_synced_at": "TEXT",
+        "last_sync_summary": "TEXT",
+    }.items():
+        if roster_cols and name not in roster_cols:
+            conn.execute(f"ALTER TABLE classroom_rosters ADD COLUMN {name} {definition}")
 
     coding_cols = _table_columns(conn, "coding_sessions") if "coding_sessions" in _table_names(conn) else set()
     for name, definition in {

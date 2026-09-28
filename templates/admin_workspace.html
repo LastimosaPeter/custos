@@ -35,10 +35,11 @@
     <div class="section-heading"><div><h2>Add Instructor</h2><p class="subtle">Create a separate instructor login and optionally assign a subject.</p></div></div>
     <form method="post" action="{{ url_for('nextgen.instructor_add') }}" class="compact-form-grid">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <label>Username<input name="username" required></label>
+      {% if google_enabled %}<p class="micro wide-field">To invite by Google, enter only the display name and their Google email; they sign in with "Sign in with Google". Or set a username and temporary password for a password login.</p>{% endif %}
+      <label>Username<input name="username"{% if not google_enabled %} required{% else %} placeholder="optional with Google"{% endif %}></label>
       <label>Display name<input name="display_name" required></label>
-      <label>Email<input type="email" name="email" placeholder="optional"></label>
-      <label>Temporary password<input type="password" name="temporary_password" minlength="10" required></label>
+      <label>Email<input type="email" name="email" placeholder="{{ 'Google email' if google_enabled else 'optional' }}"></label>
+      <label>Temporary password<input type="password" name="temporary_password" minlength="10"{% if not google_enabled %} required{% else %} placeholder="optional with Google"{% endif %}></label>
       <label class="wide-field">Assign to subject<select name="subject_id"><option value="">No assignment yet</option>{% for s in subjects %}<option value="{{ s.id }}">{{ s.code }} · {{ s.name }}</option>{% endfor %}</select></label>
       <button class="primary wide-field" type="submit">Create Instructor Account</button>
     </form>

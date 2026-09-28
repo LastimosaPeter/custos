@@ -4,6 +4,7 @@
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav(batch.assessment_type) }}
 {% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
 <div class="content-card narrow-card">
   <div class="eyebrow">{% if batch.assessment_type == 'posttest' %}POST-TEST · SET {{ batch.slot - 8 }}{% elif batch.assessment_type == 'dryrun' %}PUBLIC DRY RUN{% elif batch.assessment_type == 'custom' %}CUSTOM ASSESSMENT{% else %}MIDTERM · SET {{ batch.slot }}{% endif %}</div>
@@ -40,4 +41,5 @@
   </form>
   <p class="micro">Recommended: announce the key only when the session begins. If a key is shared outside the room, regenerate it here before allowing students to start.</p>
 </div>
+{% if batch.assessment_type == 'dryrun' %}{% set assessment_id = batch.assessment_id %}{% include "_classroom_card.html" %}{% endif %}
 {% endblock %}

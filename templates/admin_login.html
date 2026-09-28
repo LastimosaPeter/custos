@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Custos - Instructor Login{% endblock %}
 {% block breadcrumbs %}{% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
 <div class="center-card auth-card">
   <div class="eyebrow">INSTRUCTOR VIEW · ADMINISTRATION</div>
@@ -11,6 +12,15 @@
     <label>Password <input type="password" name="password" required autocomplete="current-password"></label>
     <button class="primary wide" type="submit">Sign In</button>
   </form>
+  {% if google_enabled %}
+  <div class="auth-divider"><span>or</span></div>
+  <div class="google-signin-block" data-google-signin data-client-id="{{ google_client_id }}"
+       data-endpoint="{{ url_for('google.admin_google_signin') }}" data-csrf="{{ csrf_token() }}">
+    <div data-google-button></div>
+    <p class="micro">Uses the email on your Custos instructor account.</p>
+    <p class="google-error" data-google-error hidden></p>
+  </div>
+  {% endif %}
   <a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
 </div>
 {% endblock %}

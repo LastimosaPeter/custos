@@ -4,6 +4,7 @@
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav(assessment|default("posttest")) }}
 {% endblock %}
+{% block head_extra %}{% if google_enabled %}<script src="{{ url_for('static', filename='js/google_monitor.js', v=app_asset_revision) }}" defer></script>{% endif %}{% endblock %}
 {% block content %}
 <div class="monitor-page" data-monitor-endpoint="{{ url_for('admin_monitor_data') }}">
   <div class="dashboard-heading monitor-heading">
@@ -42,4 +43,5 @@
   </div>
 </div>
 <script src="{{ url_for('static', filename='js/admin_monitor.js', v=app_asset_revision) }}" defer></script>
+{% if google_enabled %}<section class="content-card monitor-not-started" data-not-started data-endpoint="{{ url_for('google.monitor_not_started') }}" hidden></section>{% endif %}
 {% endblock %}
