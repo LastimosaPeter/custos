@@ -121,7 +121,7 @@
       </form>
       <div class="workspace-save-delete-row">
         <button class="secondary" type="submit" form="workspace-assessment-edit-{{ a.id }}">Save Assessment</button>
-        <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=a.id) }}" class="workspace-delete-assessment-form" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action" type="submit">Delete Assessment</button></form>
+        <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=a.id) }}" class="workspace-delete-assessment-form" data-confirm="Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action" type="submit">Delete Assessment</button></form>
       </div>
     </details>
     {% else %}<p class="empty-cell">No assessments yet.</p>{% endfor %}

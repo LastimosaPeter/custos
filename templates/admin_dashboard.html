@@ -28,7 +28,7 @@
 
 <div class="content-card">
   <div class="section-heading"><div><h2>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Sets & Session Keys</h2><p class="subtle">Each set has an instructor-generated key. Students cannot enter a set without the current key.</p></div>
-    <form method="post" action="{{ url_for('admin_regenerate_all_keys', assessment=assessment) }}" onsubmit="return confirm('Regenerate ALL 8 keys for this assessment? Every current key will become invalid.');">
+    <form method="post" action="{{ url_for('admin_regenerate_all_keys', assessment=assessment) }}" data-confirm="Regenerate ALL 8 keys for this assessment? Every current key will become invalid.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
       <button class="secondary" type="submit">Regenerate All 8 Keys</button>
     </form>

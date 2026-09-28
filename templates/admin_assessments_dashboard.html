@@ -155,7 +155,7 @@
               </div>
             </details>
           {% endif %}
-          <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=a.id) }}" class="assessment-delete-inline" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');">
+          <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=a.id) }}" class="assessment-delete-inline" data-confirm="Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.">
             <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action assessment-delete-btn" type="submit">Delete</button>
           </form>
         </div>

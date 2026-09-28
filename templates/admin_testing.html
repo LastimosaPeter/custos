@@ -93,7 +93,7 @@
               <form method="post" action="{{ url_for('admin_testing_resume', sid=t.id) }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary table-action-btn" type="submit">Resume</button></form>
               {% endif %}
               <a class="secondary button-link table-action-btn" href="{{ url_for('admin_session_detail', sid=t.id) }}">Review</a>
-              <form method="post" action="{{ url_for('admin_testing_delete', sid=t.id) }}" onsubmit="return confirm('Delete this instructor testing session?');">
+              <form method="post" action="{{ url_for('admin_testing_delete', sid=t.id) }}" data-confirm="Delete this instructor testing session?">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action table-action-btn" type="submit">Delete</button>
               </form>
             </div>

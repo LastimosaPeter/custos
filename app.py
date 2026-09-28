@@ -42,7 +42,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r4")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r5")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {

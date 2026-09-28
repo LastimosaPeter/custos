@@ -16,12 +16,13 @@
   <link rel="manifest" href="{{ url_for('pwa_manifest') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=app_asset_revision) }}">
   {% block head_extra %}{% endblock %}
-  <script>window.CUSTOS_ASSET_REVISION={{ app_asset_revision|tojson }};</script>
+  <meta name="custos-asset-revision" content="{{ app_asset_revision }}">
   <script src="{{ url_for('static', filename='js/pwa.js', v=app_asset_revision) }}" defer></script>
   <script src="{{ url_for('static', filename='js/theme.js', v=app_asset_revision) }}" defer></script>
   <script src="{{ url_for('static', filename='js/code_highlight.js', v=app_asset_revision) }}" defer></script>
   <script src="{{ url_for('static', filename='js/student_form.js', v=app_asset_revision) }}" defer></script>
   <script src="{{ url_for('static', filename='js/mobile_ui.js', v=app_asset_revision) }}" defer></script>
+  <script src="{{ url_for('static', filename='js/ui_controls.js', v=app_asset_revision) }}" defer></script>
 </head>
 <body class="{% block body_class %}{% endblock %}">
   {% block body %}
