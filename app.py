@@ -48,7 +48,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r13-peter-analysis")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r14-cache-fix")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -401,7 +401,9 @@ def add_security_headers(resp):
         if request.args.get("v"):
             resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
         else:
-            resp.headers["Cache-Control"] = "public, max-age=86400"
+            # Unversioned URLs must never be held by a CDN: pages always use ?v=,
+            # and a stale copy here was pre-cached by the service worker.
+            resp.headers["Cache-Control"] = "no-cache"
         resp.headers.pop("Pragma", None)
     elif request.path == "/sw.js":
         resp.headers["Cache-Control"] = "no-cache, max-age=0"

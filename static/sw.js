@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v109-goliathus-portable-r13-peter-analysis';
+const CACHE_NAME = 'custos-static-v110-goliathus-portable-r14-cache-fix';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -24,7 +24,18 @@ const STATIC_ASSETS = [
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+      // Fetch each asset with a release-specific query and bypass every cache
+      // (browser HTTP cache and any CDN such as Cloudflare), then store it under
+      // the plain path. A plain cache.addAll(STATIC_ASSETS) could pre-cache a
+      // stale copy a CDN still held for the unversioned URL - and the fetch
+      // handler below would then serve that stale file for every ?v= request.
+      .then(cache => Promise.all(STATIC_ASSETS.map(path =>
+        fetch(new Request(`${path}?release=${encodeURIComponent(CACHE_NAME)}`, {cache: 'reload'}))
+          .then(response => {
+            if (!response.ok) throw new Error(`Pre-cache failed for ${path}`);
+            return cache.put(path, response);
+          })
+      )))
       .then(() => self.skipWaiting())
   );
 });
