@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r5-classroom-instructors"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r6-course-terms"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -408,6 +408,15 @@ CREATE TABLE IF NOT EXISTS classroom_roster_students (
     FOREIGN KEY(roster_id) REFERENCES classroom_rosters(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_classroom_roster_students_email ON classroom_roster_students(email);
+CREATE TABLE IF NOT EXISTS classroom_courses (
+    course_id TEXT PRIMARY KEY,
+    subject_id INTEGER NOT NULL,
+    course_name TEXT NOT NULL DEFAULT '',
+    program TEXT,
+    class_section TEXT,
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+);
 """
 
 # PostgreSQL uses SERIAL for auto-incrementing integer primary keys.

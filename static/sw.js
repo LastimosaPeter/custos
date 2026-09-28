@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v105-goliathus-portable-r9-single-signin';
+const CACHE_NAME = 'custos-static-v106-goliathus-portable-r10-course-terms';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',

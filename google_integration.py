@@ -440,10 +440,16 @@ def classroom_courses(assessment_id):
         courses = _classroom_get(token, "/courses", {"teacherId": "me", "courseStates": "ACTIVE"})
     except GoogleAuthError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
-    return jsonify({"ok": True, "courses": [
-        {"id": c.get("id"), "name": c.get("name", ""), "section": c.get("section", "")}
-        for c in courses if c.get("id")
-    ]})
+    from instructor_scope import parse_course_name
+
+    out = []
+    for c in courses:
+        if not c.get("id"):
+            continue
+        parsed = parse_course_name(c.get("name"), f"{c.get('name', '')} {c.get('section', '')}".strip(), c.get("section"))
+        out.append({"id": c.get("id"), "name": c.get("name", ""), "section": c.get("section", ""),
+                    "custos_section": f"{parsed['program']}{parsed['class_section']}" if parsed else None})
+    return jsonify({"ok": True, "courses": out})
 
 
 @bp.post("/admin/assessment/<int:assessment_id>/classroom/import")
@@ -457,13 +463,23 @@ def classroom_import(assessment_id):
     sections = _section_choices()
     if not re.fullmatch(r"[0-9A-Za-z_-]{1,64}", course_id):
         return jsonify({"ok": False, "error": "Choose a Google Classroom course."}), 400
-    if program not in sections or class_section not in sections[program]:
-        return jsonify({"ok": False, "error": "Choose a valid Program and Section for this roster."}), 400
     try:
         token = _checked_access_token(payload)
         courses = {c.get("id"): c for c in _classroom_get(token, "/courses", {"teacherId": "me", "courseStates": "ACTIVE"})}
         if course_id not in courses:
             raise GoogleAuthError("That course isn't one of your active Google Classroom courses.")
+    except GoogleAuthError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    from instructor_scope import parse_course_name
+
+    c = courses[course_id]
+    parsed = parse_course_name(c.get("name"), f"{c.get('name', '')} {c.get('section', '')}".strip(), c.get("section"))
+    if parsed:
+        # "2026-1 CSDC100.ZC11Am" -> section ZC11, straight from the course name
+        program, class_section = parsed["program"], parsed["class_section"]
+    elif program not in sections or class_section not in sections[program]:
+        return jsonify({"ok": False, "error": "Choose a valid Program and Section for this roster."}), 400
+    try:
         students = _classroom_get(token, f"/courses/{course_id}/students")
     except GoogleAuthError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 400
@@ -518,7 +534,8 @@ def classroom_import(assessment_id):
         conn.commit()
     finally:
         conn.close()
-    return jsonify({"ok": True, "imported": len(rows), "skipped": skipped})
+    return jsonify({"ok": True, "imported": len(rows), "skipped": skipped,
+                    "section": f"{program}{class_section}"})
 
 
 @bp.post("/admin/assessment/<int:assessment_id>/classroom/<int:roster_id>/delete")

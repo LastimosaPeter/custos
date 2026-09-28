@@ -91,9 +91,9 @@ def new_assessment(c, subject_id, title):
 
 def subject_for(course_id):
     conn = connect()
-    row = conn.execute("SELECT id FROM subjects WHERE classroom_course_id=?", (course_id,)).fetchone()
+    row = conn.execute("SELECT subject_id FROM classroom_courses WHERE course_id=?", (course_id,)).fetchone()
     conn.close()
-    return row["id"] if row else None
+    return row["subject_id"] if row else None
 
 
 # ------------------------------------------------------------------ sign-in
@@ -122,7 +122,7 @@ def test_classroom_teacher_becomes_instructor_with_course_subject(client, google
     with client.session_transaction() as s:
         assert s["admin_role"] == "instructor" and s["admin_auth_method"] == "google"
     conn = connect()
-    subj = conn.execute("SELECT * FROM subjects WHERE classroom_course_id='c101'").fetchone()
+    subj = conn.execute("SELECT s.* FROM subjects s JOIN classroom_courses cc ON cc.subject_id=s.id WHERE cc.course_id='c101'").fetchone()
     admin = conn.execute("SELECT * FROM admins WHERE email='teach.a@adnu.edu.ph'").fetchone()
     link = conn.execute("""SELECT 1 FROM subject_instructors si JOIN instructors i ON i.id=si.instructor_id
                            WHERE i.admin_id=? AND si.subject_id=?""", (admin["id"], subj["id"])).fetchone()
@@ -333,12 +333,83 @@ def test_courses_sharing_a_section_name_both_become_subjects(client, google):
     assert r.status_code == 200 and r.get_json()["courses"] == 3
     conn = connect()
     codes = sorted(row["code"] for row in conn.execute(
-        "SELECT code FROM subjects WHERE classroom_course_id IN ('c501','c502','c503')").fetchall())
+        """SELECT s.code FROM subjects s JOIN classroom_courses cc ON cc.subject_id=s.id
+           WHERE cc.course_id IN ('c501','c502','c503')""").fetchall())
     conn.close()
     assert len(set(codes)) == 3 and codes[0].startswith("No section")
     # signing in again is stable (no new subjects, no errors)
     client.get("/admin/logout")
     assert sign_in(client, "tok-teacher-c").status_code == 200
     conn = connect()
-    assert conn.execute("SELECT COUNT(*) FROM subjects WHERE classroom_course_id IN ('c501','c502','c503')").fetchone()[0] == 3
+    assert conn.execute("""SELECT COUNT(DISTINCT subject_id) FROM classroom_courses
+                           WHERE course_id IN ('c501','c502','c503')""").fetchone()[0] == 3
     conn.close()
+
+
+
+# ------------------------------------------------------------------ ADNU course names
+
+import instructor_scope  # noqa: E402
+
+
+@pytest.mark.parametrize("name,expected", [
+    ("2026-1 CSDC100.ZC11Am", ("CSDC100", "1st Semester", "2026-2027", "ZC", "11")),
+    ("2026-2 CSDC100.ZC12Af", ("CSDC100", "2nd Semester", "2026-2027", "ZC", "12")),
+    ("2025-3 CSDC101.ZT11", ("CSDC101", "Intersession", "2025-2026", "ZT", "11")),
+    ("2026.1 csdc 101 zt-12", ("CSDC101", "1st Semester", "2026-2027", "ZT", "12")),
+    ("CSDC100", None),
+    ("MIT 201 Research Methods", None),
+])
+def test_parse_adnu_course_names(name, expected):
+    p = instructor_scope.parse_course_name(name)
+    assert (None if p is None else (p["code"], p["term"], p["school_year"], p["program"], p["class_section"])) == expected
+
+
+def test_sections_share_a_subject_per_year_and_term(client, google):
+    google["people"]["tok-teacher-d"] = ["teach.d@adnu.edu.ph", "Teacher D", [
+        {"id": "d1", "name": "2026-1 CSDC100.ZC11Am"},
+        {"id": "d2", "name": "2026-1 CSDC100.ZC12Af"},
+        {"id": "d3", "name": "2025-1 CSDC100.ZC11"},  # last year's ZC11: a different subject
+    ]]
+    r = sign_in(client, "tok-teacher-d")
+    assert r.status_code == 200 and r.get_json()["courses"] == 2
+    assert subject_for("d1") == subject_for("d2") != subject_for("d3")
+    conn = connect()
+    row = conn.execute("SELECT code, term, school_year FROM subjects WHERE id=?", (subject_for("d1"),)).fetchone()
+    old = conn.execute("SELECT school_year FROM subjects WHERE id=?", (subject_for("d3"),)).fetchone()
+    sec = conn.execute("SELECT program, class_section FROM classroom_courses WHERE course_id='d2'").fetchone()
+    conn.close()
+    assert tuple(row) == ("CSDC100", "1st Semester", "2026-2027") and old["school_year"] == "2025-2026"
+    assert tuple(sec) == ("ZC", "12")
+
+
+def test_roster_import_takes_section_from_course_name(client, google, monkeypatch):
+    # Owner imports the roster of an ADNU-named course without choosing a section.
+    owner_login(client)
+    with client.session_transaction() as s:
+        t = s["csrf_token"]
+    conn = connect()
+    aid = conn.execute("""INSERT INTO assessments(subject_id,title,slug,assessment_type,display_type,access_code,active,created_at)
+                          VALUES ((SELECT id FROM subjects LIMIT 1),'ZC Quiz','zc-quiz','custom','Quiz','ZC-KEY-1',1,?) RETURNING id""",
+                       (iso_now(),)).fetchone()[0]
+    conn.commit(); conn.close()
+    course = {"id": "zc11", "name": "2026-1 CSDC100.ZC11Am"}
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        if url == gi.TOKENINFO_URL:
+            return R(200, {"aud": CLIENT_ID, "scope": SCOPE})
+        if url.endswith("/courses"):
+            return R(200, {"courses": [course]})
+        return R(200, {"students": [{"userId": "z1", "profile": {"id": "z1", "emailAddress": "zc.kid@gbox.adnu.edu.ph",
+                                                                  "name": {"givenName": "Zee", "familyName": "Cee"}}}]})
+    monkeypatch.setattr(gi.requests, "get", fake_get)
+    listed = client.post(f"/admin/assessment/{aid}/classroom/courses", json={"access_token": "t"}, headers={"X-CSRFToken": t}).get_json()
+    assert listed["courses"][0]["custos_section"] == "ZC11"
+    r = client.post(f"/admin/assessment/{aid}/classroom/import", json={"access_token": "t", "course_id": "zc11"},
+                    headers={"X-CSRFToken": t}).get_json()
+    assert r["ok"] and r["section"] == "ZC11" and r["imported"] == 1
+    conn = connect()
+    row = conn.execute("""SELECT r.program, r.class_section, s.email FROM classroom_rosters r
+                          JOIN classroom_roster_students s ON s.roster_id=r.id WHERE r.assessment_id=?""", (aid,)).fetchone()
+    conn.close()
+    assert tuple(row) == ("ZC", "11", "zc.kid@adnu.edu.ph")  # gbox stored as the canonical adnu identity

@@ -19,6 +19,7 @@ behaves exactly as before.
   an owner-only emergency path.
 """
 import os
+import re
 import secrets
 
 from flask import abort, g, jsonify, request, session
@@ -182,35 +183,81 @@ def guard():
 
 # ---------------------------------------------------------------- sign-in
 
-def sync_classroom_subjects(conn, instructor_id, courses):
-    """Each taught course -> a subject linked to this instructor; drop links to
-    Classroom-derived subjects for courses no longer taught."""
-    keep = set()
-    for c in courses:
-        cid = str(c.get("id") or "")
-        if not cid:
-            continue
-        row = conn.execute("SELECT id FROM subjects WHERE classroom_course_id=?", (cid,)).fetchone()
-        name = (c.get("name") or "Google Classroom course")[:120]
-        base = (c.get("section") or c.get("descriptionHeading") or name)[:36]
-        # subjects are UNIQUE(code, term, school_year): courses sharing a section
-        # name (e.g. two "ZT11" classes) need distinct codes.
+# ADNU Classroom naming: "2026-1 CSDC100.ZC11Am"
+#   2026-1  -> school year 2026-2027, term 1 (1 = 1st sem, 2 = 2nd sem, 3 = intersession)
+#   CSDC100 -> subject code;  ZC11 -> section (program ZC, section 11); Am/Af -> ignored
+TERM_LABELS = {"1": "1st Semester", "2": "2nd Semester", "3": "Intersession"}
+_COURSE_RE = re.compile(
+    r"^\s*(?P<year>(?:19|20)\d{2})\s*[-.]\s*(?P<term>[123])\s+"
+    r"(?P<code>[A-Za-z]{2,8}\s?\d{2,4}[A-Za-z]?)\s*[.\s_-]\s*"
+    r"(?P<program>[A-Za-z]{1,4})\s*-?\s*(?P<section>\d{1,3})\s*(?:A[MFmf])?\s*$"
+)
+
+
+def parse_course_name(*candidates):
+    """Parse the first candidate matching the ADNU pattern, else None."""
+    for text in candidates:
+        m = _COURSE_RE.match(str(text or ""))
+        if m:
+            year = int(m.group("year"))
+            return {
+                "school_year": f"{year}-{year + 1}",
+                "term": TERM_LABELS[m.group("term")],
+                "code": m.group("code").replace(" ", "").upper(),
+                "program": m.group("program").upper(),
+                "class_section": str(int(m.group("section"))) if len(m.group("section")) > 2 else m.group("section"),
+            }
+    return None
+
+
+def _subject_for_course(conn, course):
+    """Find/create the subject for one Classroom course; returns (subject_id, parsed)."""
+    cid = str(course.get("id"))
+    name = (course.get("name") or "Google Classroom course")[:120]
+    parsed = parse_course_name(name, f"{name} {course.get('section') or ''}".strip(), course.get("section"))
+    mapped = conn.execute("SELECT subject_id FROM classroom_courses WHERE course_id=?", (cid,)).fetchone()
+    if parsed:
+        title = (course.get("descriptionHeading") or parsed["code"])[:120]
+        row = conn.execute("SELECT id FROM subjects WHERE code=? AND term=? AND school_year=?",
+                           (parsed["code"], parsed["term"], parsed["school_year"])).fetchone()
+        sid = row["id"] if row else conn.execute(
+            """INSERT INTO subjects(code,name,term,school_year,active,created_at) VALUES (?,?,?,?,1,?) RETURNING id""",
+            (parsed["code"], title, parsed["term"], parsed["school_year"], iso_now()),
+        ).fetchone()[0]
+    elif mapped:
+        sid = mapped["subject_id"]
+    else:
+        # Name doesn't follow the pattern: one subject per course; codes must be
+        # unique with blank term/year, so add " #n" if another course has it.
+        base = (course.get("section") or course.get("descriptionHeading") or name)[:36]
         code, n = base, 1
-        while conn.execute(
-            """SELECT 1 FROM subjects WHERE code=? AND term='' AND school_year=''
-               AND COALESCE(classroom_course_id,'')<>?""", (code, cid)
-        ).fetchone():
+        while conn.execute("SELECT 1 FROM subjects WHERE code=? AND term='' AND school_year=''", (code,)).fetchone():
             n += 1
             code = f"{base} #{n}"
-        if row:
-            sid = row["id"]
-            conn.execute("UPDATE subjects SET name=?, code=?, active=1 WHERE id=?", (name, code, sid))
-        else:
-            sid = conn.execute(
-                """INSERT INTO subjects(code,name,term,school_year,active,created_at,classroom_course_id)
-                   VALUES (?,?,'','',1,?,?) RETURNING id""",
-                (code, name, iso_now(), cid),
-            ).fetchone()[0]
+        sid = conn.execute(
+            """INSERT INTO subjects(code,name,term,school_year,active,created_at) VALUES (?,?,'','',1,?) RETURNING id""",
+            (code, name, iso_now()),
+        ).fetchone()[0]
+    conn.execute(
+        """INSERT INTO classroom_courses(course_id,subject_id,course_name,program,class_section,updated_at)
+           VALUES (?,?,?,?,?,?)
+           ON CONFLICT(course_id) DO UPDATE SET subject_id=excluded.subject_id, course_name=excluded.course_name,
+             program=excluded.program, class_section=excluded.class_section, updated_at=excluded.updated_at""",
+        (cid, sid, name, parsed["program"] if parsed else None, parsed["class_section"] if parsed else None, iso_now()),
+    )
+    return sid
+
+
+def sync_classroom_subjects(conn, instructor_id, courses):
+    """Each taught course -> its subject (school year + term + subject code),
+    linked to this instructor; drop links to Classroom-derived subjects the
+    instructor no longer teaches any course of."""
+    keep = set()
+    for c in courses:
+        if not c.get("id"):
+            continue
+        sid = _subject_for_course(conn, c)
+        conn.execute("UPDATE subjects SET active=1 WHERE id=?", (sid,))
         conn.execute(
             """INSERT INTO subject_instructors(subject_id,instructor_id,role) VALUES(?,?,'instructor')
                ON CONFLICT(subject_id,instructor_id) DO NOTHING""",
@@ -218,8 +265,8 @@ def sync_classroom_subjects(conn, instructor_id, courses):
         )
         keep.add(sid)
     stale = conn.execute(
-        """SELECT si.subject_id FROM subject_instructors si JOIN subjects s ON s.id=si.subject_id
-           WHERE si.instructor_id=? AND s.classroom_course_id IS NOT NULL""",
+        """SELECT DISTINCT si.subject_id FROM subject_instructors si
+           JOIN classroom_courses cc ON cc.subject_id=si.subject_id WHERE si.instructor_id=?""",
         (instructor_id,),
     ).fetchall()
     for r in stale:

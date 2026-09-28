@@ -109,8 +109,19 @@
   programSel.addEventListener("change", fillSections);
   fillSections();
 
-  // Pre-select Program/Section when the course name says e.g. "ZT11" or "ZT-12".
+  // "2026-1 CSDC100.ZC11Am": the server reads the section from the course name,
+  // so the pickers are hidden; otherwise pre-select from e.g. "ZT11" / "ZT-12".
+  let courseInfo = {};
+  const pickers = [programSel.closest("label"), sectionSel.closest("label")];
+  const sectionNote = document.createElement("span");
+  sectionNote.className = "micro";
+  programSel.closest("label").before(sectionNote);
   const guessSection = () => {
+    const info = courseInfo[courseSel.value];
+    const fromName = info && info.custos_section;
+    pickers.forEach((l) => { l.hidden = Boolean(fromName); });
+    sectionNote.textContent = fromName ? `Section ${fromName} (from the course name)` : "";
+    if (fromName) return;
     const label = courseSel.selectedOptions[0] ? courseSel.selectedOptions[0].textContent : "";
     const m = label.match(/\b([A-Za-z]{2})\s*-?\s*(\d{2})\b/g) || [];
     for (const hit of m) {
@@ -129,7 +140,8 @@
       const data = await post(card.dataset.coursesUrl, csrf, { access_token: accessToken });
       courseSel.replaceChildren();
       if (!data.courses.length) { say("No active courses where you are a teacher were found."); return; }
-      data.courses.forEach((c) => option(courseSel, c.id, c.section ? `${c.name} · ${c.section}` : c.name));
+      courseInfo = {};
+      data.courses.forEach((c) => { courseInfo[c.id] = c; option(courseSel, c.id, c.section ? `${c.name} · ${c.section}` : c.name); });
       guessSection();
       panel.hidden = false;
       say("Choose the course and the Custos section its students belong to.");
@@ -188,7 +200,7 @@
         access_token: accessToken, course_id: courseSel.value,
         program: programSel.value, class_section: sectionSel.value,
       });
-      say(`Imported ${data.imported} students${data.skipped ? ` (${data.skipped} skipped: not a school Google account)` : ""}.`);
+      say(`Imported ${data.imported} students into ${data.section}${data.skipped ? ` (${data.skipped} skipped: not a school Google account)` : ""}.`);
       setTimeout(() => window.location.reload(), 1200);
     } catch (err) { say(err.message); ev.target.disabled = false; }
   });

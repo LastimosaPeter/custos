@@ -336,7 +336,7 @@ def test_classroom_import_and_roster_enforcement(client, google_api, google_toke
     csrf = _admin_login(client)
     base = f"/admin/assessment/{assessment_id}/classroom"
     r = client.post(f"{base}/courses", json={"access_token": "good-token"}, headers={"X-CSRFToken": csrf})
-    assert r.get_json()["courses"] == [{"id": "111", "name": "CSDC101", "section": "ZT-11"}]
+    assert r.get_json()["courses"] == [{"id": "111", "name": "CSDC101", "section": "ZT-11", "custos_section": None}]
     # invalid section mapping and foreign course are refused
     bad = client.post(f"{base}/import", json={"access_token": "good-token", "course_id": "111", "program": "ZS", "class_section": "13"},
                       headers={"X-CSRFToken": csrf})
@@ -346,13 +346,14 @@ def test_classroom_import_and_roster_enforcement(client, google_api, google_toke
     assert bad.status_code == 400
     r = client.post(f"{base}/import", json={"access_token": "good-token", "course_id": "111", "program": "ZT", "class_section": "12"},
                     headers={"X-CSRFToken": csrf})
-    assert r.get_json() == {"ok": True, "imported": 2, "skipped": 1}
+    assert r.get_json() == {"ok": True, "imported": 2, "skipped": 1, "section": "ZT12"}
     # re-import is idempotent (replaces the list, no duplicates)
     r = client.post(f"{base}/import", json={"access_token": "good-token", "course_id": "111", "program": "ZT", "class_section": "12"},
                     headers={"X-CSRFToken": csrf})
     assert r.get_json()["imported"] == 2
     conn = connect()
-    assert conn.execute("SELECT COUNT(*) FROM classroom_roster_students").fetchone()[0] == 2
+    assert conn.execute("""SELECT COUNT(*) FROM classroom_roster_students s JOIN classroom_rosters r ON r.id=s.roster_id
+                           WHERE r.assessment_id=?""", (assessment_id,)).fetchone()[0] == 2
     conn.close()
     page = client.get(f"/admin/assessment/{assessment_id}").get_data(as_text=True)
     assert "Google Classroom" in page and "ZT12" in page and "Create assignment" in page
