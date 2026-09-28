@@ -762,6 +762,31 @@ def _set_archived(course_id, archived):
     return redirect(_back_to_workspace())
 
 
+@bp.post("/admin/view-all")
+def owner_view_all_toggle():
+    """Owners only: switch lists between "only mine" (default) and everyone's.
+    Turning it on needs the modal's confirmation (confirm=oo)."""
+    from flask import redirect, url_for
+
+    import instructor_scope as scope
+
+    _require_admin()
+    _form_csrf_or_400()
+    if not scope.active() or not scope.is_owner():
+        abort(403)
+    mode = request.form.get("mode")
+    if mode == "all":
+        if request.form.get("confirm") != "oo":
+            abort(400, "Confirmation required.")
+        session["owner_view_all"] = True
+    else:
+        session.pop("owner_view_all", None)
+    back = str(request.form.get("back", ""))
+    if not back.startswith("/admin") or "//" in back or "\\" in back:
+        back = url_for("nextgen.workspace")
+    return redirect(back)
+
+
 # --------------------------------------------------------------------------
 # Live Monitor: rostered students who haven't started
 # --------------------------------------------------------------------------

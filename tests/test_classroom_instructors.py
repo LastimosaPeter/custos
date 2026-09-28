@@ -272,9 +272,10 @@ def test_instructors_see_only_their_own_courses(client, google):
     assert client.post("/admin/workspace/subject/add", data={"csrf_token": tok, "code": "X", "name": "Y"}).status_code == 403
     assert client.post("/admin/questions/add", data={"csrf_token": tok}).status_code == 403
 
-    # the owner still sees everything
+    # an owner sees everything after confirming "Show all"
     client.get("/admin/logout")
-    owner_login(client)
+    t = owner_login(client)
+    client.post("/admin/view-all", data={"csrf_token": t, "mode": "all", "confirm": "oo"})
     hub = client.get("/admin").get_data(as_text=True)
     assert "A Quiz" in hub and "B Quiz" in hub
     assert client.get(f"/admin/session/{sid_b}").status_code == 200
@@ -579,3 +580,60 @@ def test_other_teacher_cannot_archive(teacher_p, google):
     assert teacher_p.post("/admin/classroom/course/p4a/archive", data={"csrf_token": t}).status_code == 404
     html = teacher_p.get("/admin/workspace").get_data(as_text=True)
     assert _rows(html) == 1 and "CSDC900 ZT11" in html and "CSDC500" not in html
+
+
+
+# ------------------------------------------------------------------ owners: only mine by default, "Show all" on confirm
+
+def test_owners_see_only_their_own_until_show_all(client, google):
+    google["people"]["tok-teacher-r"] = ["teach.r@adnu.edu.ph", "Teacher R", [{"id": "r1", "name": "2027-2 CSDC777.ZT11"}]]
+    sign_in(client, "tok-teacher-r")
+    r_quiz = new_assessment(client, subject_for("r1"), "R Private Quiz")
+    client.get("/admin/logout")
+    google["people"]["tok-owner2-alias"][2] = [{"id": "o7", "name": "2027-2 CSDC888.ZC11"}]
+    assert sign_in(client, "tok-owner2-alias").get_json()["role"] == "owner"
+    own_quiz = new_assessment(client, subject_for("o7"), "Owner Two Quiz")
+    assert r_quiz and own_quiz
+    hub = client.get("/admin").get_data(as_text=True)
+    ws = client.get("/admin/workspace?sy=2027-2028&st=2nd+Semester").get_data(as_text=True)
+    assert "Owner Two Quiz" in hub and "R Private Quiz" not in hub
+    assert "CSDC888" in ws and "CSDC777" not in ws
+    # side button + modal, owners only
+    assert "data-owner-view-all-open" in ws and "Sure ka dyan? Lalaki ang listahan." in ws
+    with client.session_transaction() as s:
+        t = s["csrf_token"]
+    # without the modal's confirmation nothing changes
+    assert client.post("/admin/view-all", data={"csrf_token": t, "mode": "all"}).status_code == 400
+    r = client.post("/admin/view-all", data={"csrf_token": t, "mode": "all", "confirm": "oo", "back": "/admin"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/admin")
+    hub = client.get("/admin").get_data(as_text=True)
+    assert "R Private Quiz" in hub and "Owner Two Quiz" in hub and "Back to mine" in hub
+    assert "CSDC777" in client.get("/admin/workspace?sy=2027-2028&st=2nd+Semester").get_data(as_text=True)
+    client.post("/admin/view-all", data={"csrf_token": t, "mode": "mine", "back": "https://evil.example"})
+    assert "R Private Quiz" not in client.get("/admin").get_data(as_text=True)
+
+
+def test_instructors_cannot_show_all(client, google):
+    google["people"]["tok-teacher-s"] = ["teach.s@adnu.edu.ph", "Teacher S", [{"id": "s1", "name": "2027-2 CSDC555.ZT11"}]]
+    sign_in(client, "tok-teacher-s")
+    ws = client.get("/admin/workspace").get_data(as_text=True)
+    assert "data-owner-view-all-open" not in ws and "Sure ka dyan" not in ws
+    with client.session_transaction() as s:
+        t = s["csrf_token"]
+    assert client.post("/admin/view-all", data={"csrf_token": t, "mode": "all", "confirm": "oo"}).status_code == 403
+    with client.session_transaction() as s:
+        assert not s.get("owner_view_all")
+
+
+def test_subjects_list_latest_semester_and_paging(client, google):
+    courses = [{"id": f"t{n}", "name": f"2028-1 CSDC{n}.ZT11"} for n in range(300, 312)]  # 12 subjects, latest term
+    courses += [{"id": "told", "name": "2027-1 CSDC299.ZT11"}]
+    google["people"]["tok-owner2-alias"][2] = courses  # the Subjects section is an owner tool
+    assert sign_in(client, "tok-owner2-alias").get_json()["role"] == "owner"
+    ws = client.get("/admin/workspace").get_data(as_text=True)
+    subjects_block = ws.split("subject-filter-bar")[1].split("</section>")[0]
+    assert "2028-2029 · 1st Semester (latest) · 12 subjects" in subjects_block and "Page 1 of 2" in subjects_block
+    assert "CSDC300" in subjects_block and "CSDC299" not in subjects_block
+    older = client.get("/admin/workspace?sy=2027-2028&st=1st+Semester").get_data(as_text=True).split("subject-filter-bar")[1]
+    assert "CSDC299" in older.split("</section>")[0]
+    assert "Page" not in client.get("/admin/workspace?ss=25").get_data(as_text=True).split("subject-filter-bar")[1].split("</section>")[0]

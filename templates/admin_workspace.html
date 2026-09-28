@@ -12,7 +12,7 @@
 </div>
 
 <div class="future-stat-grid">
-  <div class="stat-card"><span>Subjects</span><strong>{{ subjects|length }}</strong><small>academic workspaces</small></div>
+  <div class="stat-card"><span>Subjects</span><strong>{{ subject_filter.all_total }}</strong><small>academic workspaces</small></div>
   <div class="stat-card"><span>Assessments</span><strong>{{ assessments|length }}</strong><small>quizzes, exams & labs</small></div>
   <div class="stat-card"><span>Instructors</span><strong>{{ instructors|length }}</strong><small>Custos accounts</small></div>
   <div class="stat-card"><span>Code Runner</span><strong class="runner-word {{ 'runner-ready' if runner.ready else 'runner-off' }}">{{ 'Ready' if runner.ready else 'Setup' }}</strong><small>{{ runner.detail }}</small></div>
@@ -65,7 +65,19 @@
   <section class="content-card">
     <div class="section-heading"><div><h2>Subjects</h2><p class="subtle">Edit identity and availability without recreating the subject.</p></div></div>
     <div class="workspace-record-list">
-      {% for s in subjects %}
+      {% set sf = subject_filter %}
+      <form method="get" action="{{ url_for('nextgen.workspace') }}" class="classroom-filter-bar subject-filter-bar">
+        {% for k in ('year','term','size','archived','page') %}{% if request.args.get(k) %}<input type="hidden" name="{{ k }}" value="{{ request.args.get(k) }}">{% endif %}{% endfor %}
+        <label>A/Y<select name="sy">
+          {% for y in sf.years %}<option value="{{ y }}" {% if sf.year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+          {% if sf.undated %}<option value="needs-details" {% if sf.year == 'needs-details' %}selected{% endif %}>No year/semester ({{ sf.undated }})</option>{% endif %}
+        </select></label>
+        <label>Semester<select name="st">{% for t in sf.terms %}<option value="{{ t }}" {% if sf.term == t %}selected{% endif %}>{{ t }}</option>{% endfor %}</select></label>
+        <label>Show<select name="ss">{% for n in sf.sizes %}<option value="{{ n }}" {% if sf.size == n %}selected{% endif %}>{{ n }}</option>{% endfor %}</select></label>
+        <button class="secondary" type="submit">Show</button>
+        <span class="micro classroom-filter-summary">{% if sf.year == 'needs-details' %}Subjects without a year/semester{% elif sf.year %}{{ sf.year }} · {{ sf.term }}{% if sf.latest and sf.latest[0] == sf.year and sf.latest[1] == sf.term %} (latest){% endif %}{% endif %} · {{ sf.total }} subject{{ 's' if sf.total != 1 }}</span>
+      </form>
+      {% for s in subject_page %}
       <details class="workspace-record">
         <summary><div><strong>{{ s.code }}</strong><span>{{ s.name }}</span><small>{{ s.term or 'Term not set' }} · {{ s.school_year or 'School year not set' }}</small></div><div class="workspace-record-count"><b>{{ s.assessment_count }}</b><span>assessments</span></div></summary>
         <form method="post" action="{{ url_for('nextgen.subject_edit', subject_id=s.id) }}" class="compact-form-grid workspace-edit-form">
@@ -76,7 +88,15 @@
           <button class="secondary wide-field" type="submit">Save Subject</button>
         </form>
       </details>
-      {% else %}<p class="empty-cell">No subjects yet.</p>{% endfor %}
+      {% else %}<p class="empty-cell">No subjects for this semester.</p>{% endfor %}
+      {% if sf.pages > 1 %}
+      <nav class="classroom-pager" aria-label="Subject pages">
+        {% set q = {'sy': sf.year, 'st': sf.term, 'ss': sf.size} %}
+        {% if sf.page > 1 %}<a class="secondary button-link" href="{{ url_for('nextgen.workspace', sp=sf.page - 1, **q) }}">◂ Previous</a>{% endif %}
+        <span class="micro">Page {{ sf.page }} of {{ sf.pages }}</span>
+        {% if sf.page < sf.pages %}<a class="secondary button-link" href="{{ url_for('nextgen.workspace', sp=sf.page + 1, **q) }}">Next ▸</a>{% endif %}
+      </nav>
+      {% endif %}
     </div>
   </section>
 

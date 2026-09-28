@@ -142,7 +142,10 @@ def _admin_login(client):
     r = client.post("/admin/login", data={"username": "admin", "password": "test-admin-password-123", "csrf_token": csrf})
     assert r.status_code == 302
     with client.session_transaction() as s:
-        return s["csrf_token"]
+        t = s["csrf_token"]
+    # These tests act as the overseeing owner: switch on "Show all" (see test_classroom_instructors).
+    client.post("/admin/view-all", data={"csrf_token": t, "mode": "all", "confirm": "oo"})
+    return t
 
 
 def _exam_login(client, form=None):

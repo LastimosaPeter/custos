@@ -48,7 +48,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r15-class-list")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r16-owner-mine")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -1268,8 +1268,8 @@ def admin_dashboard():
         active_sessions = conn.execute(
             "SELECT COUNT(*) AS c FROM exam_sessions WHERE status='in_progress' AND COALESCE(is_test,0)=0"
         ).fetchone()["c"]
-        if instructor_scope.scoped():
-            # Classroom instructor: only their courses' assessments and subjects.
+        if instructor_scope.list_scoped():
+            # Classroom mode: only the signed-in teacher's own courses (owners too, unless "Show all").
             assessments = instructor_scope.filter_rows(conn, assessments)
             subjects = instructor_scope.filter_rows(conn, subjects, kind="subject")
             totals = {"assessment_count": len(assessments),

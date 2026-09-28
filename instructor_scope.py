@@ -46,7 +46,7 @@ OWNER_ONLY_ENDPOINTS = {
     "admin_regenerate_all_keys", "export_session_keys", "export_questions", "import_private_questions",
     "admin_bonus_edit", "nextgen.admin_ide", "nextgen.admin_ide_lab", "nextgen.admin_ide_task_add",
     "nextgen.admin_ide_task_edit", "nextgen.admin_ide_preview", "nextgen.admin_ide_session",
-    "nextgen.admin_ide_unlock",
+    "nextgen.admin_ide_unlock", "google.owner_view_all_toggle",
 }
 
 
@@ -61,8 +61,24 @@ def is_owner_email(email):
 
 
 def scoped():
-    """True when the signed-in admin is a Classroom instructor (not an owner)."""
+    """Access control: True when the signed-in admin is a Classroom instructor (not an owner).
+    Instructors are refused anything outside their own courses."""
     return CLASSROOM_INSTRUCTORS and session.get("admin_id") and session.get("admin_role") != "owner"
+
+
+def is_owner():
+    return bool(session.get("admin_id")) and session.get("admin_role", "owner") == "owner"
+
+
+def owner_view_all():
+    return CLASSROOM_INSTRUCTORS and is_owner() and bool(session.get("owner_view_all"))
+
+
+def list_scoped():
+    """What lists show: everyone sees only their own courses' subjects, assessments
+    and attempts - owners too - unless an owner switched on "Show all". Owners
+    still aren't *refused* other pages (that's scoped(), instructors only)."""
+    return CLASSROOM_INSTRUCTORS and bool(session.get("admin_id")) and not owner_view_all()
 
 
 def _instructor_id(conn):
@@ -96,8 +112,8 @@ def visible_assessment_ids(conn):
 
 
 def filter_rows(conn, rows, key="id", kind="assessment"):
-    """Keep only rows the current admin may see. No-op for owners / feature off."""
-    if not scoped():
+    """Keep only rows the current admin's lists should show (see list_scoped)."""
+    if not list_scoped():
         return rows
     allowed = visible_subject_ids(conn) if kind == "subject" else visible_assessment_ids(conn)
     return [r for r in rows if r[key] in allowed]
@@ -299,7 +315,7 @@ def class_listing(conn, args):
     args: year ("2026-2027" or "needs-details"), term, archived ("1"), size, page."""
     _TERMS = list(TERM_LABELS.values())
     where, params = ["cc.archived=?"], [1 if args.get("archived") == "1" else 0]
-    if scoped():
+    if list_scoped():
         where.append("cc.course_id IN (SELECT course_id FROM instructor_courses WHERE instructor_id=?)")
         params.append(_instructor_id(conn) or -1)
     base = "FROM classroom_courses cc JOIN subjects s ON s.id=cc.subject_id WHERE " + " AND ".join(where)
@@ -346,14 +362,66 @@ def class_listing(conn, args):
         (*params, *cparams, size, (page - 1) * size)).fetchall() if year else []
     archived_count = conn.execute(
         "SELECT COUNT(*) FROM classroom_courses cc WHERE cc.archived=1"
-        + (" AND cc.course_id IN (SELECT course_id FROM instructor_courses WHERE instructor_id=?)" if scoped() else ""),
-        ((_instructor_id(conn) or -1,) if scoped() else ())).fetchone()[0]
+        + (" AND cc.course_id IN (SELECT course_id FROM instructor_courses WHERE instructor_id=?)" if list_scoped() else ""),
+        ((_instructor_id(conn) or -1,) if list_scoped() else ())).fetchone()[0]
     return rows, {
         "years": years, "terms": _TERMS, "year": year, "term": term, "undated": undated,
         "size": size, "sizes": PAGE_SIZES, "page": page, "pages": pages, "total": total,
         "archived": args.get("archived") == "1", "archived_count": archived_count,
         "latest": semesters[0] if semesters else None,
     }
+
+
+def subject_listing(conn, args):
+    """One page of the Workspace Subjects list, filtered in SQL by academic year
+    + semester (default: the latest) and by ownership (list_scoped). Own query
+    params so it doesn't clash with the class list: sy, st, ss (size), sp (page)."""
+    terms = list(TERM_LABELS.values())
+    marks = ",".join("?" * len(terms))
+    where, params = ["1=1"], []
+    if list_scoped():
+        subj = sorted(visible_subject_ids(conn)) or [-1]
+        where.append(f"s.id IN ({','.join('?' * len(subj))})")
+        params.extend(subj)
+    base = "FROM subjects s WHERE " + " AND ".join(where)
+    dated = conn.execute(f"SELECT DISTINCT s.school_year, s.term {base} AND s.school_year<>'' AND s.term IN ({marks})",
+                         (*params, *terms)).fetchall()
+    undated = conn.execute(f"SELECT COUNT(*) {base} AND (s.school_year='' OR s.term NOT IN ({marks}))",
+                           (*params, *terms)).fetchone()[0]
+    semesters = sorted(((r["school_year"], r["term"]) for r in dated),
+                       key=lambda yt: (yt[0][:4], terms.index(yt[1])), reverse=True)
+    year, term = str(args.get("sy", "")), str(args.get("st", ""))
+    if year == NEEDS_DETAILS and undated:
+        term = ""
+    elif (year, term) not in semesters:
+        in_year = [t for y, t in semesters if y == year]
+        if in_year:
+            term = max(in_year, key=terms.index)
+        elif semesters:
+            year, term = semesters[0]
+        elif undated:
+            year, term = NEEDS_DETAILS, ""
+        else:
+            year, term = "", ""
+    size = int(args.get("ss")) if str(args.get("ss", "")).isdigit() and int(args.get("ss")) in PAGE_SIZES else PAGE_SIZES[0]
+    page = max(1, int(args.get("sp")) if str(args.get("sp", "")).isdigit() else 1)
+    if year == NEEDS_DETAILS:
+        cond, cparams = f" AND (s.school_year='' OR s.term NOT IN ({marks}))", list(terms)
+    else:
+        cond, cparams = " AND s.school_year=? AND s.term=?", [year, term]
+    total = conn.execute(f"SELECT COUNT(*) {base}{cond}", (*params, *cparams)).fetchone()[0] if year else 0
+    all_total = conn.execute(f"SELECT COUNT(*) {base}", tuple(params)).fetchone()[0]
+    pages = max(1, -(-total // size))
+    page = min(page, pages)
+    rows = conn.execute(
+        f"""SELECT s.*,
+                   (SELECT COUNT(*) FROM assessments a WHERE a.subject_id=s.id AND a.deleted_at IS NULL) AS assessment_count,
+                   (SELECT COUNT(*) FROM subject_instructors si WHERE si.subject_id=s.id) AS instructor_count
+            {base}{cond} ORDER BY s.active DESC, s.code, s.name LIMIT ? OFFSET ?""",
+        (*params, *cparams, size, (page - 1) * size)).fetchall() if year else []
+    return rows, {"years": sorted({y for y, _ in semesters}, reverse=True), "terms": terms, "year": year, "term": term,
+                  "undated": undated, "size": size, "sizes": PAGE_SIZES, "page": page, "pages": pages, "total": total,
+                  "all_total": all_total, "latest": semesters[0] if semesters else None}
 
 
 # ---------------------------------------------------------------- sign-in
@@ -495,4 +563,4 @@ def ensure_admin(conn, email, display_name, role):
 
 def register(app):
     app.before_request(guard)
-    app.jinja_env.globals.update(classroom_instructors=CLASSROOM_INSTRUCTORS)
+    app.jinja_env.globals.update(classroom_instructors=CLASSROOM_INSTRUCTORS, owner_view_all=owner_view_all)
