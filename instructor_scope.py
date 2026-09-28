@@ -197,7 +197,7 @@ def taught_course_ids(conn):
 def courses_for_admin(conn):
     """Classroom courses the signed-in admin may edit: owners all, instructors theirs."""
     rows = conn.execute(
-        """SELECT cc.course_id, cc.course_name, cc.program, cc.class_section, cc.manual,
+        """SELECT cc.course_id, cc.course_name, cc.program, cc.class_section, cc.manual, cc.archived,
                   s.id AS subject_id, s.code, s.name AS subject_title, s.term, s.school_year
            FROM classroom_courses cc JOIN subjects s ON s.id=cc.subject_id
            ORDER BY s.school_year DESC, s.term, s.code, cc.program, cc.class_section, cc.course_name"""
@@ -215,8 +215,8 @@ class CourseEditError(ValueError):
     pass
 
 
-def edit_course(conn, course_id, form):
-    """Apply a teacher/owner edit of one Classroom course's details (see module docs)."""
+def _validated_details(form):
+    """(school_year, term, code, title, program, class_section) or CourseEditError."""
     year_raw = str(form.get("school_year", "")).strip()
     m = re.fullmatch(r"((?:19|20)\d{2})(?:\s*-\s*((?:19|20)\d{2}))?", year_raw)
     if not m or (m.group(2) and int(m.group(2)) != int(m.group(1)) + 1):
@@ -233,7 +233,12 @@ def edit_course(conn, course_id, form):
     if not sm:
         raise CourseEditError("Section should look like ZC11.")
     program, class_section = sm.group(1).upper(), sm.group(2)
+    return school_year, term, code, title, program, class_section
 
+
+def edit_course(conn, course_id, form):
+    """Apply a teacher/owner edit of one Classroom course's details (see module docs)."""
+    school_year, term, code, title, program, class_section = _validated_details(form)
     course = conn.execute("SELECT * FROM classroom_courses WHERE course_id=?", (course_id,)).fetchone()
     if not course:
         raise CourseEditError("Unknown Google Classroom course.")
@@ -276,6 +281,79 @@ def edit_course(conn, course_id, form):
     conn.execute("UPDATE classroom_rosters SET program=?, class_section=? WHERE course_id=?",
                  (program, class_section, course_id))
     return new_sid
+
+
+def set_course_archived(conn, course_id, archived):
+    """Archive instead of delete: the class leaves the list; nothing else changes."""
+    conn.execute("UPDATE classroom_courses SET archived=?, updated_at=? WHERE course_id=?",
+                 (1 if archived else 0, iso_now(), course_id))
+
+
+PAGE_SIZES = (10, 25, 50, 100)
+NEEDS_DETAILS = "needs-details"
+
+
+def class_listing(conn, args):
+    """One page of the classes the signed-in admin may manage, filtered in SQL
+    by academic year + semester (default: the latest one) - never the whole list.
+    args: year ("2026-2027" or "needs-details"), term, archived ("1"), size, page."""
+    _TERMS = list(TERM_LABELS.values())
+    where, params = ["cc.archived=?"], [1 if args.get("archived") == "1" else 0]
+    if scoped():
+        where.append("cc.course_id IN (SELECT course_id FROM instructor_courses WHERE instructor_id=?)")
+        params.append(_instructor_id(conn) or -1)
+    base = "FROM classroom_courses cc JOIN subjects s ON s.id=cc.subject_id WHERE " + " AND ".join(where)
+
+    dated = conn.execute(
+        f"""SELECT s.school_year, s.term, COUNT(*) AS n {base} AND s.school_year<>'' AND s.term IN ({",".join("?" * len(_TERMS))})
+            GROUP BY s.school_year, s.term""", (*params, *_TERMS)).fetchall()
+    undated = conn.execute(
+        f"""SELECT COUNT(*) {base} AND (s.school_year='' OR s.term NOT IN ({",".join("?" * len(_TERMS))}))""",
+        (*params, *_TERMS)).fetchone()[0]
+    semesters = sorted(((r["school_year"], r["term"]) for r in dated),
+                       key=lambda yt: (yt[0][:4], _TERMS.index(yt[1])), reverse=True)
+    years = sorted({y for y, _ in semesters}, reverse=True)
+
+    year, term = str(args.get("year", "")), str(args.get("term", ""))
+    if year == NEEDS_DETAILS and undated:
+        term = ""
+    elif (year, term) not in semesters:
+        # Unknown/missing choice (or a year without that semester): newest term of
+        # the chosen year, else the latest semester overall.
+        in_year = [t for y, t in semesters if y == year]
+        if in_year:
+            term = max(in_year, key=_TERMS.index)
+        elif semesters:
+            year, term = semesters[0]
+        elif undated:
+            year, term = NEEDS_DETAILS, ""
+        else:
+            year, term = "", ""
+
+    size = int(args.get("size")) if str(args.get("size", "")).isdigit() and int(args.get("size")) in PAGE_SIZES else PAGE_SIZES[0]
+    page = max(1, int(args.get("page")) if str(args.get("page", "")).isdigit() else 1)
+    if year == NEEDS_DETAILS:
+        cond, cparams = f" AND (s.school_year='' OR s.term NOT IN ({','.join('?' * len(_TERMS))}))", list(_TERMS)
+    else:
+        cond, cparams = " AND s.school_year=? AND s.term=?", [year, term]
+    total = conn.execute(f"SELECT COUNT(*) {base}{cond}", (*params, *cparams)).fetchone()[0] if year else 0
+    pages = max(1, -(-total // size))
+    page = min(page, pages)
+    rows = conn.execute(
+        f"""SELECT cc.course_id, cc.course_name, cc.program, cc.class_section, cc.manual, cc.archived,
+                   s.id AS subject_id, s.code, s.name AS subject_title, s.term, s.school_year
+            {base}{cond} ORDER BY s.code, cc.program, cc.class_section, cc.course_name LIMIT ? OFFSET ?""",
+        (*params, *cparams, size, (page - 1) * size)).fetchall() if year else []
+    archived_count = conn.execute(
+        "SELECT COUNT(*) FROM classroom_courses cc WHERE cc.archived=1"
+        + (" AND cc.course_id IN (SELECT course_id FROM instructor_courses WHERE instructor_id=?)" if scoped() else ""),
+        ((_instructor_id(conn) or -1,) if scoped() else ())).fetchone()[0]
+    return rows, {
+        "years": years, "terms": _TERMS, "year": year, "term": term, "undated": undated,
+        "size": size, "sizes": PAGE_SIZES, "page": page, "pages": pages, "total": total,
+        "archived": args.get("archived") == "1", "archived_count": archived_count,
+        "latest": semesters[0] if semesters else None,
+    }
 
 
 # ---------------------------------------------------------------- sign-in

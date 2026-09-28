@@ -688,6 +688,16 @@ def classroom_sync_grades(assessment_id, roster_id):
 # Edit a Classroom course's details (owner, or a teacher of that course)
 # --------------------------------------------------------------------------
 
+def _back_to_workspace():
+    """Return to the same filter/page of the class list (only ever a Workspace URL)."""
+    from flask import url_for
+
+    back = str(request.form.get("back", ""))
+    if not back.startswith("/admin/workspace") or "//" in back or "\\" in back:
+        back = url_for("nextgen.workspace")
+    return back.split("#", 1)[0] + "#classroom-classes"
+
+
 @bp.post("/admin/classroom/course/<course_id>/edit")
 def classroom_course_edit(course_id):
     import secrets as _secrets
@@ -711,7 +721,45 @@ def classroom_course_edit(course_id):
         flash(str(exc), "error")
     finally:
         conn.close()
-    return redirect(url_for("nextgen.workspace") + "#classroom-classes")
+    return redirect(_back_to_workspace())
+
+
+def _form_csrf_or_400():
+    import secrets as _secrets
+
+    supplied = request.form.get("csrf_token", "")
+    if not supplied or not _secrets.compare_digest(supplied, session.get("csrf_token", "")):
+        abort(400, "Invalid CSRF token")
+
+
+@bp.post("/admin/classroom/course/<course_id>/archive")
+def classroom_course_archive(course_id):
+    return _set_archived(course_id, True)
+
+
+@bp.post("/admin/classroom/course/<course_id>/unarchive")
+def classroom_course_unarchive(course_id):
+    return _set_archived(course_id, False)
+
+
+def _set_archived(course_id, archived):
+    from flask import flash, redirect, url_for
+
+    import instructor_scope as scope
+
+    _require_admin()
+    _form_csrf_or_400()
+    # instructor_scope.guard already refused classes this instructor doesn't teach.
+    conn = connect()
+    try:
+        if not conn.execute("SELECT 1 FROM classroom_courses WHERE course_id=?", (course_id,)).fetchone():
+            abort(404)
+        scope.set_course_archived(conn, course_id, archived)
+        conn.commit()
+    finally:
+        conn.close()
+    flash("Class archived. Its assessments and results are kept." if archived else "Class restored.", "success")
+    return redirect(_back_to_workspace())
 
 
 # --------------------------------------------------------------------------

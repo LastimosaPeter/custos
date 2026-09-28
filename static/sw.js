@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v110-goliathus-portable-r14-cache-fix';
+const CACHE_NAME = 'custos-static-v111-goliathus-portable-r15-class-list';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',

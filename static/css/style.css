@@ -4011,3 +4011,16 @@ button,.button-link{ text-align:center; line-height:1.22; }
   .analysis-histogram{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:16px}
   .analysis-mini-stats-4up{grid-template-columns:1fr 1fr}
 }
+.classroom-filter-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin:0 0 12px;font-size:14px;color:var(--muted)}
+.classroom-filter-links{display:flex;flex-wrap:wrap;gap:14px}
+.classroom-filter-links a{color:var(--accent);font-weight:700;text-decoration:none}
+.classroom-class-actions{display:flex;gap:8px;align-items:end}
+.classroom-add{margin-top:14px}
+.classroom-add summary{cursor:pointer;font-weight:700;color:var(--accent);margin-bottom:10px}
+.classroom-filter-bar label{display:grid;gap:4px;font-weight:700;font-size:13px;color:var(--ink)}
+.classroom-filter-bar select{padding:8px 10px;border:1px solid #bfc8d2;border-radius:6px;font:inherit;background:#fff}
+.classroom-filter-bar{justify-content:flex-start;align-items:end}
+.classroom-archived-toggle{display:flex!important;align-items:center;gap:6px;padding-bottom:8px}
+.classroom-archived-toggle input{width:auto}
+.classroom-filter-summary{flex-basis:100%}
+.classroom-pager{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px}

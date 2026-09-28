@@ -196,7 +196,9 @@ def workspace():
     ).fetchall()
     import instructor_scope
 
-    classroom_classes = instructor_scope.courses_for_admin(conn) if instructor_scope.active() else []
+    classroom_classes, classroom_filter = ([], {})
+    if instructor_scope.active():
+        classroom_classes, classroom_filter = instructor_scope.class_listing(conn, request.args)
     if instructor_scope.scoped():
         # Classroom instructor: only their own subjects, assessments and account.
         subjects = instructor_scope.filter_rows(conn, subjects, kind="subject")
@@ -206,6 +208,7 @@ def workspace():
     return render_template(
         "admin_workspace.html", subjects=subjects, instructors=instructors,
         assessments=assessments, runner=runner_status(), classroom_classes=classroom_classes,
+        classroom_filter=classroom_filter,
         term_labels=list(instructor_scope.TERM_LABELS.values())
     )
 

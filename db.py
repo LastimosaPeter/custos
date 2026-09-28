@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r7-course-edit"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r8-class-archive"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -416,6 +416,7 @@ CREATE TABLE IF NOT EXISTS classroom_courses (
     class_section TEXT,
     updated_at TEXT NOT NULL,
     manual INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS instructor_courses (
@@ -631,6 +632,8 @@ def migrate_schema(conn):
     course_cols = _table_columns(conn, "classroom_courses") if "classroom_courses" in _table_names(conn) else set()
     if course_cols and "manual" not in course_cols:
         conn.execute("ALTER TABLE classroom_courses ADD COLUMN manual INTEGER NOT NULL DEFAULT 0")
+    if course_cols and "archived" not in course_cols:
+        conn.execute("ALTER TABLE classroom_courses ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
 
     roster_cols = _table_columns(conn, "classroom_rosters") if "classroom_rosters" in _table_names(conn) else set()
     for name, definition in {

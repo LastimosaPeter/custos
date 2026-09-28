@@ -111,12 +111,29 @@
     <button type="button" class="secondary" data-google-instructor-button>Sync my Google Classroom classes</button>
     <p class="google-error" data-google-error hidden></p>
   </div>
+  {% set f = classroom_filter %}
+  <form method="get" action="{{ url_for('nextgen.workspace') }}#classroom-classes" class="classroom-filter-bar">
+    <label>A/Y<select name="year">
+      {% for y in f.years %}<option value="{{ y }}" {% if f.year == y %}selected{% endif %}>{{ y }}</option>{% endfor %}
+      {% if f.undated %}<option value="needs-details" {% if f.year == 'needs-details' %}selected{% endif %}>Needs details ({{ f.undated }})</option>{% endif %}
+    </select></label>
+    <label>Semester<select name="term">
+      {% for t in f.terms %}<option value="{{ t }}" {% if f.term == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+    </select></label>
+    <label>Show<select name="size">
+      {% for n in f.sizes %}<option value="{{ n }}" {% if f.size == n %}selected{% endif %}>{{ n }} sections</option>{% endfor %}
+    </select></label>
+    <label class="classroom-archived-toggle"><input type="checkbox" name="archived" value="1" {% if f.archived %}checked{% endif %}> Archived{% if f.archived_count %} ({{ f.archived_count }}){% endif %}</label>
+    <button class="secondary" type="submit">Show</button>
+    <span class="micro classroom-filter-summary">{% if f.year == 'needs-details' %}Classes missing their year or semester{% elif f.year %}{{ f.year }} · {{ f.term }}{% if f.latest and f.latest[0] == f.year and f.latest[1] == f.term %} (latest){% endif %}{% endif %}{% if f.total %} · {{ f.total }} section{{ 's' if f.total != 1 }}{% endif %}</span>
+  </form>
   {% if classroom_classes %}
   <div class="classroom-class-list">
   {% for c in classroom_classes %}
     <form method="post" action="{{ url_for('google.classroom_course_edit', course_id=c.course_id) }}" class="classroom-class-row">
-      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-      <div class="classroom-class-name"><strong>{{ c.course_name }}</strong>{% if c.manual %}<span class="micro"> · edited</span>{% endif %}</div>
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="back" value="{{ request.full_path }}">
+      <div class="classroom-class-name"><strong>{% if c.school_year and c.program %}{{ c.code }} {{ c.program }}{{ c.class_section }}{% else %}{{ c.course_name }}{% endif %}</strong>
+        <span class="micro"> · {{ c.course_name }}{% if c.manual %} · edited{% endif %}{% if c.archived %} · archived{% endif %}</span></div>
       <label>Academic Year<input name="school_year" value="{{ c.school_year }}" placeholder="2026-2027" required pattern="\s*(19|20)\d{2}(\s*-\s*(19|20)\d{2})?\s*"></label>
       <label>Semester<select name="term" required>
         <option value="" {% if not c.term %}selected{% endif %} disabled>Choose…</option>
@@ -125,12 +142,29 @@
       <label>Subject Code<input name="code" value="{{ c.code if c.school_year else '' }}" placeholder="CSDC100" required></label>
       <label>Subject Title<input name="title" value="{{ c.subject_title }}" placeholder="Fundamentals of Programming"></label>
       <label>Section<input name="section" value="{{ (c.program or '') ~ (c.class_section or '') }}" placeholder="ZC11" required></label>
-      <button class="primary" type="submit">Save</button>
+      <div class="classroom-class-actions">
+        <button class="primary" type="submit">Save</button>
+        <button class="secondary" type="submit" form="archive-{{ loop.index }}">{% if c.archived %}Restore{% else %}Archive{% endif %}</button>
+      </div>
+    </form>
+    <form id="archive-{{ loop.index }}" method="post" hidden
+          action="{{ url_for('google.classroom_course_unarchive' if c.archived else 'google.classroom_course_archive', course_id=c.course_id) }}">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="back" value="{{ request.full_path }}">
     </form>
   {% endfor %}
   </div>
+  {% if f.pages > 1 %}
+  <nav class="classroom-pager" aria-label="Class pages">
+    {% set q = {'year': f.year, 'term': f.term, 'size': f.size, 'archived': '1' if f.archived else None} %}
+    {% if f.page > 1 %}<a class="secondary button-link" href="{{ url_for('nextgen.workspace', page=f.page - 1, **q) }}#classroom-classes">◂ Previous</a>{% endif %}
+    <span class="micro">Page {{ f.page }} of {{ f.pages }}</span>
+    {% if f.page < f.pages %}<a class="secondary button-link" href="{{ url_for('nextgen.workspace', page=f.page + 1, **q) }}#classroom-classes">Next ▸</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% elif f.archived %}
+  <p class="micro">No archived classes for this semester.</p>
   {% else %}
-  <p class="micro">No Google Classroom classes yet. Sign in with Google as a teacher to bring in the classes you teach.</p>
+  <p class="micro">No Google Classroom classes yet. Use "Sync my Google Classroom classes", or add one below.</p>
   {% endif %}
 </section>
 {% endif %}

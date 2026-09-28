@@ -513,3 +513,69 @@ def test_owner_can_sync_their_own_classroom_classes(client, google):
     c = _course("o1")
     assert (c["code"], c["term"], c["school_year"], c["program"], c["class_section"]) == ("CSDC100", "2nd Semester", "2026-2027", "ZC", "11")
     assert "2026-2 CSDC100.ZC11Am" in client.get("/admin/workspace").get_data(as_text=True)
+
+
+# ------------------------------------------------------------------ class list: semester filter, paging, archive
+
+def _rows(html):
+    return html.count('class="classroom-class-row"')
+
+
+@pytest.fixture
+def teacher_p(client, google):
+    courses = [{"id": f"p5{n}", "name": f"2027-1 CSDC500.ZT{n}Am"} for n in range(11, 23)]  # 12 sections, latest term
+    courses += [{"id": "p4a", "name": "2026-2 CSDC400.ZC11"}, {"id": "p4b", "name": "2026-2 CSDC400.ZC12Af"},
+                {"id": "pold", "name": "Old seminar"}]
+    google["people"]["tok-teacher-p"] = ["teach.p@adnu.edu.ph", "Teacher P", courses]
+    assert sign_in(client, "tok-teacher-p").status_code == 200
+    return client
+
+
+def test_default_is_latest_semester_ten_per_page(teacher_p):
+    html = teacher_p.get("/admin/workspace").get_data(as_text=True)
+    assert "2027-2028 · 1st Semester (latest)" in html and "12 sections" in html
+    assert _rows(html) == 10 and "Page 1 of 2" in html
+    assert "<strong>CSDC500 ZT11</strong>" in html and "CSDC400" not in html.split("classroom-class-list")[1]
+    for opt in ('value="2027-2028"', 'value="2026-2027"', "Needs details (1)", 'value="25"', 'value="100"'):
+        assert opt in html
+    page2 = teacher_p.get("/admin/workspace?year=2027-2028&term=1st+Semester&size=10&page=2").get_data(as_text=True)
+    assert _rows(page2) == 2 and "Page 2 of 2" in page2
+
+
+def test_page_sizes_and_other_semesters(teacher_p):
+    assert _rows(teacher_p.get("/admin/workspace?size=25").get_data(as_text=True)) == 12
+    assert _rows(teacher_p.get("/admin/workspace?size=13").get_data(as_text=True)) == 10  # only 10/25/50/100
+    older = teacher_p.get("/admin/workspace?year=2026-2027&term=2nd+Semester").get_data(as_text=True)
+    assert _rows(older) == 2 and "<strong>CSDC400 ZC11</strong>" in older and "<strong>CSDC400 ZC12</strong>" in older
+    # a year without that semester falls back to that year's newest semester
+    assert _rows(teacher_p.get("/admin/workspace?year=2026-2027&term=1st+Semester").get_data(as_text=True)) == 2
+    todo = teacher_p.get("/admin/workspace?year=needs-details").get_data(as_text=True)
+    assert _rows(todo) == 1 and "Old seminar" in todo
+
+
+def test_archive_and_restore_keep_the_current_view(teacher_p):
+    with teacher_p.session_transaction() as s:
+        t = s["csrf_token"]
+    back = "/admin/workspace?year=2026-2027&term=2nd+Semester"
+    r = teacher_p.post("/admin/classroom/course/p4b/archive", data={"csrf_token": t, "back": back})
+    assert r.status_code == 302 and r.headers["Location"].endswith(back + "#classroom-classes")
+    assert _rows(teacher_p.get(back).get_data(as_text=True)) == 1
+    archived = teacher_p.get(back + "&archived=1").get_data(as_text=True)
+    assert _rows(archived) == 1 and "CSDC400 ZC12" in archived and "Restore" in archived
+    conn = connect()
+    assert conn.execute("SELECT COUNT(*) FROM classroom_courses WHERE course_id='p4b'").fetchone()[0] == 1  # not deleted
+    conn.close()
+    r = teacher_p.post("/admin/classroom/course/p4b/unarchive", data={"csrf_token": t, "back": "https://evil.example/x"})
+    assert r.headers["Location"].endswith("/admin/workspace#classroom-classes")  # never leaves Custos
+    assert _rows(teacher_p.get(back).get_data(as_text=True)) == 2
+
+
+def test_other_teacher_cannot_archive(teacher_p, google):
+    teacher_p.get("/admin/logout")
+    google["people"]["tok-teacher-q"] = ["teach.q@adnu.edu.ph", "Teacher Q", [{"id": "q1", "name": "2027-1 CSDC900.ZT11"}]]
+    sign_in(teacher_p, "tok-teacher-q")
+    with teacher_p.session_transaction() as s:
+        t = s["csrf_token"]
+    assert teacher_p.post("/admin/classroom/course/p4a/archive", data={"csrf_token": t}).status_code == 404
+    html = teacher_p.get("/admin/workspace").get_data(as_text=True)
+    assert _rows(html) == 1 and "CSDC900 ZT11" in html and "CSDC500" not in html
