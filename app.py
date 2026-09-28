@@ -17,7 +17,7 @@ from flask import (
 from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
-from db import APP_TZ, DATABASE_ENGINE, connect, init_db, iso_now, unique_session_key
+from db import APP_TZ, DATABASE_ENGINE, connect, ensure_db_initialized, init_db, iso_now, unique_session_key
 from item_analysis import build_item_analysis
 
 load_dotenv()
@@ -42,7 +42,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-r1")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r1")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -58,44 +58,31 @@ STUDENT_SECTIONS = {
     "ZS": {"11"},
 }
 
-THEME_COOKIE_NAME = "custos_client_id"
+THEME_COOKIE_NAME = "custos_theme"
 THEME_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
-THEME_CLIENT_RE = re.compile(r"^[A-Za-z0-9_-]{20,80}$")
-
-
-@app.before_request
-def ensure_theme_client_id():
-    """Give this browser an opaque ID; the theme itself is stored server-side."""
-    client_id = request.cookies.get(THEME_COOKIE_NAME, "").strip()
-    if not THEME_CLIENT_RE.fullmatch(client_id):
-        client_id = secrets.token_urlsafe(24)
-        g.set_theme_client_cookie = True
-    else:
-        g.set_theme_client_cookie = False
-    g.theme_client_id = client_id
-
-
-def _theme_preference_key():
-    return f"browser:{g.theme_client_id}"
 
 
 def get_saved_theme():
-    conn = connect()
-    try:
-        row = conn.execute(
-            "SELECT theme FROM ui_preferences WHERE preference_key=?",
-            (_theme_preference_key(),),
-        ).fetchone()
-        return row["theme"] if row and row["theme"] in {"light", "dark"} else "light"
-    finally:
-        conn.close()
+    """Theme preference is intentionally client/session scoped.
 
-# Initialize schema/batches when the module is loaded by Waitress/Gunicorn.
-# The deployment-safe build seeds NO live assessment questions.
-init_db(
-    admin_username=os.getenv("ADMIN_USERNAME", "admin"),
-    admin_password=_admin_password,
-)
+    Older Custos builds stored this tiny UI preference in PostgreSQL, which meant
+    every rendered page paid for an unnecessary database round trip. Keeping the
+    preference in Flask's signed session makes page rendering faster and works on
+    Render, Vercel, Docker, and local SQLite without changing assessment data.
+    """
+    theme = session.get("ui_theme", "light")
+    return theme if theme in {"light", "dark"} else "light"
+
+
+# Avoid a full schema migration on every Gunicorn/Vercel cold start. New or
+# upgraded databases are still initialized automatically; established databases
+# only perform a tiny schema-version probe.
+if os.getenv("AUTO_INIT_DB", "1") == "1":
+    ensure_db_initialized(
+        admin_username=os.getenv("ADMIN_USERNAME", "admin"),
+        admin_password=_admin_password,
+        force=os.getenv("FORCE_DB_INIT", "0") == "1",
+    )
 
 
 def normalize_short_answer(value):
@@ -377,18 +364,7 @@ def save_theme_preference():
     if theme not in {"light", "dark"}:
         return jsonify({"ok": False, "error": "Invalid theme."}), 400
 
-    conn = connect()
-    try:
-        conn.execute(
-            """INSERT INTO ui_preferences(preference_key,theme,updated_at)
-               VALUES (?,?,?)
-               ON CONFLICT(preference_key) DO UPDATE
-               SET theme=excluded.theme, updated_at=excluded.updated_at""",
-            (_theme_preference_key(), theme, iso_now()),
-        )
-        conn.commit()
-    finally:
-        conn.close()
+    session["ui_theme"] = theme
     return jsonify({"ok": True, "theme": theme})
 
 
@@ -397,22 +373,32 @@ def add_security_headers(resp):
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
-    resp.headers["Cache-Control"] = "no-store, max-age=0"
-    resp.headers["Pragma"] = "no-cache"
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
     resp.headers["Content-Security-Policy"] = (
-        "default-src 'self'; img-src 'self' data:; style-src 'self'; "
+        "default-src 'self'; img-src 'self' data:; "
+        "style-src 'self' https://fonts.googleapis.com; "
+        "font-src 'self' https://fonts.gstatic.com; "
         "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     )
-    if getattr(g, "set_theme_client_cookie", False):
-        resp.set_cookie(
-            THEME_COOKIE_NAME,
-            g.theme_client_id,
-            max_age=THEME_COOKIE_MAX_AGE,
-            httponly=True,
-            secure=app.config["SESSION_COOKIE_SECURE"],
-            samesite="Strict",
-        )
+
+    # Versioned static assets are immutable for the lifetime of a release. The
+    # old build marked every response no-store, forcing CSS/images/JS to download
+    # again on repeat visits. Keep dynamic assessment/API responses uncached.
+    if request.path.startswith("/static/"):
+        if request.args.get("v"):
+            resp.headers["Cache-Control"] = "public, max-age=31536000, immutable"
+        else:
+            resp.headers["Cache-Control"] = "public, max-age=86400"
+        resp.headers.pop("Pragma", None)
+    elif request.path == "/sw.js":
+        resp.headers["Cache-Control"] = "no-cache, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
+    elif request.path == "/manifest.webmanifest":
+        resp.headers["Cache-Control"] = "public, max-age=3600"
+        resp.headers.pop("Pragma", None)
+    else:
+        resp.headers["Cache-Control"] = "no-store, max-age=0"
+        resp.headers["Pragma"] = "no-cache"
     return resp
 
 
@@ -2629,8 +2615,12 @@ register_nextgen(app)
 
 
 if __name__ == "__main__":
-    init_db(
-        admin_username=os.getenv("ADMIN_USERNAME", "admin"),
-        admin_password=_admin_password,
-    )
-    app.run(host="127.0.0.1", port=5000, debug=os.getenv("FLASK_DEBUG", "0") == "1")
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "5000"))
+    if os.getenv("FLASK_DEBUG", "0") == "1":
+        app.run(host=host, port=port, debug=True)
+    else:
+        # Waitress is production-grade on Windows and Linux and makes this same
+        # build suitable for a classroom LAN server without requiring Gunicorn.
+        from waitress import serve
+        serve(app, host=host, port=port, threads=int(os.getenv("WAITRESS_THREADS", "8")))

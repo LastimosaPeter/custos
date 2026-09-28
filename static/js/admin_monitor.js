@@ -38,5 +38,14 @@
   list.addEventListener('click',e=>{const b=e.target.closest('[data-monitor-action]');if(b){e.preventDefault();doAction(b.closest('[data-session-id]'),b.dataset.monitorAction);}});
   filter.addEventListener('change',refresh); assessmentFilter?.addEventListener('change',refresh); document.getElementById('monitorRefresh').addEventListener('click',refresh);
   refresh();
-  setInterval(refresh,10000);
+  let monitorTimer=null;
+  async function pollMonitor(){
+    if(!document.hidden) await refresh();
+    monitorTimer=setTimeout(pollMonitor,document.hidden?30000:10000);
+  }
+  document.addEventListener('visibilitychange',()=>{
+    if(monitorTimer) clearTimeout(monitorTimer);
+    monitorTimer=setTimeout(pollMonitor,document.hidden?30000:500);
+  });
+  monitorTimer=setTimeout(pollMonitor,10000);
 })();

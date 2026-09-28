@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}Offline Solo · Caudex IDE{% endblock %}
+{% block body_class %}offline-page{% endblock %}
+{% block head %}<script src="{{ url_for('static', filename='js/offline.js') }}" defer></script>{% endblock %}
+{% block body %}
+<div class="offline-app">
+  <header class="workspace-header">
+    <a class="workspace-brand" href="{{ url_for('index') }}">
+      <img class="brand-wordmark brand-light" src="{{ url_for('static', filename='img/caudex-wordmark-light.png') }}" alt="Caudex IDE">
+      <img class="brand-wordmark brand-dark" src="{{ url_for('static', filename='img/caudex-wordmark-dark.png') }}" alt="Caudex IDE">
+    </a>
+    <div class="workspace-title"><strong>Offline Solo</strong><span>Browser-saved C++ draft</span></div>
+    <div class="workspace-header-actions"><span id="offlineNetBadge" class="connection-badge"><i></i><span>Checking</span></span><button type="button" class="icon-button" data-theme-toggle><span data-theme-icon>◐</span></button></div>
+  </header>
+  <main class="offline-shell">
+    <section class="panel offline-intro"><div><div class="eyebrow">SOLO MODE</div><h1>Keep coding without a room.</h1><p>Your source is stored in this browser. Import or export a <code>.cpp</code> file at any time. Compilation works when this Caudex server is reachable.</p></div><a href="{{ url_for('index') }}" class="secondary-button">Back to Rooms</a></section>
+    <section class="editor-card offline-editor-card">
+      <div class="editor-toolbar"><div class="file-tab"><span class="file-dot"></span><strong>offline.cpp</strong><small id="offlineSaveState">Saved locally</small></div><div class="editor-toolbar-actions"><label class="toolbar-button file-button">Import<input type="file" id="offlineImport" accept=".cpp,.cc,.cxx,text/plain"></label><button class="toolbar-button" id="offlineExport" type="button">Export</button></div></div>
+      <div class="code-accessory" id="offlineAccessory">
+        <button data-insert="#include <iostream>\n" type="button">#include</button><button data-insert="using namespace std;\n" type="button">using</button><button data-insert="    " type="button">⇥ Tab</button><button data-insert="{}" data-cursor-back="1" type="button">{ }</button><button data-insert="()" data-cursor-back="1" type="button">( )</button><button data-insert=";" type="button">;</button><button data-insert=" << " type="button">&lt;&lt;</button><button data-insert=" >> " type="button">&gt;&gt;</button><button data-insert="&quot;&quot;" data-cursor-back="1" type="button">" "</button><button data-insert="\n" type="button">↵</button>
+      </div>
+      <div class="editor-shell offline-editor-shell"><pre class="line-numbers" id="offlineLineNumbers">1</pre><div class="code-layer"><pre class="syntax-layer" id="offlineHighlight" aria-hidden="true"></pre><textarea id="offlineCode" class="code-editor syntax-source" data-syntax-target="offlineHighlight" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off"></textarea></div></div>
+    </section>
+    <section class="console-card">
+      <div class="console-header"><div><span class="eyebrow">LOCAL COMPILER</span><strong>Console</strong></div><div class="console-actions"><span id="offlineRunStatus" class="run-status">Ready</span><button class="run-button" id="offlineRun" type="button">▶ Run Code</button></div></div>
+      <div class="console-grid"><label class="stdin-panel"><span>Input (stdin)</span><textarea id="offlineStdin"></textarea></label><div class="output-panel"><span>Output</span><pre id="offlineOutput">Run your program to see output here.</pre></div></div>
+    </section>
+  </main>
+  {% include "_footer.html" %}
+</div>
+{% endblock %}

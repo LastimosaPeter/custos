@@ -119,5 +119,18 @@
   });
 
   if (currentSid) loadThread(currentSid);
-  setInterval(() => { refreshThreads(); if (currentSid) loadThread(currentSid); }, 4000);
+
+  let pollTimer = null;
+  async function pollMessages() {
+    if (!document.hidden) {
+      await refreshThreads();
+      if (currentSid) await loadThread(currentSid);
+    }
+    pollTimer = setTimeout(pollMessages, document.hidden ? 20000 : 7000);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(pollMessages, document.hidden ? 20000 : 500);
+  });
+  pollTimer = setTimeout(pollMessages, 7000);
 })();

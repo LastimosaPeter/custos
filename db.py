@@ -2,6 +2,7 @@ import os
 import json
 import secrets
 import sqlite3
+import threading
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
@@ -26,6 +27,17 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r1"
+
+# PostgreSQL connections are expensive when the database is on another host.
+# Keep a small per-process pool so repeated API polls and answer saves can reuse
+# already-open TLS/database connections. Disable with DB_POOL_ENABLED=0.
+_default_pool_enabled = "0" if os.environ.get("VERCEL") else "1"
+DB_POOL_ENABLED = os.environ.get("DB_POOL_ENABLED", _default_pool_enabled) == "1"
+DB_POOL_MIN = max(1, int(os.environ.get("DB_POOL_MIN", "1") or 1))
+DB_POOL_MAX = max(DB_POOL_MIN, int(os.environ.get("DB_POOL_MAX", "8") or 8))
+_pg_pool = None
+_pg_pool_lock = threading.Lock()
 DEFAULT_BONUS_QUESTIONS = [
     (1, "Configure Before Use", "Configure Bonus Question 1 in Instructor → Question Banks.", "CHANGE_ME_1"),
     (2, "Configure Before Use", "Configure Bonus Question 2 in Instructor → Question Banks.", "CHANGE_ME_2"),
@@ -378,11 +390,12 @@ def _pg_sql(sql):
 
 
 class PostgresConnection:
-    """Small compatibility wrapper so the existing Custos query layer works on Postgres."""
+    """Compatibility wrapper with optional pooled connection return on close()."""
 
-    def __init__(self, raw_connection, dict_cursor_factory):
+    def __init__(self, raw_connection, dict_cursor_factory, pool=None):
         self._conn = raw_connection
         self._dict_cursor_factory = dict_cursor_factory
+        self._pool = pool
 
     def execute(self, sql, params=()):
         cur = self._conn.cursor(cursor_factory=self._dict_cursor_factory)
@@ -401,7 +414,58 @@ class PostgresConnection:
         self._conn.rollback()
 
     def close(self):
-        self._conn.close()
+        raw = self._conn
+        if raw is None:
+            return
+        self._conn = None
+        # SELECTs also open transactions in psycopg2. Clear any transaction before
+        # returning a connection to the pool so the next request receives a clean one.
+        try:
+            if not raw.closed:
+                raw.rollback()
+        except Exception:
+            pass
+        if self._pool is not None:
+            try:
+                self._pool.putconn(raw, close=bool(raw.closed))
+                return
+            except Exception:
+                pass
+        try:
+            raw.close()
+        except Exception:
+            pass
+
+
+def _postgres_url():
+    url = DATABASE_URL
+    if url.startswith("postgres://"):
+        url = "postgresql://" + url[len("postgres://"):]
+    return url
+
+
+def _get_postgres_pool():
+    global _pg_pool
+    if not DB_POOL_ENABLED:
+        return None
+    if _pg_pool is not None:
+        return _pg_pool
+    with _pg_pool_lock:
+        if _pg_pool is None:
+            try:
+                from psycopg2.pool import ThreadedConnectionPool
+            except ImportError as exc:
+                raise RuntimeError(
+                    "DATABASE_URL is set but psycopg2 is not installed. Run: pip install -r requirements.txt"
+                ) from exc
+            _pg_pool = ThreadedConnectionPool(
+                DB_POOL_MIN,
+                DB_POOL_MAX,
+                dsn=_postgres_url(),
+                connect_timeout=10,
+                application_name="Custos",
+            )
+    return _pg_pool
 
 
 def connect():
@@ -414,15 +478,23 @@ def connect():
             raise RuntimeError(
                 "DATABASE_URL is set but psycopg2 is not installed. Run: pip install -r requirements.txt"
             ) from exc
-        url = DATABASE_URL
-        if url.startswith("postgres://"):
-            url = "postgresql://" + url[len("postgres://"):]
-        raw = psycopg2.connect(url, connect_timeout=10)
-        return PostgresConnection(raw, DictCursor)
+        pool = _get_postgres_pool()
+        raw = pool.getconn() if pool is not None else psycopg2.connect(
+            _postgres_url(), connect_timeout=10, application_name="Custos"
+        )
+        return PostgresConnection(raw, DictCursor, pool=pool)
 
-    conn = sqlite3.connect(DB_PATH)
+    # WAL + a modest busy timeout makes the local SQLite mode much friendlier to
+    # concurrent classroom traffic while retaining zero-configuration portability.
+    conn = sqlite3.connect(DB_PATH, timeout=10, check_same_thread=False)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA busy_timeout = 10000")
+    try:
+        conn.execute("PRAGMA journal_mode = WAL")
+        conn.execute("PRAGMA synchronous = NORMAL")
+    except sqlite3.DatabaseError:
+        pass
     return conn
 
 
@@ -571,6 +643,24 @@ def _future_access_code(prefix="LAB"):
     return f"{prefix}-{secret[:5]}-{secret[5:]}"
 
 
+def _ensure_performance_indexes(conn):
+    """Add indexes used by the live monitor, chat, scoring, and resume paths."""
+    statements = [
+        "CREATE INDEX IF NOT EXISTS idx_exam_sessions_active ON exam_sessions(status,is_test,monitor_done)",
+        "CREATE INDEX IF NOT EXISTS idx_exam_sessions_batch ON exam_sessions(batch_id)",
+        "CREATE INDEX IF NOT EXISTS idx_exam_sessions_assessment ON exam_sessions(assessment_id)",
+        "CREATE INDEX IF NOT EXISTS idx_exam_sessions_email ON exam_sessions(email)",
+        "CREATE INDEX IF NOT EXISTS idx_session_questions_session_order ON session_questions(session_id,q_order)",
+        "CREATE INDEX IF NOT EXISTS idx_session_bonus_session ON session_bonus_answers(session_id,q_order)",
+        "CREATE INDEX IF NOT EXISTS idx_proctor_events_session_id ON proctor_events(session_id,id)",
+        "CREATE INDEX IF NOT EXISTS idx_exam_messages_unread ON exam_messages(session_id,sender,read_at,id)",
+        "CREATE INDEX IF NOT EXISTS idx_coding_sessions_active ON coding_sessions(status,is_test)",
+        "CREATE INDEX IF NOT EXISTS idx_coding_submissions_session ON coding_submissions(session_id,task_id)",
+    ]
+    for statement in statements:
+        conn.execute(statement)
+
+
 def _ensure_future_seed(conn, admin_username):
     now = iso_now()
     admin = conn.execute("SELECT id FROM admins WHERE username=?", (admin_username,)).fetchone()
@@ -675,6 +765,7 @@ def init_db(admin_username="admin", admin_password="ChangeMe123!"):
 
         _apply_schema(conn)
         migrate_schema(conn)
+        _ensure_performance_indexes(conn)
 
         conn.execute(
             """INSERT INTO admins(username, password_hash) VALUES (?, ?)
@@ -750,6 +841,11 @@ def init_db(admin_username="admin", admin_password="ChangeMe123!"):
             )
 
         _ensure_future_seed(conn, admin_username)
+        conn.execute(
+            """INSERT INTO app_meta(key,value) VALUES('schema_version',?)
+               ON CONFLICT(key) DO UPDATE SET value=excluded.value""",
+            (DB_SCHEMA_VERSION,),
+        )
 
         conn.commit()
     except Exception:
@@ -763,6 +859,50 @@ def init_db(admin_username="admin", admin_password="ChangeMe123!"):
             except Exception:
                 pass
         conn.close()
+
+
+def ensure_db_initialized(admin_username="admin", admin_password="ChangeMe123!", force=False):
+    """Fast startup guard for long-running and serverless deployments.
+
+    A full schema migration/seed is only run when the database is new, this build
+    has a newer schema marker, or force=True. Normal cold starts perform one tiny
+    metadata query and reuse that PostgreSQL connection through the pool.
+    """
+    if force:
+        init_db(admin_username=admin_username, admin_password=admin_password)
+        return True
+
+    conn = None
+    try:
+        conn = connect()
+        if DATABASE_ENGINE == "postgresql":
+            exists = conn.execute(
+                "SELECT 1 FROM information_schema.tables WHERE table_schema=current_schema() AND table_name='app_meta'"
+            ).fetchone()
+        else:
+            exists = conn.execute(
+                "SELECT 1 FROM sqlite_master WHERE type='table' AND name='app_meta'"
+            ).fetchone()
+        if not exists:
+            if conn:
+                conn.close()
+                conn = None
+            init_db(admin_username=admin_username, admin_password=admin_password)
+            return True
+        row = conn.execute("SELECT value FROM app_meta WHERE key='schema_version'").fetchone()
+        current = row["value"] if row else None
+        if current == DB_SCHEMA_VERSION:
+            return False
+    except Exception:
+        # If the metadata probe fails because the database is only partially
+        # initialized, fall back to the idempotent migration path below.
+        pass
+    finally:
+        if conn is not None:
+            conn.close()
+
+    init_db(admin_username=admin_username, admin_password=admin_password)
+    return True
 
 
 def iso_now():

@@ -53,7 +53,7 @@ html,body{
 body:not(.exam-page){
   min-height:100vh;
   background-color:#f6f8fb;
-  background-image:url("../img/csdc101-background.png");
+  background-image:url("../img/csdc101-background.webp");
   background-position:center center;
   background-size:cover;
   background-repeat:no-repeat;

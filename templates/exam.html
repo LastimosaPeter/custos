@@ -8,7 +8,7 @@
       <div class="exam-brand-lockup" aria-label="Custos CSDC101">
         <span class="exam-custos-wordmark"><span class="exam-custos-orb"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></span><span>Custos</span></span>
         <span class="exam-brand-divider" aria-hidden="true"></span>
-        <img class="exam-brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="CSDC101">
+        <img class="exam-brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.webp') }}" alt="CSDC101">
       </div>
       <div class="exam-brand-copy">
         <strong>{% if is_custom %}{{ assessment.display_type or 'Assessment' }}{% else %}{{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }}{% endif %} {% if exam_session.is_test %}<em class="test-chip">TEST MODE</em>{% endif %}</strong>

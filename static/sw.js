@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v100-goliathus-r1';
+const CACHE_NAME = 'custos-static-v100-goliathus-portable-r1';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -13,10 +13,11 @@ const STATIC_ASSETS = [
   '/static/img/apple-touch-icon.png',
   '/static/img/pwa-icon-192.png',
   '/static/img/pwa-icon-512.png',
-  '/static/img/csdc101-logo.png',
+  '/static/img/csdc101-logo.webp',
   '/static/img/caudex-logo.png',
   '/static/img/caudex-wordmark-light.png',
-  '/static/img/caudex-wordmark-dark.png'
+  '/static/img/caudex-wordmark-dark.png',
+  '/static/img/csdc101-background.webp'
 ];
 
 self.addEventListener('install', event => {
@@ -57,16 +58,19 @@ self.addEventListener('fetch', event => {
   }
 
   if (url.pathname.startsWith('/static/')) {
+    // Cache-first for release-versioned static assets. ignoreSearch lets the
+    // pre-cached /static/foo.css satisfy /static/foo.css?v=<release>. A cache
+    // name bump on each release guarantees updates without background refetches.
     event.respondWith(
-      caches.match(request).then(cached => {
-        const network = fetch(request).then(response => {
+      caches.match(request, {ignoreSearch: true}).then(cached => {
+        if (cached) return cached;
+        return fetch(request).then(response => {
           if (response.ok) {
             const copy = response.clone();
             caches.open(CACHE_NAME).then(cache => cache.put(request, copy));
           }
           return response;
-        }).catch(() => cached);
-        return cached || network;
+        });
       })
     );
   }
@@ -80,4 +84,4 @@ self.addEventListener('fetch', event => {
 
 // UI + assessment engine refresh: free-form custom assessments 2026-09-27
 
-// Custos 1.0 · Goliathus cache refresh.
+// Custos 1.0 · Goliathus portable/performance cache refresh.

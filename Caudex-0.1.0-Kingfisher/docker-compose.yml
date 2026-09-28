@@ -1,0 +1,14 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: caudex
+      POSTGRES_USER: caudex
+      POSTGRES_PASSWORD: caudex
+    ports:
+      - "5432:5432"
+    volumes:
+      - caudex_pgdata:/var/lib/postgresql/data
+
+volumes:
+  caudex_pgdata:

@@ -596,7 +596,24 @@
   setInterval(() => {
     if (securityState.permanent || securityState.pending || securityState.tempRemaining > 0) refreshSecurityStatus();
   }, 3000);
-  setInterval(fetchChatMessages, 3000);
+  // Chat is useful during an exam, but polling every 3 seconds from every
+  // student creates unnecessary database traffic. Poll quickly only while the
+  // chat is open, back off while it is closed, and pause network polling when
+  // the page is hidden.
+  let chatPollTimer = null;
+  function scheduleChatPoll(delay) {
+    if (chatPollTimer) clearTimeout(chatPollTimer);
+    const nextDelay = delay ?? (chatOpen ? 5000 : 12000);
+    chatPollTimer = setTimeout(async () => {
+      if (!document.hidden) await fetchChatMessages();
+      scheduleChatPoll();
+    }, nextDelay);
+  }
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) fetchChatMessages();
+    scheduleChatPoll(document.hidden ? 20000 : 1000);
+  });
+  scheduleChatPoll();
 
   if (isInstalledAppMode()) {
     document.documentElement.classList.add('pwa-standalone');

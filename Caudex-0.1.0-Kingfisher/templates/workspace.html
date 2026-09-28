@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+{% block title %}{{ room.title }} · Caudex IDE{% endblock %}
+{% block body_class %}workspace-page{% endblock %}
+{% block head %}
+<script>
+window.CAUDEX_BOOT = {{ {
+  'roomCode': room.code,
+  'participantId': participant.id,
+  'participantName': participant.display_name,
+  'participantColor': participant.color,
+  'role': participant.role,
+  'isHost': participant.is_host,
+  'focusMode': room.focus_mode,
+  'capabilities': capabilities,
+  'shareLinks': links,
+}|tojson }};
+</script>
+<script src="{{ url_for('static', filename='js/workspace.js') }}" defer></script>
+{% endblock %}
+{% block body %}
+<div class="workspace-app" id="workspaceApp" style="--my-caret:{{ participant.color }}">
+  <header class="workspace-header">
+    <a class="workspace-brand" href="{{ url_for('index') }}" aria-label="Caudex IDE home">
+      <img class="brand-wordmark brand-light" src="{{ url_for('static', filename='img/caudex-wordmark-light.png') }}" alt="Caudex IDE">
+      <img class="brand-wordmark brand-dark" src="{{ url_for('static', filename='img/caudex-wordmark-dark.png') }}" alt="Caudex IDE">
+    </a>
+    <div class="workspace-title"><strong>{{ room.title }}</strong><span>Room {{ room.code }} · C++17</span></div>
+    <div class="desktop-mode-switch" aria-label="Workspace modes"><button class="active" data-mode-target="code" type="button">Code</button><button data-mode-target="board" type="button">Jam Board</button></div>
+    <div class="workspace-header-actions">
+      <span id="connectionBadge" class="connection-badge connecting"><i></i><span>Connecting</span></span>
+      {% if room.focus_mode %}<button type="button" class="ghost-button compact" id="focusButton">Focus</button>{% endif %}
+      <button type="button" class="icon-button" data-theme-toggle aria-label="Toggle theme"><span data-theme-icon>◐</span></button>
+    </div>
+  </header>
+
+  <nav class="mobile-mode-tabs" aria-label="Workspace modes">
+    <button class="active" data-mode-target="code">Code</button>
+    <button data-mode-target="board">Board</button>
+    <button data-open-drawer="people">People <span id="mobilePeopleCount">1</span></button>
+    <button data-open-drawer="chat">Chat <span id="mobileChatDot"></span></button>
+  </nav>
+
+  <div class="workspace-grid">
+    <aside class="side-panel people-panel" data-drawer="people">
+      <div class="side-panel-head"><div><span class="eyebrow">ROOM</span><strong>{{ room.code }}</strong></div><button class="drawer-close" data-close-drawer type="button">×</button></div>
+      <div class="room-meta">
+        <div><span>Access</span><b class="role-badge {{ participant.role }}">{{ participant.role|title }}</b></div>
+        <div><span>Capacity</span><b><span id="peopleCount">1</span>/{{ room.max_users }}</b></div>
+      </div>
+      <div class="section-label">Live participants</div>
+      <div id="participantList" class="participant-list"><div class="participant-skeleton">Connecting…</div></div>
+      {% if participant.is_host %}
+      <button class="secondary-button wide" type="button" id="shareButton">Share Room</button>
+      {% endif %}
+      <div class="side-note"><strong>Autosync</strong><p>Edits are synchronized character-by-character and also saved as a local browser draft while this room is open.</p></div>
+      <div class="security-mini {% if not room.focus_mode %}muted{% endif %}">
+        <span>Focus mode</span><b>{{ 'On' if room.focus_mode else 'Off' }}</b>
+        {% if room.focus_mode %}<small>Leaving the tab/app is logged, not blocked.</small>{% endif %}
+      </div>
+    </aside>
+
+    <main class="center-stage">
+      <section class="mode-panel code-mode active" data-mode="code">
+        <div class="editor-card">
+          <div class="editor-toolbar">
+            <div class="file-tab"><span class="file-dot"></span><strong>main.cpp</strong><small id="saveState">Synced</small></div>
+            <div class="editor-toolbar-actions">
+              <label class="toolbar-button file-button">Import<input type="file" id="importFile" accept=".cpp,.cc,.cxx,text/plain"></label>
+              <button class="toolbar-button" type="button" id="exportButton">Export</button>
+              <button class="toolbar-button" type="button" id="copyCodeButton">Copy</button>
+            </div>
+          </div>
+          <div class="code-accessory" id="codeAccessory" aria-label="C++ mobile coding shortcuts">
+            <button data-insert="#include <iostream>\n" type="button">#include</button>
+            <button data-insert="using namespace std;\n" type="button">using</button>
+            <button data-insert="    " type="button">⇥ Tab</button>
+            <button data-insert="{}" data-cursor-back="1" type="button">{ }</button>
+            <button data-insert="()" data-cursor-back="1" type="button">( )</button>
+            <button data-insert=";" type="button">;</button>
+            <button data-insert=" << " type="button">&lt;&lt;</button>
+            <button data-insert=" >> " type="button">&gt;&gt;</button>
+            <button data-insert="&quot;&quot;" data-cursor-back="1" type="button">" "</button>
+            <button data-insert="\n" type="button">↵</button>
+          </div>
+          <div class="editor-shell" id="editorShell">
+            <pre class="line-numbers" id="lineNumbers" aria-hidden="true">1</pre>
+            <div class="code-layer">
+              <pre class="syntax-layer" id="codeHighlight" aria-hidden="true"></pre>
+              <textarea id="codeEditor" class="code-editor syntax-source" data-syntax-target="codeHighlight" wrap="off" spellcheck="false" autocomplete="off" autocapitalize="off" autocorrect="off" {% if not capabilities.edit %}readonly{% endif %} aria-label="C++ source editor"></textarea>
+            </div>
+            <div class="remote-caret-layer" id="remoteCaretLayer" aria-hidden="true"></div>
+          </div>
+          {% if not capabilities.edit %}<div class="locked-editor-note">Source is read-only for your <b>{{ participant.role }}</b> link.</div>{% endif %}
+        </div>
+
+        <section class="console-card">
+          <div class="console-header">
+            <div><span class="eyebrow">COMPILER</span><strong>Console</strong></div>
+            <div class="console-actions"><span id="runStatus" class="run-status">Ready</span><button class="run-button" type="button" id="runButton" {% if not capabilities.run %}disabled{% endif %}>▶ Run Code</button></div>
+          </div>
+          <div class="console-grid">
+            <label class="stdin-panel"><span>Input (stdin)</span><textarea id="stdinInput" spellcheck="false" placeholder="Optional input for cin…"></textarea></label>
+            <div class="output-panel"><span>Output</span><pre id="consoleOutput">Run your program to see output here.</pre></div>
+          </div>
+        </section>
+      </section>
+
+      <section class="mode-panel board-mode" data-mode="board">
+        <div class="board-card">
+          <div class="board-toolbar">
+            <div><span class="eyebrow">JAM BOARD</span><strong>Sketch, annotate, brainstorm.</strong></div>
+            <div class="board-tools">
+              <button class="active" type="button" data-board-tool="pen">Pen</button>
+              <button type="button" data-board-tool="highlighter">Highlight</button>
+              <button type="button" data-board-tool="eraser">Eraser</button>
+              <label>Color <input type="color" id="boardColor" value="{{ participant.color }}"></label>
+              <label>Size <input type="range" id="boardWidth" min="1" max="18" value="3"></label>
+              <button type="button" id="clearBoardButton" class="danger-text" {% if not capabilities.edit %}disabled{% endif %}>Clear</button>
+            </div>
+          </div>
+          <div class="canvas-wrap"><canvas id="jamCanvas"></canvas><div class="board-readonly {% if capabilities.edit %}hidden{% endif %}">Board is view-only for this access link.</div></div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="side-panel chat-panel" data-drawer="chat">
+      <div class="side-panel-head"><div><span class="eyebrow">ROOM CHAT</span><strong>Messages</strong></div><button class="drawer-close" data-close-drawer type="button">×</button></div>
+      <div id="chatMessages" class="chat-messages"></div>
+      <form id="chatForm" class="chat-form">
+        <textarea id="chatInput" maxlength="2000" rows="2" placeholder="Message the room…" {% if not capabilities.comment %}disabled{% endif %}></textarea>
+        <button class="send-button" type="submit" {% if not capabilities.comment %}disabled{% endif %}>Send</button>
+      </form>
+      {% if not capabilities.comment %}<div class="chat-readonly-note">Chat is read-only for this link.</div>{% endif %}
+    </aside>
+  </div>
+
+  <div class="workspace-footer-wrap">{% include "_footer.html" %}</div>
+
+  <div id="remotePointerLayer" class="remote-pointer-layer" aria-hidden="true"></div>
+
+  <div class="mobile-action-bar">
+    <button type="button" id="mobileRunButton" {% if not capabilities.run %}disabled{% endif %}><span>▶</span>Run</button>
+    <button type="button" data-open-drawer="chat"><span>✦</span>Chat</button>
+    <button type="button" id="mobileImportButton"><span>↑</span>Import</button>
+    <button type="button" id="mobileExportButton"><span>↓</span>Export</button>
+  </div>
+
+  {% if participant.is_host %}
+  <div class="modal" id="shareModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-modal></div>
+    <section class="modal-card share-card" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+      <div class="modal-head"><div><span class="eyebrow">SHARE ROOM {{ room.code }}</span><h2 id="shareTitle">Choose what collaborators can do</h2></div><button type="button" class="modal-close" data-close-modal>×</button></div>
+      <div class="share-links">
+        {% for role, description in [('view','Source is visible; running and editing are disabled.'),('comment','Can view and use chat; cannot run or edit.'),('run','Can view, chat, and compile the shared code; cannot edit.'),('edit','Full collaboration: edit, run, chat, and whiteboard.')] %}
+        <div class="share-link-row"><div><b class="role-badge {{ role }}">{{ role|title }}</b><p>{{ description }}</p></div><div class="share-link-control"><input readonly value="{{ links.get(role,'') }}" aria-label="{{ role }} invitation link"><button type="button" data-copy-link="{{ links.get(role,'') }}">Copy</button></div></div>
+        {% endfor %}
+      </div>
+      <p class="modal-note">For phones/tablets on the same Wi-Fi, these links use the computer’s LAN address when Caudex is running locally. Keep the terminal running while students code.</p>
+    </section>
+  </div>
+  {% endif %}
+
+  {% if room.focus_mode %}
+  <div class="modal focus-modal" id="focusModal" aria-hidden="true">
+    <div class="modal-backdrop" data-close-focus></div>
+    <section class="modal-card" role="dialog" aria-modal="true">
+      <div class="focus-icon"><img src="{{ url_for('static', filename='img/caudex-logo.png') }}" alt=""></div>
+      <div class="eyebrow">FOCUS MODE</div><h2>Use Caudex as your main coding screen</h2>
+      <p>On supported desktop browsers, Caudex can enter fullscreen. On iPhone/iPad, the closest experience is opening the installed Home Screen app. Caudex can log when the page is hidden, but browsers cannot prevent app switching.</p>
+      <div class="modal-actions"><button type="button" class="secondary-button" data-close-focus>Not now</button><button type="button" class="primary-button" id="enterFullscreenButton">Enter Focus Mode</button></div>
+    </section>
+  </div>
+  {% endif %}
+
+  <div class="toast-stack" id="toastStack" aria-live="polite"></div>
+</div>
+{% endblock %}

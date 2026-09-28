@@ -1,5 +1,10 @@
 {% extends "base.html" %}
 {% block title %}Custos - Secure C++ IDE{% endblock %}
+{% block head_extra %}
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+{% endblock %}
 {% block body_class %}ide-page{% endblock %}
 {% block body %}
 <div id="ideApp" class="ide-app" data-remaining="{{ remaining if remaining is not none else '' }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-violation-count="{{ security.violation_count }}" data-is-test="{{ 1 if cs.is_test else 0 }}">
@@ -7,7 +12,7 @@
     <div class="ide-brand-lockup" aria-label="Caudex IDE · {{ cs.subject_code }}">
       <strong class="ide-custos-identity"><span class="ide-custos-orb"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></span><span>Caudex IDE</span></strong>
       <span class="ide-brand-divider" aria-hidden="true"></span>
-      <img class="ide-subject-logo" src="{{ url_for('static', filename='img/csdc101-logo.png') }}" alt="{{ cs.subject_code }}">
+      <img class="ide-subject-logo" src="{{ url_for('static', filename='img/csdc101-logo.webp') }}" alt="{{ cs.subject_code }}">
     </div>
     <div class="ide-header-meta"><span>{{ cs.student_name }}</span><button class="theme-toggle" type="button" data-theme-toggle aria-label="Switch theme"><span data-theme-icon>🌙</span></button></div>
   </header>

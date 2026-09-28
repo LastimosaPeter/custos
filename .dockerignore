@@ -1,0 +1,10 @@
+.git
+.venv
+__pycache__
+*.pyc
+.env
+*.db
+*.db-shm
+*.db-wal
+*.sqlite
+*.sqlite3

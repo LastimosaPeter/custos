@@ -14,10 +14,8 @@
   <link rel="icon" type="image/png" href="{{ url_for('static', filename='img/favicon.png') }}">
   <link rel="apple-touch-icon" sizes="180x180" href="{{ url_for('static', filename='img/apple-touch-icon.png') }}">
   <link rel="manifest" href="{{ url_for('pwa_manifest') }}">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css', v=app_asset_revision) }}">
+  {% block head_extra %}{% endblock %}
   <script>window.CUSTOS_ASSET_REVISION={{ app_asset_revision|tojson }};</script>
   <script src="{{ url_for('static', filename='js/pwa.js', v=app_asset_revision) }}" defer></script>
   <script src="{{ url_for('static', filename='js/theme.js', v=app_asset_revision) }}" defer></script>
@@ -34,7 +32,7 @@
         <span>Custos</span>
       </span>
       <span class="brand-divider" aria-hidden="true"></span>
-      <img class="brand-logo subject-brand-logo" src="{{ url_for('static', filename=subject_logo_filename|default('img/csdc101-logo.png')) }}" alt="{{ subject_logo_alt|default('CSDC101') }}">
+      <img class="brand-logo subject-brand-logo" src="{{ url_for('static', filename=subject_logo_filename|default('img/csdc101-logo.webp')) }}" alt="{{ subject_logo_alt|default('CSDC101') }}">
     </a>
     <button class="mobile-nav-toggle" type="button" aria-expanded="false" aria-label="Open navigation" title="Menu"><span aria-hidden="true">☰</span></button>
     {% block header_right %}
@@ -63,14 +61,14 @@
     </div>
   </main>
   <div class="footer-fade" aria-hidden="true"></div>
-  <img class="page-watermark theme-image theme-image-light" src="{{ url_for('static', filename='img/csdc101-watermark.png') }}" alt="" aria-hidden="true">
-  <img class="page-watermark theme-image theme-image-dark" src="{{ url_for('static', filename='img/csdc101-watermark-dark.png') }}" alt="" aria-hidden="true">
+  <img class="page-watermark theme-image theme-image-light" decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/csdc101-watermark.png') }}" alt="" aria-hidden="true">
+  <img class="page-watermark theme-image theme-image-dark" decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/csdc101-watermark-dark.png') }}" alt="" aria-hidden="true">
   <div class="institution-logos institution-logos-light" aria-label="Department logos">
-    <img src="{{ url_for('static', filename='img/dcs-logo-1.png') }}" alt="Computer Studies">
-    <img src="{{ url_for('static', filename='img/dcs-logo-2.png') }}" alt="Department of Computer Science">
-    <img src="{{ url_for('static', filename='img/dcs-logo-3.png') }}" alt="Department of Informatics">
+    <img decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/dcs-logo-1.webp') }}" alt="Computer Studies">
+    <img decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/dcs-logo-2.webp') }}" alt="Department of Computer Science">
+    <img decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/dcs-logo-3.webp') }}" alt="Department of Informatics">
   </div>
-  <img class="institution-logos-dark theme-image theme-image-dark" src="{{ url_for('static', filename='img/institution-logos-dark.png') }}" alt="Computer Studies, Department of Computer Science, and Department of Informatics logos">
+  <img class="institution-logos-dark theme-image theme-image-dark" decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/institution-logos-dark.webp') }}" alt="Computer Studies, Department of Computer Science, and Department of Informatics logos">
   <footer class="site-footer" aria-label="Application version">
     <span class="footer-product">{{ app_name }}</span>
     <span class="footer-separator">·</span>

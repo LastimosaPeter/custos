@@ -150,7 +150,7 @@
 
   if(remaining!==null){setInterval(()=>{remaining=Math.max(0,remaining-1);const h=String(Math.floor(remaining/3600)).padStart(2,'0'),m=String(Math.floor((remaining%3600)/60)).padStart(2,'0'),s=String(remaining%60).padStart(2,'0');timer.textContent=`${h}:${m}:${s}`;if(remaining===0){intentionalNavigation=true;finishForm.submit();}},1000);}
   setInterval(()=>{if(state.tempRemaining>0&&tempLockEnds){state.tempRemaining=Math.max(0,Math.ceil((tempLockEnds-Date.now())/1000));lockCountdown.textContent=String(state.tempRemaining);if(state.tempRemaining===0)refreshSecurity();}},250);
-  setInterval(refreshSecurity,5000);
+  setInterval(()=>{if(!document.hidden)refreshSecurity();},5000);
   window.addEventListener('beforeunload',()=>{if(!intentionalNavigation) log('beforeunload','Programming Lab page unloading');});
   panels.forEach(p=>updateLineNumbers(p)); renderSecurity();
 })();

@@ -4,7 +4,7 @@ services:
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --workers 2 --threads 4 --timeout 120 app:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers ${WEB_CONCURRENCY:-1} --threads ${GUNICORN_THREADS:-8} --timeout 120 --keep-alive 5 app:app
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
@@ -23,6 +23,18 @@ services:
         value: Asia/Manila
       - key: SESSION_COOKIE_SECURE
         value: "1"
+      - key: AUTO_INIT_DB
+        value: "1"
+      - key: DB_POOL_ENABLED
+        value: "1"
+      - key: DB_POOL_MIN
+        value: "1"
+      - key: DB_POOL_MAX
+        value: "8"
+      - key: WEB_CONCURRENCY
+        value: "1"
+      - key: GUNICORN_THREADS
+        value: "8"
       - key: STUDENT_IDE_ENABLED
         value: "0"
       - key: CODE_RUNNER_BACKEND
