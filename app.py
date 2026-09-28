@@ -20,7 +20,7 @@ from werkzeug.security import check_password_hash
 from db import APP_TZ, DATABASE_ENGINE, connect, ensure_db_initialized, init_db, iso_now, unique_session_key
 from item_analysis import build_item_analysis
 from google_integration import (
-    STUDENT_GOOGLE_LOGIN_REQUIRED, csp_additions, google_student_identity, roster_entry,
+    STUDENT_GOOGLE_LOGIN_REQUIRED, csp_additions, google_profile_names, google_student_identity, roster_entry,
 )
 
 # Pages that render a Google sign-in button or the Classroom connector.
@@ -463,15 +463,22 @@ def student_login():
         else:
             email = request.form.get("email", "").strip().lower()
         session_key = request.form.get("session_key", "").strip().upper()
-        identity, identity_error = parse_student_identity(request.form)
-        if identity_error:
-            flash(identity_error, "error")
-            return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
-        first_name, last_name, student_name, program, class_section = identity
-        email_re = rf"^[A-Za-z0-9._%+\-]+@{re.escape(ALLOWED_EMAIL_DOMAIN)}$"
-        if not google_ident and not re.match(email_re, email):
-            flash(f"Use your @{ALLOWED_EMAIL_DOMAIN} account.", "error")
-            return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
+        if google_ident:
+            # Name comes from the verified Google profile; section from the
+            # Classroom roster (or, for an assessment without one, the form).
+            first_name, last_name = google_profile_names(google_ident)
+            program = request.form.get("program", "").strip().upper()
+            class_section = request.form.get("class_section", "").strip()
+        else:
+            identity, identity_error = parse_student_identity(request.form)
+            if identity_error:
+                flash(identity_error, "error")
+                return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
+            first_name, last_name, student_name, program, class_section = identity
+            email_re = rf"^[A-Za-z0-9._%+\-]+@{re.escape(ALLOWED_EMAIL_DOMAIN)}$"
+            if not re.match(email_re, email):
+                flash(f"Use your @{ALLOWED_EMAIL_DOMAIN} account.", "error")
+                return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
 
         conn = connect()
         batch = conn.execute("SELECT * FROM batches WHERE access_code=?", (session_key,)).fetchone()
@@ -493,8 +500,13 @@ def student_login():
                 return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
             first_name = rostered["first_name"] or first_name
             last_name = rostered["last_name"] or last_name
-            student_name = f"{first_name} {last_name}".strip()
             program, class_section = rostered["program"], rostered["class_section"]
+        elif google_ident and (program not in STUDENT_SECTIONS or class_section not in STUDENT_SECTIONS[program]):
+            # No Classroom roster for this assessment: ask for the section only now.
+            conn.close()
+            return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN,
+                                   need_section=True, session_key_value=session_key)
+        student_name = f"{first_name} {last_name}".strip()
         if assessment and assessment["assessment_type"] == "custom":
             allowed = {x.strip().upper() for x in str(assessment["allowed_sections"] or "").split(",") if x.strip()}
             student_section = f"{program}{class_section}"

@@ -81,6 +81,20 @@
   programSel.addEventListener("change", fillSections);
   fillSections();
 
+  // Pre-select Program/Section when the course name says e.g. "ZT11" or "ZT-12".
+  const guessSection = () => {
+    const label = courseSel.selectedOptions[0] ? courseSel.selectedOptions[0].textContent : "";
+    const m = label.match(/\b([A-Za-z]{2})\s*-?\s*(\d{2})\b/g) || [];
+    for (const hit of m) {
+      const [, prog, sec] = hit.match(/([A-Za-z]{2})\s*-?\s*(\d{2})/);
+      const P = prog.toUpperCase();
+      if ((sections[P] || []).includes(sec)) {
+        programSel.value = P; fillSections(); sectionSel.value = sec; return;
+      }
+    }
+  };
+  courseSel.addEventListener("change", guessSection);
+
   const loadCourses = async () => {
     say("Loading your Google Classroom courses…");
     try {
@@ -88,6 +102,7 @@
       courseSel.replaceChildren();
       if (!data.courses.length) { say("No active courses where you are a teacher were found."); return; }
       data.courses.forEach((c) => option(courseSel, c.id, c.section ? `${c.name} · ${c.section}` : c.name));
+      guessSection();
       panel.hidden = false;
       say("Choose the course and the Custos section its students belong to.");
     } catch (err) { say(err.message); }

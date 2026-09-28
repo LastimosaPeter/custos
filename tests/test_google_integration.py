@@ -194,7 +194,10 @@ def test_student_signin_accepts_both_school_domains(client, google_token, email,
     r = _student_signin(client, google_token, email, hd)
     assert r.status_code == 200 and r.get_json()["email"] == email
     html = client.get("/login").get_data(as_text=True)
-    assert email in html and 'name="session_key"' in html and 'name="email"' not in html
+    assert email in html and 'name="session_key"' in html
+    # identity comes from Google: no name/email/section fields to fill in
+    for field in ('name="email"', 'name="first_name"', 'name="last_name"', 'name="program"'):
+        assert field not in html
 
 
 @pytest.mark.parametrize("email,hd", [
@@ -224,13 +227,38 @@ def test_exam_login_requires_google_when_required(client, assessment_id):
     assert r.status_code == 200 and "Sign in with your school Google account first" in r.get_data(as_text=True)
 
 
-def test_typed_email_is_ignored_and_google_email_used(client, google_token, assessment_id):
+def test_typed_identity_is_ignored_and_google_profile_used(client, google_token, assessment_id):
     _student_signin(client, google_token, "cara@adnu.edu.ph", "adnu.edu.ph")
-    r = _exam_login(client, {"email": "someone.else@adnu.edu.ph"})
+    r = _exam_login(client, {"email": "someone.else@adnu.edu.ph", "first_name": "Fake", "last_name": "Name"})
     assert r.status_code == 302 and r.headers["Location"].endswith("/instructions")
     with client.session_transaction() as s:
         assert s["pending_email"] == "cara@adnu.edu.ph"
         assert s["pending_google_sub"] == "sub-cara"
+        assert (s["pending_first_name"], s["pending_last_name"]) == ("Gina", "Google")
+
+
+def test_no_roster_asks_for_section_only_after_key(client, google_token, assessment_id):
+    _student_signin(client, google_token, "gus@adnu.edu.ph", "adnu.edu.ph")
+    with client.session_transaction() as s:
+        csrf = s["csrf_token"]
+    r = client.post("/login", data={"csrf_token": csrf, "session_key": ACCESS_KEY})
+    html = r.get_data(as_text=True)
+    assert r.status_code == 200 and "linked to Google Classroom yet" in html
+    assert 'name="program"' in html and f'value="{ACCESS_KEY}"' in html
+    r = client.post("/login", data={"csrf_token": csrf, "session_key": ACCESS_KEY, "program": "ZS", "class_section": "11"})
+    assert r.status_code == 302
+    with client.session_transaction() as s:
+        assert (s["pending_program"], s["pending_class_section"]) == ("ZS", "11")
+
+
+def test_instructor_email_on_student_page_goes_to_workspace(client, google_token):
+    google_token["t2"] = _claims("teacher@adnu.edu.ph", hd="adnu.edu.ph")
+    csrf = _csrf(client)
+    r = client.post("/auth/google/student", json={"credential": "t2"}, headers={"X-CSRFToken": csrf})
+    body = r.get_json()
+    assert r.status_code == 200 and body["role"] == "instructor" and body["redirect"].endswith("/admin/workspace")
+    with client.session_transaction() as s:
+        assert s["admin_id"] and "google_student" not in s
 
 
 def test_start_records_google_auth_method(client, google_token, assessment_id):
@@ -334,10 +362,12 @@ def test_classroom_import_and_roster_enforcement(client, google_api, google_toke
     page = client.get(f"/admin/assessment/{assessment_id}").get_data(as_text=True)
     assert "Google Classroom roster" in page and "ZT-12" in page
 
-    # A rostered student: name + section come from the roster, not the form
+    # A rostered student types only the key; name + section come from the roster
     client.get("/admin/logout")
     _student_signin(client, google_token, "ana@gbox.adnu.edu.ph", "gbox.adnu.edu.ph")
-    r = _exam_login(client, {"first_name": "Fake", "last_name": "Person", "class_section": "11"})
+    with client.session_transaction() as s:
+        csrf = s["csrf_token"]
+    r = client.post("/login", data={"csrf_token": csrf, "session_key": ACCESS_KEY})
     assert r.status_code == 302
     with client.session_transaction() as s:
         assert (s["pending_first_name"], s["pending_last_name"]) == ("Ana", "Roster")

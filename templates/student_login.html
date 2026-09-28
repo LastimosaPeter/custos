@@ -33,6 +33,7 @@
   {% if not google_enabled or google_student or not google_student_required %}
   <form method="post" class="form-grid" data-student-identity-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    {% if not google_student %}
     <div class="student-name-grid">
       <label>First Name
         <input type="text" name="first_name" placeholder="e.g., Juan" value="{{ request.form.get('first_name', google_student.given_name if google_student else '') }}" required maxlength="60" autocomplete="given-name">
@@ -41,6 +42,11 @@
         <input type="text" name="last_name" placeholder="e.g., Dela Cruz" value="{{ request.form.get('last_name', google_student.family_name if google_student else '') }}" required maxlength="60" autocomplete="family-name">
       </label>
     </div>
+    {% endif %}
+    {% if need_section %}
+    <p class="flash">This assessment isn't linked to Google Classroom yet. Choose your program and section to continue.</p>
+    {% endif %}
+    {% if not google_student or need_section %}
     <div class="student-class-grid">
       <label>Program
         <select name="program" required data-program-select>
@@ -52,15 +58,14 @@
         <select name="class_section" required data-section-select data-selected-section="{{ request.form.get('class_section', '11') }}"></select>
       </label>
     </div>
+    {% endif %}
     {% if not google_student %}
     <label>Email address
       <input type="email" name="email" placeholder="student@{{ domain }}" value="{{ request.form.get('email', '') }}" required autocomplete="username">
     </label>
-    {% else %}
-    <p class="micro">If your class is linked to Google Classroom, your name and section are taken from the class list.</p>
     {% endif %}
     <label>Session key
-      <input type="password" name="session_key" placeholder="Enter instructor-issued session key" required autocomplete="off" autocapitalize="characters" spellcheck="false">
+      <input type="password" name="session_key" placeholder="Enter instructor-issued session key" value="{{ session_key_value or '' }}" required autocomplete="off" autocapitalize="characters" spellcheck="false"{% if google_student and not need_section %} autofocus{% endif %}>
     </label>
     <button class="primary wide" type="submit">Verify Key & Continue</button>
   </form>

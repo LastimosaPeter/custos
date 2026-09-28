@@ -106,6 +106,18 @@ def google_student_identity():
     return ident if isinstance(ident, dict) and ident.get("email") else None
 
 
+def google_profile_names(ident):
+    """(first, last) from the verified Google profile, never empty."""
+    first = " ".join(str(ident.get("given_name", "")).split())[:60]
+    last = " ".join(str(ident.get("family_name", "")).split())[:60]
+    if not first and not last:
+        parts = " ".join(str(ident.get("name", "")).split()).rsplit(" ", 1)
+        first, last = (parts[0], parts[1]) if len(parts) == 2 else (parts[0], "")
+    if not first:
+        first = ident["email"].split("@", 1)[0][:60]
+    return first, last or "-"
+
+
 def _require_csrf_header():
     supplied = request.headers.get("X-CSRFToken", "")
     expected = session.get("csrf_token", "")
@@ -121,10 +133,22 @@ def _require_csrf_header():
 
 @bp.post("/auth/google/student")
 def student_google_signin():
+    """Single Google entry point on the student page: an instructor's email
+    goes straight to the Workspace; everyone else continues as a student."""
     _require_csrf_header()
     payload = request.get_json(silent=True) or {}
     try:
         claims = verify_id_token(payload.get("credential"))
+    except GoogleAuthError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 401
+    conn = connect()
+    try:
+        admin = find_admin_for_email(conn, claims["email"])
+    finally:
+        conn.close()
+    if admin:
+        return jsonify({"ok": True, "role": "instructor", "redirect": _sign_in_admin(admin)})
+    try:
         verify_student_claims(claims)
     except GoogleAuthError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 401
@@ -135,7 +159,7 @@ def student_google_signin():
         "family_name": str(claims.get("family_name", ""))[:60],
         "name": str(claims.get("name", ""))[:120],
     }
-    return jsonify({"ok": True, "email": claims["email"]})
+    return jsonify({"ok": True, "role": "student", "email": claims["email"]})
 
 
 @bp.post("/auth/google/student/signout")
@@ -181,17 +205,22 @@ def admin_google_signin():
         conn.close()
     if not admin:
         return jsonify({"ok": False, "error": "No Custos instructor account uses this Google email."}), 403
+    return jsonify({"ok": True, "redirect": _sign_in_admin(admin)})
+
+
+def _sign_in_admin(admin):
+    """Same session the password login creates; returns the Workspace URL."""
+    from flask import url_for
+
+    from app import csrf_token  # late import: app imports this module
+
     session.clear()
     session["admin_id"] = admin["id"]
     session["admin_role"] = admin["role"] if "role" in admin.keys() else "owner"
     session["admin_display_name"] = (admin["display_name"] if "display_name" in admin.keys() else None) or admin["username"]
     session["admin_auth_method"] = "google"
-    from app import csrf_token  # late import: app imports this module
-
     csrf_token()
-    from flask import url_for
-
-    return jsonify({"ok": True, "redirect": url_for("nextgen.workspace")})
+    return url_for("nextgen.workspace")
 
 
 # --------------------------------------------------------------------------
