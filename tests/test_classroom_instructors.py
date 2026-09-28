@@ -354,6 +354,7 @@ import instructor_scope  # noqa: E402
 
 @pytest.mark.parametrize("name,expected", [
     ("2026-1 CSDC100.ZC11Am", ("CSDC100", "1st Semester", "2026-2027", "ZC", "11")),
+    ("2026-1 CSDC100.zc11am", ("CSDC100", "1st Semester", "2026-2027", "ZC", "11")),
     ("2026-2 CSDC100.ZC12Af", ("CSDC100", "2nd Semester", "2026-2027", "ZC", "12")),
     ("2025-3 CSDC101.ZT11", ("CSDC101", "Intersession", "2025-2026", "ZT", "11")),
     ("2026.1 csdc 101 zt-12", ("CSDC101", "1st Semester", "2026-2027", "ZT", "12")),
@@ -413,3 +414,89 @@ def test_roster_import_takes_section_from_course_name(client, google, monkeypatc
                           JOIN classroom_roster_students s ON s.roster_id=r.id WHERE r.assessment_id=?""", (aid,)).fetchone()
     conn.close()
     assert tuple(row) == ("ZC", "11", "zc.kid@adnu.edu.ph")  # gbox stored as the canonical adnu identity
+
+
+# ------------------------------------------------------------------ editing class details
+
+def _edit(client, course_id, **fields):
+    with client.session_transaction() as s:
+        t = s["csrf_token"]
+    data = {"csrf_token": t, "school_year": "2026-2027", "term": "1st Semester", "code": "CSDC199",
+            "title": "Special Topics", "section": "ZC21"}
+    data.update(fields)
+    return client.post(f"/admin/classroom/course/{course_id}/edit", data=data)
+
+
+def _course(course_id):
+    conn = connect()
+    row = conn.execute("""SELECT cc.*, s.code, s.name AS title, s.term, s.school_year, s.active
+                          FROM classroom_courses cc JOIN subjects s ON s.id=cc.subject_id WHERE cc.course_id=?""",
+                       (course_id,)).fetchone()
+    conn.close()
+    return row
+
+
+def test_teacher_edits_class_without_section_and_edit_sticks(client, google):
+    google["people"]["tok-teacher-e"] = ["teach.e@adnu.edu.ph", "Teacher E", [{"id": "e1", "name": "Special Topics"}]]
+    sign_in(client, "tok-teacher-e")
+    before = _course("e1")
+    assert before["school_year"] == "" and before["program"] is None
+    page = client.get("/admin/workspace").get_data(as_text=True)
+    assert "My Google Classroom classes" in page and "Special Topics" in page
+    r = _edit(client, "e1", section="zc21am")
+    assert r.status_code == 302
+    after = _course("e1")
+    assert after["subject_id"] == before["subject_id"]  # renamed in place
+    assert (after["code"], after["title"], after["term"], after["school_year"], after["program"], after["class_section"], after["manual"]) == \
+        ("CSDC199", "Special Topics", "1st Semester", "2026-2027", "ZC", "21", 1)
+    client.get("/admin/logout")
+    sign_in(client, "tok-teacher-e")  # next sign-in must not overwrite the edit
+    again = _course("e1")
+    assert (again["code"], again["program"], again["class_section"]) == ("CSDC199", "ZC", "21")
+
+
+def test_bad_edits_are_rejected_without_changes(client, google):
+    google["people"]["tok-teacher-f"] = ["teach.f@adnu.edu.ph", "Teacher F", [{"id": "f1", "name": "Elective"}]]
+    sign_in(client, "tok-teacher-f")
+    before = tuple(_course("f1"))
+    for bad in ({"school_year": "26-27"}, {"school_year": "2026-2028"}, {"section": "Section A"},
+                {"code": "C"}, {"term": "Summer"}):
+        _edit(client, "f1", **bad)
+        assert tuple(_course("f1")) == before, bad
+
+
+def test_cannot_edit_a_course_you_do_not_teach(client, google):
+    google["people"]["tok-teacher-g"] = ["teach.g@adnu.edu.ph", "Teacher G", [{"id": "g1", "name": "G class"}]]
+    google["people"]["tok-teacher-h"] = ["teach.h@adnu.edu.ph", "Teacher H", [{"id": "h1", "name": "H class"}]]
+    sign_in(client, "tok-teacher-g")
+    client.get("/admin/logout")
+    sign_in(client, "tok-teacher-h")
+    assert _edit(client, "g1").status_code == 404
+    assert "G class" not in client.get("/admin/workspace").get_data(as_text=True)
+    client.get("/admin/logout")
+    owner_login(client)  # owners can edit any class
+    assert _edit(client, "g1", code="CSDC777", section="ZT31").status_code == 302
+    assert _course("g1")["code"] == "CSDC777"
+
+
+def test_merging_into_existing_subject_moves_assessments_and_rosters(client, google):
+    google["people"]["tok-teacher-i"] = ["teach.i@adnu.edu.ph", "Teacher I", [
+        {"id": "i1", "name": "2026-1 CSDC300.ZT11Am"}, {"id": "i2", "name": "Loose class"}]]
+    sign_in(client, "tok-teacher-i")
+    loose_subject = _course("i2")["subject_id"]
+    quiz = new_assessment(client, loose_subject, "Loose Quiz")
+    conn = connect()
+    conn.execute("""INSERT INTO classroom_rosters(assessment_id,course_id,course_name,program,class_section,imported_at,student_count)
+                    VALUES (?,?,?,?,?,?,0)""", (quiz, "i2", "Loose class", "ZT", "99", iso_now()))
+    conn.commit(); conn.close()
+    # Point the loose class at CSDC300 2026-1 (already exists from i1), section ZT12.
+    _edit(client, "i2", code="CSDC300", title="Data Structures", section="ZT12")
+    target = _course("i1")["subject_id"]
+    conn = connect()
+    moved = conn.execute("SELECT subject_id FROM assessments WHERE id=?", (quiz,)).fetchone()["subject_id"]
+    old_active = conn.execute("SELECT active FROM subjects WHERE id=?", (loose_subject,)).fetchone()["active"]
+    roster = conn.execute("SELECT program, class_section FROM classroom_rosters WHERE course_id='i2'").fetchone()
+    conn.close()
+    assert _course("i2")["subject_id"] == target and moved == target and old_active == 0
+    assert tuple(roster) == ("ZT", "12")
+    assert client.get(f"/admin/assessment/{quiz}").status_code == 200  # still theirs

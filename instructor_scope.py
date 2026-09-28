@@ -127,6 +127,8 @@ def _referenced_assessments(conn):
             one("SELECT assessment_id FROM questions WHERE id=?", value)
         elif name == "roster_id":
             continue  # always paired with assessment_id, and filtered by it
+        elif name == "course_id":
+            refs.add(("course", str(value)))
         else:
             return None  # e.g. subject_id/instructor_id/lab_id/<assessment> type: not resolvable here
     for src in (request.args, request.form):
@@ -173,12 +175,107 @@ def guard():
         subjects = visible_subject_ids(conn)
         assessments = visible_assessment_ids(conn)
         for ref in refs:
-            ok = (ref[1] in subjects) if isinstance(ref, tuple) else (ref in assessments)
+            if isinstance(ref, tuple) and ref[0] == "course":
+                ok = ref[1] in taught_course_ids(conn)
+            elif isinstance(ref, tuple):
+                ok = ref[1] in subjects
+            else:
+                ok = ref in assessments
             if not ok:
                 abort(404)
     finally:
         conn.close()
     return None
+
+
+def taught_course_ids(conn):
+    iid = _instructor_id(conn)
+    return {r["course_id"] for r in conn.execute(
+        "SELECT course_id FROM instructor_courses WHERE instructor_id=?", (iid,)).fetchall()} if iid else set()
+
+
+def courses_for_admin(conn):
+    """Classroom courses the signed-in admin may edit: owners all, instructors theirs."""
+    rows = conn.execute(
+        """SELECT cc.course_id, cc.course_name, cc.program, cc.class_section, cc.manual,
+                  s.id AS subject_id, s.code, s.name AS subject_title, s.term, s.school_year
+           FROM classroom_courses cc JOIN subjects s ON s.id=cc.subject_id
+           ORDER BY s.school_year DESC, s.term, s.code, cc.program, cc.class_section, cc.course_name"""
+    ).fetchall()
+    if scoped():
+        mine = taught_course_ids(conn)
+        rows = [r for r in rows if r["course_id"] in mine]
+    return rows
+
+
+SECTION_RE = re.compile(r"^\s*([A-Za-z]{1,4})\s*-?\s*(\d{1,3})\s*(?:[Aa][MFmf])?\s*$")
+
+
+class CourseEditError(ValueError):
+    pass
+
+
+def edit_course(conn, course_id, form):
+    """Apply a teacher/owner edit of one Classroom course's details (see module docs)."""
+    year_raw = str(form.get("school_year", "")).strip()
+    m = re.fullmatch(r"((?:19|20)\d{2})(?:\s*-\s*((?:19|20)\d{2}))?", year_raw)
+    if not m or (m.group(2) and int(m.group(2)) != int(m.group(1)) + 1):
+        raise CourseEditError("Academic year must look like 2026-2027.")
+    school_year = f"{m.group(1)}-{int(m.group(1)) + 1}"
+    term = str(form.get("term", "")).strip()
+    if term not in TERM_LABELS.values():
+        raise CourseEditError("Choose the semester.")
+    code = re.sub(r"\s+", "", str(form.get("code", ""))).upper()
+    if not re.fullmatch(r"[A-Z0-9._-]{2,20}", code):
+        raise CourseEditError("Subject code should look like CSDC100.")
+    title = " ".join(str(form.get("title", "")).split())[:120] or code
+    sm = SECTION_RE.match(str(form.get("section", "")))
+    if not sm:
+        raise CourseEditError("Section should look like ZC11.")
+    program, class_section = sm.group(1).upper(), sm.group(2)
+
+    course = conn.execute("SELECT * FROM classroom_courses WHERE course_id=?", (course_id,)).fetchone()
+    if not course:
+        raise CourseEditError("Unknown Google Classroom course.")
+    old_sid = course["subject_id"]
+    target = conn.execute("SELECT id FROM subjects WHERE code=? AND term=? AND school_year=?",
+                          (code, term, school_year)).fetchone()
+    shared = conn.execute("SELECT COUNT(*) FROM classroom_courses WHERE subject_id=? AND course_id<>?",
+                          (old_sid, course_id)).fetchone()[0]
+    if target is None or target["id"] == old_sid:
+        if shared == 0 or (target and target["id"] == old_sid):
+            # This course's own subject (or unchanged key): rename in place, keeps its assessments.
+            conn.execute("UPDATE subjects SET code=?, term=?, school_year=?, name=? WHERE id=?",
+                         (code, term, school_year, title, old_sid))
+            new_sid = old_sid
+        else:
+            new_sid = conn.execute(
+                "INSERT INTO subjects(code,name,term,school_year,active,created_at) VALUES (?,?,?,?,1,?) RETURNING id",
+                (code, title, term, school_year, iso_now()),
+            ).fetchone()[0]
+    else:
+        new_sid = target["id"]
+        conn.execute("UPDATE subjects SET name=? WHERE id=?", (title, new_sid))
+    if new_sid != old_sid:
+        # Teachers of the old subject follow the course.
+        conn.execute("""INSERT INTO subject_instructors(subject_id,instructor_id,role)
+                        SELECT ?, instructor_id, role FROM subject_instructors WHERE subject_id=?
+                        ON CONFLICT(subject_id,instructor_id) DO NOTHING""", (new_sid, old_sid))
+        if shared == 0:
+            # The old subject only existed for this course: move its assessments, retire it.
+            conn.execute("UPDATE questions SET subject_id=? WHERE assessment_id IN (SELECT id FROM assessments WHERE subject_id=?)",
+                         (new_sid, old_sid))
+            conn.execute("UPDATE assessments SET subject_id=? WHERE subject_id=?", (new_sid, old_sid))
+            conn.execute("UPDATE batches SET subject_id=? WHERE subject_id=?", (new_sid, old_sid))
+            conn.execute("DELETE FROM subject_instructors WHERE subject_id=?", (old_sid,))
+            conn.execute("UPDATE subjects SET active=0 WHERE id=?", (old_sid,))
+    conn.execute(
+        """UPDATE classroom_courses SET subject_id=?, program=?, class_section=?, manual=1, updated_at=?
+           WHERE course_id=?""", (new_sid, program, class_section, iso_now(), course_id))
+    # Rosters already imported from this course follow the new section.
+    conn.execute("UPDATE classroom_rosters SET program=?, class_section=? WHERE course_id=?",
+                 (program, class_section, course_id))
+    return new_sid
 
 
 # ---------------------------------------------------------------- sign-in
@@ -190,7 +287,7 @@ TERM_LABELS = {"1": "1st Semester", "2": "2nd Semester", "3": "Intersession"}
 _COURSE_RE = re.compile(
     r"^\s*(?P<year>(?:19|20)\d{2})\s*[-.]\s*(?P<term>[123])\s+"
     r"(?P<code>[A-Za-z]{2,8}\s?\d{2,4}[A-Za-z]?)\s*[.\s_-]\s*"
-    r"(?P<program>[A-Za-z]{1,4})\s*-?\s*(?P<section>\d{1,3})\s*(?:A[MFmf])?\s*$"
+    r"(?P<program>[A-Za-z]{1,4})\s*-?\s*(?P<section>\d{1,3})\s*(?:[Aa][MFmf])?\s*$"
 )
 
 
@@ -215,7 +312,11 @@ def _subject_for_course(conn, course):
     cid = str(course.get("id"))
     name = (course.get("name") or "Google Classroom course")[:120]
     parsed = parse_course_name(name, f"{name} {course.get('section') or ''}".strip(), course.get("section"))
-    mapped = conn.execute("SELECT subject_id FROM classroom_courses WHERE course_id=?", (cid,)).fetchone()
+    mapped = conn.execute("SELECT subject_id, manual FROM classroom_courses WHERE course_id=?", (cid,)).fetchone()
+    if mapped and mapped["manual"]:
+        # Edited by hand in Custos: keep the teacher's details, only refresh the name.
+        conn.execute("UPDATE classroom_courses SET course_name=?, updated_at=? WHERE course_id=?", (name, iso_now(), cid))
+        return mapped["subject_id"]
     if parsed:
         title = (course.get("descriptionHeading") or parsed["code"])[:120]
         row = conn.execute("SELECT id FROM subjects WHERE code=? AND term=? AND school_year=?",
@@ -253,10 +354,13 @@ def sync_classroom_subjects(conn, instructor_id, courses):
     linked to this instructor; drop links to Classroom-derived subjects the
     instructor no longer teaches any course of."""
     keep = set()
+    conn.execute("DELETE FROM instructor_courses WHERE instructor_id=?", (instructor_id,))
     for c in courses:
         if not c.get("id"):
             continue
         sid = _subject_for_course(conn, c)
+        conn.execute("INSERT INTO instructor_courses(instructor_id,course_id) VALUES (?,?) ON CONFLICT DO NOTHING",
+                     (instructor_id, str(c["id"])))
         conn.execute("UPDATE subjects SET active=1 WHERE id=?", (sid,))
         conn.execute(
             """INSERT INTO subject_instructors(subject_id,instructor_id,role) VALUES(?,?,'instructor')

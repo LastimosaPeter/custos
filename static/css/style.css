@@ -3945,3 +3945,9 @@ button,.button-link{ text-align:center; line-height:1.22; }
 .teacher-link-block{display:grid;justify-items:center;gap:6px;margin:14px 0 4px}
 .instructor-take-exam{margin:18px 0 0;border:1px solid var(--line);border-radius:8px;padding:10px 14px}
 .instructor-take-exam summary{cursor:pointer;font-weight:700;color:var(--muted)}
+.classroom-class-list{display:grid;gap:12px}
+.classroom-class-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;gap:10px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+.classroom-class-row .classroom-class-name{grid-column:1/-1}
+.classroom-class-row label{display:grid;gap:4px;font-weight:700;font-size:13px}
+.classroom-class-row input,.classroom-class-row select{padding:9px 10px;border:1px solid #bfc8d2;border-radius:6px;font:inherit;background:#fff;min-width:0}
+@media (max-width:900px){.classroom-class-row{grid-template-columns:1fr 1fr}.classroom-class-row button{grid-column:1/-1}}

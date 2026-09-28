@@ -101,6 +101,34 @@
 </div>
 {% endif %}
 
+{% if classroom_instructors %}
+<section class="content-card" id="classroom-classes">
+  <div class="section-heading"><div><h2>{% if session.get('admin_role') == 'owner' %}Google Classroom classes{% else %}My Google Classroom classes{% endif %}</h2>
+    <p class="subtle">Filled in from the Classroom name (e.g. <code>2026-1 CSDC100.ZC11Am</code>) when you sign in. Fix anything missing or wrong here; your edits are kept on later sign-ins.</p></div></div>
+  {% if classroom_classes %}
+  <div class="classroom-class-list">
+  {% for c in classroom_classes %}
+    <form method="post" action="{{ url_for('google.classroom_course_edit', course_id=c.course_id) }}" class="classroom-class-row">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="classroom-class-name"><strong>{{ c.course_name }}</strong>{% if c.manual %}<span class="micro"> · edited</span>{% endif %}</div>
+      <label>Academic Year<input name="school_year" value="{{ c.school_year }}" placeholder="2026-2027" required pattern="\s*(19|20)\d{2}(\s*-\s*(19|20)\d{2})?\s*"></label>
+      <label>Semester<select name="term" required>
+        <option value="" {% if not c.term %}selected{% endif %} disabled>Choose…</option>
+        {% for t in term_labels %}<option value="{{ t }}" {% if c.term == t %}selected{% endif %}>{{ t }}</option>{% endfor %}
+      </select></label>
+      <label>Subject Code<input name="code" value="{{ c.code if c.school_year else '' }}" placeholder="CSDC100" required></label>
+      <label>Subject Title<input name="title" value="{{ c.subject_title }}" placeholder="Fundamentals of Programming"></label>
+      <label>Section<input name="section" value="{{ (c.program or '') ~ (c.class_section or '') }}" placeholder="ZC11" required></label>
+      <button class="primary" type="submit">Save</button>
+    </form>
+  {% endfor %}
+  </div>
+  {% else %}
+  <p class="micro">No Google Classroom classes yet. Sign in with Google as a teacher to bring in the classes you teach.</p>
+  {% endif %}
+</section>
+{% endif %}
+
 <section class="content-card">
   <div class="section-heading"><div><h2>Assessment Catalog</h2><p class="subtle">Select an assessment to update its delivery settings. Existing CSDC101 assessments remain mapped automatically.</p></div></div>
   <div class="workspace-assessment-list">

@@ -685,6 +685,36 @@ def classroom_sync_grades(assessment_id, roster_id):
 
 
 # --------------------------------------------------------------------------
+# Edit a Classroom course's details (owner, or a teacher of that course)
+# --------------------------------------------------------------------------
+
+@bp.post("/admin/classroom/course/<course_id>/edit")
+def classroom_course_edit(course_id):
+    import secrets as _secrets
+
+    from flask import flash, redirect, url_for
+
+    import instructor_scope as scope
+
+    _require_admin()
+    supplied = request.form.get("csrf_token", "")
+    if not supplied or not _secrets.compare_digest(supplied, session.get("csrf_token", "")):
+        abort(400, "Invalid CSRF token")
+    # instructor_scope.guard already refused courses this instructor doesn't teach.
+    conn = connect()
+    try:
+        scope.edit_course(conn, course_id, request.form)
+        conn.commit()
+        flash("Class details saved.", "success")
+    except scope.CourseEditError as exc:
+        conn.rollback()
+        flash(str(exc), "error")
+    finally:
+        conn.close()
+    return redirect(url_for("nextgen.workspace") + "#classroom-classes")
+
+
+# --------------------------------------------------------------------------
 # Live Monitor: rostered students who haven't started
 # --------------------------------------------------------------------------
 
