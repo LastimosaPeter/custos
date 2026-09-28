@@ -14,16 +14,7 @@ import tempfile
 
 import pytest
 
-ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CLIENT_ID = "test-client.apps.googleusercontent.com"
-_tmp = tempfile.mkdtemp(prefix="custos-google-test-")
-os.environ.update({
-    "SECRET_KEY": "x" * 64, "ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "test-admin-password-123",
-    "DATABASE_URL": "", "EXAM_DB_PATH": os.path.join(_tmp, "test.db"), "AUTO_INIT_DB": "1",
-    "GOOGLE_CLIENT_ID": CLIENT_ID, "GOOGLE_ALLOWED_DOMAINS": "adnu.edu.ph,gbox.adnu.edu.ph",
-    "STUDENT_GOOGLE_LOGIN_REQUIRED": "1", "CODE_RUNNER_BACKEND": "disabled",
-})
-sys.path.insert(0, ROOT)
+from conftest import CLIENT_ID, ROOT, TMP as _tmp  # noqa: E402  (settings live in conftest.py)
 
 import app as custos  # noqa: E402
 import google_integration as gi  # noqa: E402
@@ -192,9 +183,10 @@ def test_student_signin_requires_csrf(client, google_token):
 @pytest.mark.parametrize("email,hd", [("ana@adnu.edu.ph", "adnu.edu.ph"), ("ana@gbox.adnu.edu.ph", "gbox.adnu.edu.ph")])
 def test_student_signin_accepts_both_school_domains(client, google_token, email, hd):
     r = _student_signin(client, google_token, email, hd)
-    assert r.status_code == 200 and r.get_json()["email"] == email
+    canonical = email.replace("@gbox.adnu.edu.ph", "@adnu.edu.ph")  # one identity across aliased domains
+    assert r.status_code == 200 and r.get_json()["email"] == canonical
     html = client.get("/login").get_data(as_text=True)
-    assert email in html and 'name="session_key"' in html
+    assert canonical in html and 'name="session_key"' in html
     # identity comes from Google: no name/email/section fields to fill in
     for field in ('name="email"', 'name="first_name"', 'name="last_name"', 'name="program"'):
         assert field not in html
@@ -312,7 +304,8 @@ def test_admin_google_signin_unknown_email_refused(client, google_token):
 
 
 def test_admin_login_page_has_google_button(client):
-    assert "/auth/google/admin" in client.get("/admin/login").get_data(as_text=True)
+    # Classroom-instructor mode (see conftest.py): Google + Classroom teacher check
+    assert "/auth/google/instructor" in client.get("/admin/login").get_data(as_text=True)
 
 
 # --------------------------------------------------------------------------- classroom
@@ -461,6 +454,7 @@ def _import_roster(client, csrf, assessment_id):
 
 
 def _submitted_attempt(assessment_id, email, auto_total, admin_total=None):
+    email = gi.canonical_email(email)  # attempts always carry the canonical Google email
     conn = connect()
     batch = conn.execute("SELECT id FROM batches WHERE assessment_id=?", (assessment_id,)).fetchone()
     conn.execute("DELETE FROM exam_sessions WHERE email=? AND assessment_id=?", (email, assessment_id))

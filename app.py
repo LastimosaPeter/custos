@@ -48,7 +48,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r7-google")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r8-classroom")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -1215,6 +1215,8 @@ def admin_login():
         conn = connect()
         admin = conn.execute("SELECT * FROM admins WHERE username=?", (username,)).fetchone()
         conn.close()
+        if admin and instructor_scope.active() and admin["role"] != "owner":
+            admin = None  # Classroom mode: password login is an owner-only emergency path
         if admin and ("active" not in admin.keys() or admin["active"]) and check_password_hash(admin["password_hash"], password):
             session.clear()
             session["admin_id"] = admin["id"]
@@ -1261,6 +1263,16 @@ def admin_dashboard():
         active_sessions = conn.execute(
             "SELECT COUNT(*) AS c FROM exam_sessions WHERE status='in_progress' AND COALESCE(is_test,0)=0"
         ).fetchone()["c"]
+        if instructor_scope.scoped():
+            # Classroom instructor: only their courses' assessments and subjects.
+            assessments = instructor_scope.filter_rows(conn, assessments)
+            subjects = instructor_scope.filter_rows(conn, subjects, kind="subject")
+            totals = {"assessment_count": len(assessments),
+                      "active_count": sum(1 for a in assessments if a["active"])}
+            visible = instructor_scope.visible_assessment_ids(conn)
+            active_sessions = sum(1 for r in conn.execute(
+                "SELECT assessment_id FROM exam_sessions WHERE status='in_progress' AND COALESCE(is_test,0)=0"
+            ).fetchall() if r["assessment_id"] in visible)
         conn.close()
         return render_template(
             "admin_assessments_dashboard.html", assessments=assessments, subjects=subjects,
@@ -1761,7 +1773,7 @@ def admin_chat_messages(sid):
 def _message_threads(conn):
     rows = conn.execute(
         """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,
-                  b.name AS batch_name,b.assessment_type,
+                  e.assessment_id, b.name AS batch_name,b.assessment_type,
                   (SELECT COUNT(*) FROM exam_messages m WHERE m.session_id=e.id AND m.sender='student' AND m.read_at IS NULL) AS unread_messages,
                   (SELECT m.message FROM exam_messages m WHERE m.session_id=e.id ORDER BY m.id DESC LIMIT 1) AS last_message,
                   (SELECT m.created_at FROM exam_messages m WHERE m.session_id=e.id ORDER BY m.id DESC LIMIT 1) AS last_message_at
@@ -1770,7 +1782,7 @@ def _message_threads(conn):
            ORDER BY CASE WHEN (SELECT COUNT(*) FROM exam_messages mu WHERE mu.session_id=e.id AND mu.sender='student' AND mu.read_at IS NULL) > 0 THEN 0 ELSE 1 END,
                     last_message_at DESC, e.id DESC"""
     ).fetchall()
-    return [dict(r) for r in rows]
+    return [dict(r) for r in instructor_scope.filter_rows(conn, rows, key="assessment_id")]
 
 
 @app.get("/admin/messages")
@@ -2013,6 +2025,7 @@ def _live_monitor_payload(conn):
            WHERE e.status='in_progress' AND COALESCE(e.is_test,0)=0 AND COALESCE(e.monitor_done,0)=0
            ORDER BY e.id DESC"""
     ).fetchall()
+    rows = instructor_scope.filter_rows(conn, rows, key="assessment_id")
     payload=[]
     for r in rows:
         item=dict(r)
@@ -2062,7 +2075,7 @@ def _live_monitor_payload(conn):
 def admin_monitor():
     conn=connect()
     students=_live_monitor_payload(conn)
-    assessment_options=_admin_assessment_options(conn)
+    assessment_options=instructor_scope.filter_rows(conn, _admin_assessment_options(conn))
     conn.close()
     attention_count=sum(1 for s in students if s["attention_level"] in {"high","locked"})
     locked_count=sum(1 for s in students if s["attention_level"] == "locked")
@@ -2132,7 +2145,7 @@ def _admin_assessment_options(conn):
 
 
 def _resolve_admin_assessment(conn):
-    options = _admin_assessment_options(conn)
+    options = instructor_scope.filter_rows(conn, _admin_assessment_options(conn))
     if not options:
         return options, None
     raw_id = request.args.get("assessment_id", "").strip()
@@ -2827,6 +2840,8 @@ from workspace import register as register_nextgen
 register_nextgen(app)
 from google_integration import register as register_google
 register_google(app)
+import instructor_scope
+instructor_scope.register(app)
 
 
 if __name__ == "__main__":

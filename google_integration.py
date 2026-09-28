@@ -40,6 +40,31 @@ GOOGLE_ALLOWED_DOMAINS = {
 }
 STUDENT_GOOGLE_LOGIN_REQUIRED = bool(GOOGLE_CLIENT_ID) and os.getenv("STUDENT_GOOGLE_LOGIN_REQUIRED", "1") == "1"
 
+# Domains that are the same school identity (e.g. mid-migration). "alias=canonical",
+# comma-separated. name@gbox.adnu.edu.ph and name@adnu.edu.ph are one person.
+EMAIL_DOMAIN_ALIASES = {}
+for _pair in os.getenv("EMAIL_DOMAIN_ALIASES", "gbox.adnu.edu.ph=adnu.edu.ph").split(","):
+    if "=" in _pair:
+        _a, _c = (x.strip().lower() for x in _pair.split("=", 1))
+        if _a and _c:
+            EMAIL_DOMAIN_ALIASES[_a] = _c
+
+
+def canonical_email(email):
+    """One stored form per person across aliased school domains."""
+    email = str(email or "").strip().lower()
+    if "@" not in email:
+        return email
+    local, domain = email.rsplit("@", 1)
+    return f"{local}@{EMAIL_DOMAIN_ALIASES.get(domain, domain)}"
+
+
+def email_variants(email):
+    """All spellings of this person's address across aliased domains."""
+    canon = canonical_email(email)
+    local, domain = canon.rsplit("@", 1) if "@" in canon else (canon, "")
+    return sorted({canon} | {f"{local}@{a}" for a, c in EMAIL_DOMAIN_ALIASES.items() if c == domain})
+
 CLASSROOM_SCOPES = (
     "https://www.googleapis.com/auth/classroom.courses.readonly",
     "https://www.googleapis.com/auth/classroom.rosters.readonly",
@@ -146,11 +171,21 @@ def student_google_signin():
         claims = verify_id_token(payload.get("credential"))
     except GoogleAuthError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 401
+    import instructor_scope as scope
+
     conn = connect()
     try:
         admin = find_admin_for_email(conn, claims["email"])
+        if scope.active() and scope.is_owner_email(claims["email"]):
+            admin, _ = scope.ensure_admin(conn, claims["email"], claims.get("name") or claims["email"], "owner")
+            conn.commit()
     finally:
         conn.close()
+    if admin and scope.active() and admin["role"] != "owner":
+        # Classroom instructors are re-checked against Google Classroom at every sign-in.
+        from flask import url_for
+
+        return jsonify({"ok": True, "role": "instructor", "redirect": url_for("admin_login")})
     if admin:
         return jsonify({"ok": True, "role": "instructor", "redirect": _sign_in_admin(admin)})
     try:
@@ -158,13 +193,13 @@ def student_google_signin():
     except GoogleAuthError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 401
     session["google_student"] = {
-        "email": claims["email"],
+        "email": canonical_email(claims["email"]),
         "sub": str(claims.get("sub", "")),
         "given_name": str(claims.get("given_name", ""))[:60],
         "family_name": str(claims.get("family_name", ""))[:60],
         "name": str(claims.get("name", ""))[:120],
     }
-    return jsonify({"ok": True, "role": "student", "email": claims["email"]})
+    return jsonify({"ok": True, "role": "student", "email": canonical_email(claims["email"])})
 
 
 @bp.post("/auth/google/student/signout")
@@ -182,16 +217,19 @@ def student_google_signout():
 # --------------------------------------------------------------------------
 
 def find_admin_for_email(conn, email):
-    """An active Custos admin whose own email, or linked instructor email, matches."""
+    """An active Custos admin whose own email, or linked instructor email, matches
+    (any spelling across aliased school domains)."""
+    variants = email_variants(email)
+    marks = ",".join("?" * len(variants))
     row = conn.execute(
-        "SELECT * FROM admins WHERE LOWER(COALESCE(email,''))=? AND COALESCE(active,1)=1", (email,)
+        f"SELECT * FROM admins WHERE LOWER(COALESCE(email,'')) IN ({marks}) AND COALESCE(active,1)=1", tuple(variants)
     ).fetchone()
     if row:
         return row
     return conn.execute(
-        """SELECT a.* FROM admins a JOIN instructors i ON i.admin_id=a.id
-           WHERE LOWER(COALESCE(i.email,''))=? AND COALESCE(i.active,1)=1 AND COALESCE(a.active,1)=1""",
-        (email,),
+        f"""SELECT a.* FROM admins a JOIN instructors i ON i.admin_id=a.id
+            WHERE LOWER(COALESCE(i.email,'')) IN ({marks}) AND COALESCE(i.active,1)=1 AND COALESCE(a.active,1)=1""",
+        tuple(variants),
     ).fetchone()
 
 
@@ -210,7 +248,73 @@ def admin_google_signin():
         conn.close()
     if not admin:
         return jsonify({"ok": False, "error": "No Custos instructor account uses this Google email."}), 403
+    import instructor_scope as scope
+
+    if scope.active() and admin["role"] != "owner" and not scope.is_owner_email(claims["email"]):
+        # Classroom instructors must go through the Classroom teacher check.
+        return jsonify({"ok": False, "error": "Use \"Sign in with Google\" on the Instructor page."}), 403
     return jsonify({"ok": True, "redirect": _sign_in_admin(admin)})
+
+
+USERINFO_URL = "https://openidconnect.googleapis.com/v1/userinfo"
+
+
+@bp.post("/auth/google/instructor")
+def instructor_google_signin():
+    """Classroom instructors: the browser gets a short-lived access token with
+    openid/email/profile + Classroom scopes; we verify it was issued to Custos,
+    read the verified email, and ask Classroom which ACTIVE courses this person
+    teaches. Owners (CUSTOS_OWNER_EMAILS) skip the teacher requirement."""
+    import instructor_scope as scope
+
+    _require_csrf_header()
+    if not scope.active():
+        abort(404)
+    payload = request.get_json(silent=True) or {}
+    token = str(payload.get("access_token", ""))
+    try:
+        if not token or len(token) > 4096:
+            raise GoogleAuthError("Google sign-in failed. Please try again.")
+        info = requests.get(TOKENINFO_URL, params={"access_token": token}, timeout=HTTP_TIMEOUT)
+        data = info.json() if info.status_code == 200 else {}
+        if data.get("aud") != GOOGLE_CLIENT_ID and data.get("azp") != GOOGLE_CLIENT_ID:
+            raise GoogleAuthError("Google sign-in failed. Please try again.")
+        email = canonical_email(data.get("email", ""))
+        if not email or str(data.get("email_verified", "")).lower() not in ("true", "1"):
+            raise GoogleAuthError("Your Google account email is not verified.")
+        granted = set(str(data.get("scope", "")).split())
+        profile = {}
+        try:
+            u = requests.get(USERINFO_URL, headers={"Authorization": f"Bearer {token}"}, timeout=HTTP_TIMEOUT)
+            profile = u.json() if u.status_code == 200 else {}
+        except requests.RequestException:
+            pass
+        name = str(profile.get("name") or email)[:120]
+        owner = scope.is_owner_email(email)
+        courses = []
+        if CLASSROOM_SCOPES[0] in granted:
+            courses = _classroom_get(token, "/courses", {"teacherId": "me", "courseStates": "ACTIVE"})
+        elif not owner:
+            raise GoogleAuthError("Please allow Custos to see your Google Classroom classes.")
+    except GoogleAuthError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 401
+    except requests.RequestException:
+        return jsonify({"ok": False, "error": "Could not reach Google. Try again."}), 503
+
+    conn = connect()
+    try:
+        existing = find_admin_for_email(conn, email)
+        is_owner = owner or (existing is not None and existing["role"] == "owner")
+        if not is_owner and not courses:
+            return jsonify({"ok": False, "error": "This Google account isn't a teacher of any active Google Classroom class, "
+                                                  "so it can't open the instructor side. Students: use Student View."}), 403
+        admin, inst = scope.ensure_admin(conn, email, name, "owner" if is_owner else "instructor")
+        synced = scope.sync_classroom_subjects(conn, inst["id"], courses)
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "role": "owner" if is_owner else "instructor",
+                    "courses": len(synced), "redirect": _sign_in_admin(admin)})
 
 
 def _sign_in_admin(admin):
@@ -366,6 +470,7 @@ def classroom_import(assessment_id):
         if not email or _email_domain(email) not in GOOGLE_ALLOWED_DOMAINS:
             skipped += 1
             continue
+        email = canonical_email(email)
         name = profile.get("name") or {}
         rows[email] = (
             str(name.get("givenName", "")).strip()[:60],
@@ -575,6 +680,9 @@ def monitor_not_started():
                                  AND e.email=s.email AND COALESCE(e.is_test,0)=0)
                ORDER BY a.title, r.program, r.class_section, s.last_name, s.first_name"""
         ).fetchall()
+        import instructor_scope
+
+        rows = instructor_scope.filter_rows(conn, rows, key="assessment_id")
     finally:
         conn.close()
     out = {}
@@ -609,7 +717,7 @@ def roster_entry(conn, assessment_id, email):
         """SELECT s.first_name, s.last_name, r.program, r.class_section
            FROM classroom_roster_students s JOIN classroom_rosters r ON r.id=s.roster_id
            WHERE r.assessment_id=? AND s.email=? ORDER BY r.imported_at DESC LIMIT 1""",
-        (assessment_id, email),
+        (assessment_id, canonical_email(email)),
     ).fetchone()
     return True, entry
 
@@ -672,5 +780,6 @@ def register(app):
             "google_student_required": STUDENT_GOOGLE_LOGIN_REQUIRED,
             "google_allowed_domains": sorted(GOOGLE_ALLOWED_DOMAINS),
             "classroom_scopes": " ".join(ALL_CLASSROOM_SCOPES),
+            "instructor_signin_scopes": "openid email profile " + " ".join(ALL_CLASSROOM_SCOPES),
             "student_sections": _student_sections_json(),
         }

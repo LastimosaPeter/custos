@@ -6,13 +6,25 @@
 <div class="center-card auth-card">
   <div class="eyebrow">INSTRUCTOR VIEW · ADMINISTRATION</div>
   <h1>Instructor Sign-In</h1>
+  {% if classroom_instructors and not request.args.get('password') %}
+  {# Classroom mode: Google sign-in + Classroom teacher check is the only way in. #}
+  <p class="lead">Sign in with the school Google account you use in Google Classroom. Teachers of an active Classroom class get access to their own courses.</p>
+  <div class="google-signin-block" data-google-instructor-signin data-client-id="{{ google_client_id }}"
+       data-scopes="{{ instructor_signin_scopes }}"
+       data-endpoint="{{ url_for('google.instructor_google_signin') }}" data-csrf="{{ csrf_token() }}">
+    <button type="button" class="primary wide" data-google-instructor-button>Sign in with Google</button>
+    <p class="micro">The first time, Google asks you to let Custos see your Google Classroom classes.</p>
+    <p class="google-error" data-google-error hidden></p>
+  </div>
+  {% else %}
+  {% if classroom_instructors %}<p class="micro">Emergency sign-in for Custos owners only.</p>{% endif %}
   <form method="post" class="form-grid">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Username <input name="username" required autocomplete="username"></label>
     <label>Password <input type="password" name="password" required autocomplete="current-password"></label>
     <button class="primary wide" type="submit">Sign In</button>
   </form>
-  {% if google_enabled %}
+  {% if google_enabled and not classroom_instructors %}
   <div class="auth-divider"><span>or</span></div>
   <div class="google-signin-block" data-google-signin data-client-id="{{ google_client_id }}"
        data-endpoint="{{ url_for('google.admin_google_signin') }}" data-csrf="{{ csrf_token() }}">
@@ -20,6 +32,7 @@
     <p class="micro">Uses the email on your Custos instructor account.</p>
     <p class="google-error" data-google-error hidden></p>
   </div>
+  {% endif %}
   {% endif %}
   <a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
 </div>

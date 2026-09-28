@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r4-google"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r5-classroom-instructors"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -606,6 +606,12 @@ def migrate_schema(conn):
     for name, definition in session_additions.items():
         if name not in session_cols:
             conn.execute(f"ALTER TABLE exam_sessions ADD COLUMN {name} {definition}")
+
+    subject_cols = _table_columns(conn, "subjects") if "subjects" in _table_names(conn) else set()
+    if subject_cols and "classroom_course_id" not in subject_cols:
+        conn.execute("ALTER TABLE subjects ADD COLUMN classroom_course_id TEXT")
+    if subject_cols:
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_subjects_classroom_course ON subjects(classroom_course_id)")
 
     roster_cols = _table_columns(conn, "classroom_rosters") if "classroom_rosters" in _table_names(conn) else set()
     for name, definition in {

@@ -50,6 +50,33 @@
     });
   });
 
+  // ---- Instructor sign-in in Classroom mode: access token + Classroom teacher check ----
+  document.querySelectorAll("[data-google-instructor-signin]").forEach((block) => {
+    const errorBox = block.querySelector("[data-google-error]");
+    const btn = block.querySelector("[data-google-instructor-button]");
+    let client = null;
+    btn.addEventListener("click", () => {
+      if (errorBox) errorBox.hidden = true;
+      whenGoogle(hasOAuth, () => {
+        if (!client) {
+          client = google.accounts.oauth2.initTokenClient({
+            client_id: block.dataset.clientId,
+            scope: block.dataset.scopes,
+            callback: async (resp) => {
+              if (resp.error) { errorBox.textContent = "Google sign-in was cancelled."; errorBox.hidden = false; return; }
+              btn.disabled = true;
+              try {
+                const data = await post(block.dataset.endpoint, block.dataset.csrf, { access_token: resp.access_token });
+                window.location.assign(data.redirect);
+              } catch (err) { errorBox.textContent = err.message; errorBox.hidden = false; btn.disabled = false; }
+            },
+          });
+        }
+        client.requestAccessToken();
+      });
+    });
+  });
+
   document.querySelectorAll("[data-google-signout]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       try { await post(btn.dataset.endpoint, btn.dataset.csrf); } finally {

@@ -194,6 +194,13 @@ def workspace():
            WHERE a.deleted_at IS NULL
            ORDER BY a.active DESC, s.code, a.created_at DESC"""
     ).fetchall()
+    import instructor_scope
+
+    if instructor_scope.scoped():
+        # Classroom instructor: only their own subjects, assessments and account.
+        subjects = instructor_scope.filter_rows(conn, subjects, kind="subject")
+        assessments = instructor_scope.filter_rows(conn, assessments)
+        instructors = [i for i in instructors if i["admin_id"] == session.get("admin_id")]
     conn.close()
     return render_template(
         "admin_workspace.html", subjects=subjects, instructors=instructors,

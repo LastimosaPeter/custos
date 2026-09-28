@@ -7,7 +7,7 @@
 {% block content %}
 <div class="dashboard-heading future-heading">
   <div><div class="eyebrow">INSTRUCTOR VIEW · PRIMARY WORKSPACE</div><h1>Workspace</h1><p class="subtle">Manage subjects, assessments, and instructor access from one place. Assessment dashboards and monitoring stay contextual to the activity being delivered.</p></div>
-  <a class="secondary button-link" href="{{ url_for('nextgen.admin_ide') }}">Caudex IDE</a>
+  {% if not classroom_instructors or session.get('admin_role') == 'owner' %}<a class="secondary button-link" href="{{ url_for('nextgen.admin_ide') }}">Caudex IDE</a>{% endif %}
 </div>
 
 <div class="future-stat-grid">
@@ -17,6 +17,7 @@
   <div class="stat-card"><span>Code Runner</span><strong class="runner-word {{ 'runner-ready' if runner.ready else 'runner-off' }}">{{ 'Ready' if runner.ready else 'Setup' }}</strong><small>{{ runner.detail }}</small></div>
 </div>
 
+{% if not classroom_instructors %}
 <div class="future-grid two">
   <section class="content-card">
     <div class="section-heading"><div><h2>Add Subject</h2><p class="subtle">Create a reusable academic container.</p></div></div>
@@ -46,6 +47,10 @@
   </section>
   {% else %}<section class="content-card"><h2>Instructor Accounts</h2><p class="subtle">Only the Custos owner can create or manage instructor logins.</p></section>{% endif %}
 </div>
+{% else %}
+<section class="content-card"><h2>Subjects &amp; instructors come from Google Classroom</h2>
+  <p class="subtle">Each Google Classroom course you teach appears here as a subject when you sign in, and anyone listed as a Teacher of an active Classroom course can sign in as an instructor. They see only their own courses' assessments.</p></section>
+{% endif %}
 
 <section class="content-card workspace-assessment-handoff">
   <div class="section-heading">
@@ -54,6 +59,7 @@
   </div>
 </section>
 
+{% if not classroom_instructors or session.get('admin_role') == 'owner' %}
 <div class="workspace-management-grid">
   <section class="content-card">
     <div class="section-heading"><div><h2>Subjects</h2><p class="subtle">Edit identity and availability without recreating the subject.</p></div></div>
@@ -93,6 +99,7 @@
     </div>
   </section>
 </div>
+{% endif %}
 
 <section class="content-card">
   <div class="section-heading"><div><h2>Assessment Catalog</h2><p class="subtle">Select an assessment to update its delivery settings. Existing CSDC101 assessments remain mapped automatically.</p></div></div>
