@@ -192,7 +192,16 @@ def sync_classroom_subjects(conn, instructor_id, courses):
             continue
         row = conn.execute("SELECT id FROM subjects WHERE classroom_course_id=?", (cid,)).fetchone()
         name = (c.get("name") or "Google Classroom course")[:120]
-        code = (c.get("section") or c.get("descriptionHeading") or name)[:40]
+        base = (c.get("section") or c.get("descriptionHeading") or name)[:36]
+        # subjects are UNIQUE(code, term, school_year): courses sharing a section
+        # name (e.g. two "ZT11" classes) need distinct codes.
+        code, n = base, 1
+        while conn.execute(
+            """SELECT 1 FROM subjects WHERE code=? AND term='' AND school_year=''
+               AND COALESCE(classroom_course_id,'')<>?""", (code, cid)
+        ).fetchone():
+            n += 1
+            code = f"{base} #{n}"
         if row:
             sid = row["id"]
             conn.execute("UPDATE subjects SET name=?, code=?, active=1 WHERE id=?", (name, code, sid))

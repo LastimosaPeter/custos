@@ -321,3 +321,24 @@ def test_classroom_mode_off_keeps_classic_admin():
     )
     out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
     assert "CLASSIC_OK" in out.stdout, out.stderr[-2000:]
+
+
+def test_courses_sharing_a_section_name_both_become_subjects(client, google):
+    google["people"]["tok-teacher-c"] = ["teach.c@adnu.edu.ph", "Teacher C", [
+        {"id": "c501", "name": "CSDC100", "section": "ZT11"},
+        {"id": "c502", "name": "MIT 201", "section": "ZT11"},
+        {"id": "c503", "name": "No section"},
+    ]]
+    r = sign_in(client, "tok-teacher-c")
+    assert r.status_code == 200 and r.get_json()["courses"] == 3
+    conn = connect()
+    codes = sorted(row["code"] for row in conn.execute(
+        "SELECT code FROM subjects WHERE classroom_course_id IN ('c501','c502','c503')").fetchall())
+    conn.close()
+    assert len(set(codes)) == 3 and codes[0].startswith("No section")
+    # signing in again is stable (no new subjects, no errors)
+    client.get("/admin/logout")
+    assert sign_in(client, "tok-teacher-c").status_code == 200
+    conn = connect()
+    assert conn.execute("SELECT COUNT(*) FROM subjects WHERE classroom_course_id IN ('c501','c502','c503')").fetchone()[0] == 3
+    conn.close()
