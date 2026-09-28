@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block title %}Custos - Item Analysis{% endblock %}
+{% block header_right %}{% from "_admin_nav.html" import admin_nav %}{{ admin_nav(assessment) }}{% endblock %}
+{% block content %}
+<div class="dashboard-heading"><div><div class="eyebrow">INSTRUCTOR VIEW · ITEM ANALYSIS</div><h1>Item Analysis needs a database repair</h1><p class="subtle">Custos attempted an automatic schema repair, but this deployment still could not build the analysis page.</p></div></div>
+<section class="content-card analysis-card">
+  <h2>What to check</h2>
+  <p>The detailed traceback has been written to your Vercel Function Logs. No database password or SQL traceback is shown here.</p>
+  <p><strong>Error class:</strong> {{ error_type }}</p>
+  <p class="subtle">Open Vercel → Project → Logs, reproduce this page once, and inspect the newest /admin/analysis request if this message remains after redeployment.</p>
+</section>
+{% endblock %}

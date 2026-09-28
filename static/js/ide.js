@@ -45,6 +45,7 @@
     violationCount: Number(app.dataset.violationCount || 0),
     permanent: app.dataset.securityLocked === '1',
     pending: app.dataset.pendingBlackout === '1',
+    resumeRequired: app.dataset.securityResumeRequired === '1',
     tempRemaining: Number(app.dataset.tempLockRemaining || 0)
   };
 
@@ -118,23 +119,51 @@
 
   finishBtn.addEventListener('click',()=>finishOverlay.classList.add('active')); cancelFinish.addEventListener('click',()=>finishOverlay.classList.remove('active')); finishForm.addEventListener('submit',()=>{intentionalNavigation=true;});
 
+  async function confirmResume(){
+    if(!state.resumeRequired) return true;
+    try{
+      const res=await post('/api/ide/security-resume',{secure_active:secureActive()});
+      const data=await res.json().catch(()=>({}));
+      if(!res.ok||!data.ok){if(data.locked)applySecurity(data);return false;}
+      applySecurity(data);
+      log('security_resume_client_confirmed','Secure display mode restored after instructor unlock');
+      return !state.resumeRequired;
+    }catch(_){return false;}
+  }
   async function enterSecureMode(){
     secureError.classList.add('hidden');
-    try { if(installed()){secureEntered=true;secureOverlay.classList.remove('active');log('standalone_secure_mode_enter','Installed Custos IDE secure mode entered');return;} if(!document.fullscreenElement) await document.documentElement.requestFullscreen(); secureEntered=true;secureOverlay.classList.remove('active');log('fullscreen_enter','IDE fullscreen entered'); }
+    if(state.permanent||state.pending||state.tempRemaining>0)return;
+    try {
+      if(installed()){
+        secureEntered=true;
+        log('standalone_secure_mode_enter','Installed Custos IDE secure mode entered');
+        if(state.resumeRequired&&!await confirmResume()){secureError.classList.remove('hidden');return;}
+        secureOverlay.classList.remove('active');
+        renderSecurity();
+        return;
+      }
+      if(!document.fullscreenElement) await document.documentElement.requestFullscreen();
+      secureEntered=true;
+      log('fullscreen_enter','IDE fullscreen entered');
+      if(state.resumeRequired&&!await confirmResume()){secureError.classList.remove('hidden');return;}
+      secureOverlay.classList.remove('active');
+      renderSecurity();
+    }
     catch(_){secureError.classList.remove('hidden');}
   }
   enterSecure.addEventListener('click',enterSecureMode); resumeSecure.addEventListener('click',enterSecureMode);
 
-  function applySecurity(data){ state.violationCount=Number(data.violation_count??state.violationCount);state.permanent=Boolean(data.permanent);state.pending=Boolean(data.pending);state.tempRemaining=Number(data.temp_remaining??0);renderSecurity(); }
+  function applySecurity(data){ state.violationCount=Number(data.violation_count??state.violationCount);state.permanent=Boolean(data.permanent);state.pending=Boolean(data.pending);state.resumeRequired=Boolean(data.resume_required??data.resumeRequired??state.resumeRequired);state.tempRemaining=Number(data.temp_remaining??0);renderSecurity(); }
   function renderSecurity(){
     violationCount.textContent=state.violationCount; violationMini.textContent=`${state.violationCount}/3 violations`;
     if(state.permanent){lockOverlay.classList.add('active','permanent');lockTitle.textContent='Coding Session Locked';lockCountdown.textContent='INSTRUCTOR REQUIRED';lockMessage.textContent='Three security violations were recorded. Only your instructor can unlock the IDE.';resumeSecure.classList.add('hidden');return;}
     lockOverlay.classList.remove('permanent');
+    if(state.resumeRequired){lockOverlay.classList.add('active');lockTitle.textContent='Secure Mode Required';lockCountdown.textContent='READY';lockMessage.textContent='Your instructor granted another chance. Re-enter secure display mode before editing, running, or submitting code. Previous violations remain recorded.';resumeSecure.classList.remove('hidden');return;}
     if(state.pending){lockOverlay.classList.add('active');lockTitle.textContent='Security Event Detected';lockCountdown.textContent='…';lockMessage.textContent='The 15-second lock begins when Custos regains focus.';resumeSecure.classList.add('hidden');return;}
     if(state.tempRemaining>0){tempLockEnds=Date.now()+state.tempRemaining*1000;lockOverlay.classList.add('active');lockTitle.textContent='Security Lock';lockMessage.textContent='The IDE is temporarily unavailable. Your lab timer continues.';resumeSecure.classList.add('hidden');return;}
     if(secureEntered&&!secureActive()){lockOverlay.classList.add('active');lockTitle.textContent='Security Lock Complete';lockCountdown.textContent='READY';lockMessage.textContent='Return to secure display mode to continue.';resumeSecure.classList.remove('hidden');} else {lockOverlay.classList.remove('active');resumeSecure.classList.add('hidden');}
   }
-  async function violation(source){ if(!secureEntered||intentionalNavigation||state.permanent||state.pending||state.tempRemaining>0||violationInFlight)return; violationInFlight=true; try{const res=await post('/api/ide/security-violation',{source});const data=await res.json();if(data.ok){applySecurity(data);if(state.pending&&!document.hidden&&document.hasFocus()) await startLock();}}catch(_){}finally{violationInFlight=false;} }
+  async function violation(source){ if(!secureEntered||intentionalNavigation||state.permanent||state.pending||state.resumeRequired||state.tempRemaining>0||violationInFlight)return; violationInFlight=true; try{const res=await post('/api/ide/security-violation',{source});const data=await res.json();if(data.ok){applySecurity(data);if(state.pending&&!document.hidden&&document.hasFocus()) await startLock();}}catch(_){}finally{violationInFlight=false;} }
   async function startLock(){try{const res=await post('/api/ide/security-start-lock',{});const data=await res.json();if(data.ok)applySecurity(data);}catch(_){}}
   async function refreshSecurity(){try{const res=await fetch('/api/ide/security-status',{credentials:'same-origin',cache:'no-store'});const data=await res.json();if(data.ok){applySecurity(data);if(state.pending&&!document.hidden&&document.hasFocus())await startLock();}}catch(_){}}
   document.addEventListener('visibilitychange',()=>{if(document.hidden)violation('visibility_hidden');else refreshSecurity();});
@@ -146,7 +175,7 @@
   function activity(){ lastActivity=Date.now(); if(inactivityShown){inactivityShown=false;inactiveOverlay.classList.remove('active');} }
   ['mousemove','mousedown','keydown','touchstart','scroll','input'].forEach(type=>document.addEventListener(type,activity,{passive:true}));
   stillHere?.addEventListener('click',activity);
-  setInterval(()=>{if(secureEntered&&!inactivityShown&&Date.now()-lastActivity>=60000){inactivityShown=true;inactiveOverlay.classList.add('active');log('inactivity','No IDE activity detected for 60 seconds');}},5000);
+  setInterval(()=>{if(secureEntered&&!state.permanent&&!state.pending&&!state.resumeRequired&&state.tempRemaining<=0&&!inactivityShown&&Date.now()-lastActivity>=60000){inactivityShown=true;inactiveOverlay.classList.add('active');log('inactivity','No IDE activity detected for 60 seconds');}},5000);
 
   if(remaining!==null){setInterval(()=>{remaining=Math.max(0,remaining-1);const h=String(Math.floor(remaining/3600)).padStart(2,'0'),m=String(Math.floor((remaining%3600)/60)).padStart(2,'0'),s=String(remaining%60).padStart(2,'0');timer.textContent=`${h}:${m}:${s}`;if(remaining===0){intentionalNavigation=true;finishForm.submit();}},1000);}
   setInterval(()=>{if(state.tempRemaining>0&&tempLockEnds){state.tempRemaining=Math.max(0,Math.ceil((tempLockEnds-Date.now())/1000));lockCountdown.textContent=String(state.tempRemaining);if(state.tempRemaining===0)refreshSecurity();}},250);

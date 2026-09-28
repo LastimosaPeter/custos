@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r3-google-grades"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r4-google"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     security_locked INTEGER NOT NULL DEFAULT 0,
     temp_locked_until TEXT,
     pending_blackout INTEGER NOT NULL DEFAULT 0,
+    security_resume_required INTEGER NOT NULL DEFAULT 0,
     monitor_done INTEGER NOT NULL DEFAULT 0,
     last_question_index INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(batch_id) REFERENCES batches(id)
@@ -320,6 +321,7 @@ CREATE TABLE IF NOT EXISTS coding_sessions (
     security_locked INTEGER NOT NULL DEFAULT 0,
     temp_locked_until TEXT,
     pending_blackout INTEGER NOT NULL DEFAULT 0,
+    security_resume_required INTEGER NOT NULL DEFAULT 0,
     flagged_count INTEGER NOT NULL DEFAULT 0,
     ip_address TEXT,
     user_agent TEXT,
@@ -591,6 +593,7 @@ def migrate_schema(conn):
         "security_locked": "INTEGER NOT NULL DEFAULT 0",
         "temp_locked_until": "TEXT",
         "pending_blackout": "INTEGER NOT NULL DEFAULT 0",
+        "security_resume_required": "INTEGER NOT NULL DEFAULT 0",
         "monitor_done": "INTEGER NOT NULL DEFAULT 0",
         "bonus_correct": "INTEGER NOT NULL DEFAULT 0",
         "bonus_score": "INTEGER NOT NULL DEFAULT 0",
@@ -619,6 +622,7 @@ def migrate_schema(conn):
     for name, definition in {
         "first_name": "TEXT",
         "last_name": "TEXT",
+        "security_resume_required": "INTEGER NOT NULL DEFAULT 0",
     }.items():
         if coding_cols and name not in coding_cols:
             conn.execute(f"ALTER TABLE coding_sessions ADD COLUMN {name} {definition}")
@@ -678,6 +682,25 @@ def migrate_schema(conn):
     if "assessment_id" not in batch_cols:
         conn.execute("ALTER TABLE batches ADD COLUMN assessment_id INTEGER")
     conn.execute("UPDATE batches SET assessment_type='midterm' WHERE slot BETWEEN 1 AND 8")
+
+    # Repair assessment links on records created by older Custos builds. The
+    # analytics engine scopes through batches, but keeping these links populated
+    # also makes exports, monitoring, and future migrations more reliable.
+    if "assessment_id" in session_cols and "assessment_id" in batch_cols:
+        conn.execute(
+            """UPDATE exam_sessions
+               SET assessment_id=(SELECT b.assessment_id FROM batches b WHERE b.id=exam_sessions.batch_id)
+               WHERE assessment_id IS NULL
+                 AND EXISTS (SELECT 1 FROM batches b WHERE b.id=exam_sessions.batch_id AND b.assessment_id IS NOT NULL)"""
+        )
+    question_cols = _table_columns(conn, "questions")
+    if "assessment_id" in question_cols and "assessment_id" in batch_cols:
+        conn.execute(
+            """UPDATE questions
+               SET assessment_id=(SELECT b.assessment_id FROM batches b WHERE b.slot=questions.batch_slot)
+               WHERE assessment_id IS NULL
+                 AND EXISTS (SELECT 1 FROM batches b WHERE b.slot=questions.batch_slot AND b.assessment_id IS NOT NULL)"""
+        )
     conn.commit()
 
 

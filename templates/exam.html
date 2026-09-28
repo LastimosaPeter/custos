@@ -2,7 +2,7 @@
 {% block title %}Custos - {{ assessment.title if is_custom else ('Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm')) }}{% endblock %}
 {% block body_class %}exam-page{% endblock %}
 {% block body %}
-<div id="examApp" class="exam-app" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-custom="{{ 1 if is_custom else 0 }}">
+<div id="examApp" class="exam-app" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-security-resume-required="{{ 1 if security.resume_required else 0 }}" data-custom="{{ 1 if is_custom else 0 }}">
   <header class="exam-header">
     <div class="exam-brand">
       <div class="exam-brand-lockup" aria-label="Custos CSDC101">
@@ -134,13 +134,13 @@
     </div>
   </div>
 
-  <div id="securityLockOverlay" class="security-lock-overlay {% if security.permanent or security.pending or security.temp_remaining > 0 %}active{% endif %}" role="dialog" aria-modal="true" aria-live="assertive">
+  <div id="securityLockOverlay" class="security-lock-overlay {% if security.permanent or security.pending or security.resume_required or security.temp_remaining > 0 %}active{% endif %}" role="dialog" aria-modal="true" aria-live="assertive">
     <div class="security-lock-content">
       <img class="security-lock-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
       <div class="security-lock-kicker">CUSTOS EXAM SECURITY</div>
-      <h2 id="securityLockTitle">{% if security.permanent %}Attempt Locked{% elif security.pending %}Security Event Detected{% else %}Security Lock{% endif %}</h2>
-      <div id="securityLockCountdown" class="security-lock-countdown">{% if security.permanent %}INSTRUCTOR REQUIRED{% elif security.pending %}…{% else %}{{ security.temp_remaining }}{% endif %}</div>
-      <p id="securityLockMessage">{% if security.permanent %}Three or more major security violations were recorded. Only the instructor can unlock this attempt.{% elif security.pending %}A focus/fullscreen violation was recorded. The 15-second blackout will begin as soon as this exam regains focus.{% else %}The exam is temporarily unavailable because a focus/fullscreen violation was detected. The timer continues to run.{% endif %}</p>
+      <h2 id="securityLockTitle">{% if security.permanent %}Attempt Locked{% elif security.resume_required %}Secure Mode Required{% elif security.pending %}Security Event Detected{% else %}Security Lock{% endif %}</h2>
+      <div id="securityLockCountdown" class="security-lock-countdown">{% if security.permanent %}INSTRUCTOR REQUIRED{% elif security.resume_required %}READY{% elif security.pending %}…{% else %}{{ security.temp_remaining }}{% endif %}</div>
+      <p id="securityLockMessage">{% if security.permanent %}Three or more major security violations were recorded. Only the instructor can unlock this attempt.{% elif security.resume_required %}Your instructor granted another chance. Return to secure display mode before Custos allows answers or submission again.{% elif security.pending %}A focus/fullscreen violation was recorded. The 15-second blackout will begin as soon as this exam regains focus.{% else %}The exam is temporarily unavailable because a focus/fullscreen violation was detected. The timer continues to run.{% endif %}</p>
       <p class="security-violation-counter">Recorded violations: <strong id="violationCount">{{ security.violation_count }}</strong> / 3</p>
       <button type="button" id="securityChatBtn" class="security-chat-link" aria-label="Ask Instructor" title="Ask Instructor">💬</button>
       <button type="button" id="resumeSecureBtn" class="primary security-resume-btn hidden">Return to Fullscreen</button>

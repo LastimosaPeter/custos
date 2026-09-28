@@ -18,7 +18,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 from werkzeug.security import check_password_hash
 
 from db import APP_TZ, DATABASE_ENGINE, connect, ensure_db_initialized, init_db, iso_now, unique_session_key
-from item_analysis import build_item_analysis
+from item_analysis import build_item_analysis, build_programming_analysis
 from google_integration import (
     STUDENT_GOOGLE_LOGIN_REQUIRED, csp_additions, google_profile_names, google_student_identity, roster_entry,
 )
@@ -48,7 +48,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r3-google-grades")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r7-google")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -223,13 +223,14 @@ def get_security_state(exam_session):
         "violation_count": int(exam_session["violation_count"] or 0) if "violation_count" in exam_session.keys() else 0,
         "permanent": bool(exam_session["security_locked"]) if "security_locked" in exam_session.keys() else False,
         "pending": bool(exam_session["pending_blackout"]) if "pending_blackout" in exam_session.keys() else False,
+        "resume_required": bool(exam_session["security_resume_required"]) if "security_resume_required" in exam_session.keys() else False,
         "temp_remaining": temp_remaining,
     }
 
 
 def session_security_blocked(exam_session):
     state = get_security_state(exam_session)
-    return state["permanent"] or state["pending"] or state["temp_remaining"] > 0, state
+    return state["permanent"] or state["pending"] or state["resume_required"] or state["temp_remaining"] > 0, state
 
 
 def assign_questions_to_session(conn, sid, batch_slot):
@@ -783,13 +784,17 @@ def save_question_position():
         return jsonify({"ok": False, "error": "invalid_index"}), 400
 
     conn = connect()
-    ex = conn.execute("SELECT status FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    ex = conn.execute("SELECT * FROM exam_sessions WHERE id=?", (sid,)).fetchone()
     if not ex:
         conn.close()
         return jsonify({"ok": False, "error": "session_not_found"}), 404
     if ex["status"] == "submitted":
         conn.close()
         return jsonify({"ok": False, "error": "submitted"}), 409
+    blocked, security = session_security_blocked(ex)
+    if blocked:
+        conn.close()
+        return jsonify({"ok": False, "locked": True, **security}), 423
     conn.execute("UPDATE exam_sessions SET last_question_index=? WHERE id=?", (index, sid))
     conn.commit()
     conn.close()
@@ -809,13 +814,17 @@ def set_question_review_flag():
     flagged = 1 if bool(data.get("flagged")) else 0
 
     conn = connect()
-    ex = conn.execute("SELECT status FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    ex = conn.execute("SELECT * FROM exam_sessions WHERE id=?", (sid,)).fetchone()
     if not ex:
         conn.close()
         return jsonify({"ok": False, "error": "session_not_found"}), 404
     if ex["status"] != "in_progress":
         conn.close()
         return jsonify({"ok": False, "error": "Exam is not active"}), 409
+    blocked, security = session_security_blocked(ex)
+    if blocked:
+        conn.close()
+        return jsonify({"ok": False, "locked": True, **security}), 423
     cur = conn.execute(
         "UPDATE session_questions SET marked_for_review=? WHERE session_id=? AND question_id=?",
         (flagged, sid, qid),
@@ -947,7 +956,7 @@ def security_violation():
         return jsonify({"ok": False, "error": "Exam is not active"}), 409
 
     existing_state = get_security_state(ex)
-    if existing_state["permanent"] or existing_state["pending"] or existing_state["temp_remaining"] > 0:
+    if existing_state["permanent"] or existing_state["pending"] or existing_state["resume_required"] or existing_state["temp_remaining"] > 0:
         conn.close()
         return jsonify({"ok": True, "already_locked": True, **existing_state})
 
@@ -970,7 +979,7 @@ def security_violation():
     permanent = current_count >= MAX_SECURITY_VIOLATIONS
     if permanent:
         conn.execute(
-            "UPDATE exam_sessions SET violation_count=?, security_locked=1, temp_locked_until=NULL, pending_blackout=0, flagged_count=flagged_count+1 WHERE id=?",
+            "UPDATE exam_sessions SET violation_count=?, security_locked=1, temp_locked_until=NULL, pending_blackout=0, security_resume_required=0, flagged_count=flagged_count+1 WHERE id=?",
             (current_count, sid),
         )
         detail = f"Violation {current_count}: {source}. Attempt permanently locked pending instructor unlock."
@@ -1005,7 +1014,7 @@ def security_start_lock():
         conn.close()
         return jsonify({"ok": False, "error": "Exam is not active"}), 409
     state = get_security_state(ex)
-    if state["permanent"] or state["temp_remaining"] > 0:
+    if state["permanent"] or state["resume_required"] or state["temp_remaining"] > 0:
         conn.close()
         return jsonify({"ok": True, **state})
     if state["pending"]:
@@ -1017,6 +1026,42 @@ def security_start_lock():
         conn.execute(
             "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
             (sid, "security_blackout_started", f"{TEMP_LOCK_SECONDS}-second blackout penalty started after returning to the exam.", iso_now()),
+        )
+        conn.commit()
+        ex = conn.execute("SELECT * FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+        state = get_security_state(ex)
+    conn.close()
+    return jsonify({"ok": True, **state})
+
+
+@app.route("/api/security-resume", methods=["POST"])
+@student_session_required
+def security_resume():
+    """Complete an instructor-granted unlock only after secure mode is restored.
+
+    The unlock action deliberately leaves a server-side resume gate in place.
+    Answers, navigation persistence, review flags, and submission remain blocked
+    until the student's browser explicitly re-enters the secure display flow.
+    """
+    require_csrf()
+    sid = session["student_session_id"]
+    data = request.get_json(silent=True) or {}
+    if not bool(data.get("secure_active")):
+        return jsonify({"ok": False, "error": "secure_mode_required"}), 409
+    conn = connect()
+    ex = conn.execute("SELECT * FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    if not ex or ex["status"] != "in_progress":
+        conn.close()
+        return jsonify({"ok": False, "error": "Exam is not active"}), 409
+    state = get_security_state(ex)
+    if state["permanent"] or state["pending"] or state["temp_remaining"] > 0:
+        conn.close()
+        return jsonify({"ok": False, "locked": True, **state}), 423
+    if state["resume_required"]:
+        conn.execute("UPDATE exam_sessions SET security_resume_required=0 WHERE id=?", (sid,))
+        conn.execute(
+            "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
+            (sid, "security_resume_confirmed", "Student re-entered secure display mode after instructor unlock.", iso_now()),
         )
         conn.commit()
         ex = conn.execute("SELECT * FROM exam_sessions WHERE id=?", (sid,)).fetchone()
@@ -1647,16 +1692,16 @@ def admin_unlock_session(sid):
         conn.close()
         abort(404)
     conn.execute(
-        "UPDATE exam_sessions SET security_locked=0, temp_locked_until=NULL, pending_blackout=0 WHERE id=?",
+        "UPDATE exam_sessions SET security_locked=0, temp_locked_until=NULL, pending_blackout=0, security_resume_required=1 WHERE id=?",
         (sid,),
     )
     conn.execute(
         "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
-        (sid, "security_unlocked", f"Instructor unlocked attempt; violation count retained at {ex['violation_count'] or 0}.", iso_now()),
+        (sid, "security_unlocked", f"Instructor granted another chance; violation count retained at {ex['violation_count'] or 0}. Secure-mode re-entry is required before answering can resume.", iso_now()),
     )
     conn.commit()
     conn.close()
-    flash("The exam attempt has been unlocked. Its violation count was retained.", "success")
+    flash("Another chance was granted. The student must re-enter secure mode before answering or submitting; prior violations remain recorded.", "success")
     return redirect(url_for("admin_session_detail", sid=sid))
 
 
@@ -1955,7 +2000,7 @@ def admin_testing_return():
 def _live_monitor_payload(conn):
     rows = conn.execute(
         """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,e.started_at,
-                  e.flagged_count,e.violation_count,e.security_locked,e.temp_locked_until,e.pending_blackout,e.monitor_done,
+                  e.flagged_count,e.violation_count,e.security_locked,e.temp_locked_until,e.pending_blackout,e.security_resume_required,e.monitor_done,
                   e.assessment_id, a.title AS assessment_title, b.name AS batch_name,b.assessment_type,
                   (SELECT COUNT(*) FROM exam_messages m WHERE m.session_id=e.id AND m.sender='student' AND m.read_at IS NULL) AS unread_messages,
                   (SELECT pe.event_type FROM proctor_events pe WHERE pe.session_id=e.id ORDER BY pe.id DESC LIMIT 1) AS last_event,
@@ -1981,6 +2026,8 @@ def _live_monitor_payload(conn):
         risk=0
         if item.get("security_locked"):
             risk += 100
+        if item.get("security_resume_required"):
+            risk += 70
         if item.get("pending_blackout") or temp_active:
             risk += 45
         risk += min(violations,3)*25
@@ -1991,6 +2038,9 @@ def _live_monitor_payload(conn):
         if item.get("security_locked"):
             item["attention_level"]="locked"
             item["attention_label"]="Locked · instructor required"
+        elif item.get("security_resume_required"):
+            item["attention_level"]="high"
+            item["attention_label"]="Unlock granted · secure re-entry pending"
         elif risk >= 65:
             item["attention_level"]="high"
             item["attention_label"]="Needs attention"
@@ -2041,12 +2091,12 @@ def admin_monitor_action(sid):
         return jsonify({"ok": False, "error": "Session not found."}), 404
     if action == "clear_security":
         conn.execute(
-            "UPDATE exam_sessions SET security_locked=0,temp_locked_until=NULL,pending_blackout=0 WHERE id=?",
+            "UPDATE exam_sessions SET security_locked=0,temp_locked_until=NULL,pending_blackout=0,security_resume_required=1 WHERE id=?",
             (sid,),
         )
-        detail = f"Instructor cleared active security lock from Live Monitor; violation count retained at {ex['violation_count'] or 0}."
+        detail = f"Instructor granted another chance; violation count retained at {ex['violation_count'] or 0}. Secure-mode re-entry is required before answering can resume."
         event_type = "monitor_security_cleared"
-        message = "Security lock cleared."
+        message = "Unlock granted. The student must re-enter secure mode before continuing."
     elif action == "mark_done":
         conn.execute("UPDATE exam_sessions SET monitor_done=1 WHERE id=?", (sid,))
         detail = "Instructor marked this attempt as done in Live Monitor. Exam status and answers were not changed."
@@ -2378,6 +2428,41 @@ def admin_bonus_edit(qid):
 @app.route("/admin/analysis")
 @admin_required
 def admin_analysis():
+    try:
+        return _admin_analysis_impl()
+    except Exception as exc:
+        # Only database-driver errors should trigger an automatic schema repair.
+        # Template/programming errors cannot be fixed by a migration and retrying
+        # them adds needless latency on serverless deployments.
+        exc_module = type(exc).__module__.lower()
+        is_database_error = exc_module.startswith("sqlite3") or exc_module.startswith("psycopg")
+        if not is_database_error:
+            app.logger.exception("Item Analysis failed")
+            return render_template(
+                "admin_analysis_error.html",
+                error_type=type(exc).__name__,
+                assessment=session.get("admin_assessment", "posttest"),
+            ), 500
+
+        app.logger.exception("Item Analysis database error; attempting one schema repair retry")
+        try:
+            ensure_db_initialized(
+                admin_username=os.getenv("ADMIN_USERNAME", "admin"),
+                admin_password=_admin_password,
+                force=True,
+            )
+            return _admin_analysis_impl()
+        except Exception:
+            app.logger.exception("Item Analysis retry failed")
+            # Do not expose database credentials, SQL, or a traceback in the UI.
+            return render_template(
+                "admin_analysis_error.html",
+                error_type=type(exc).__name__,
+                assessment=session.get("admin_assessment", "posttest"),
+            ), 500
+
+
+def _admin_analysis_impl():
     conn = connect()
     assessment_options, selected_assessment = _resolve_admin_assessment(conn)
     if not selected_assessment:
@@ -2387,53 +2472,82 @@ def admin_analysis():
     max_score = _assessment_max_score(conn, selected_assessment)
 
     if atype == "programming_lab":
-        lab = conn.execute("SELECT * FROM programming_labs WHERE assessment_id=?", (assessment_id,)).fetchone()
-        task_stats = []
-        if lab:
-            task_stats = conn.execute(
-                """SELECT t.id,t.position,t.title,t.points,
-                          COUNT(DISTINCT CASE WHEN COALESCE(cs.is_test,0)=0 THEN cs.id END) AS students,
-                          AVG(CASE WHEN COALESCE(cs.is_test,0)=0 THEN ctp.score END) AS avg_score,
-                          AVG(CASE WHEN COALESCE(cs.is_test,0)=0 THEN ctp.run_count END) AS avg_runs,
-                          SUM(CASE WHEN COALESCE(cs.is_test,0)=0 AND ctp.score>=t.points THEN 1 ELSE 0 END) AS full_score_count
-                   FROM programming_tasks t
-                   LEFT JOIN coding_task_progress ctp ON ctp.task_id=t.id
-                   LEFT JOIN coding_sessions cs ON cs.id=ctp.session_id
-                   WHERE t.lab_id=? AND COALESCE(t.active,1)=1
-                   GROUP BY t.id ORDER BY t.position,t.id""",
-                (lab["id"],),
-            ).fetchall()
-        summary = conn.execute(
-            """SELECT COUNT(*) AS attempts,
-                      SUM(CASE WHEN status='submitted' AND COALESCE(is_test,0)=0 THEN 1 ELSE 0 END) AS submitted,
-                      AVG(CASE WHEN status='submitted' AND COALESCE(is_test,0)=0 THEN total_score END) AS avg_score
-               FROM coding_sessions WHERE lab_id=? AND COALESCE(is_test,0)=0""",
-            (lab["id"],),
-        ).fetchone() if lab else {"attempts":0,"submitted":0,"avg_score":None}
+        analysis = build_programming_analysis(conn, assessment_id=assessment_id, max_score=max_score)
         conn.close()
         return render_template(
-            "admin_analysis_programming.html", assessment_options=assessment_options,
-            selected_assessment=selected_assessment, task_stats=task_stats, summary=summary,
-            max_score=max_score, assessment=""
+            "admin_analysis_programming.html",
+            assessment_options=assessment_options,
+            selected_assessment=selected_assessment,
+            analysis=analysis,
+            max_score=max_score,
+            assessment="",
         )
 
     batch_slot = request.args.get("batch_slot", "").strip()
     part = request.args.get("part", "").strip()
     topic = request.args.get("topic", "").strip()
     analysis = build_item_analysis(
-        conn, batch_slot=int(batch_slot) if batch_slot.isdigit() else None,
-        part=int(part) if part in {"1","2"} else None, topic=topic or None,
-        assessment_id=assessment_id, assessment=atype,
+        conn,
+        batch_slot=int(batch_slot) if batch_slot.isdigit() else None,
+        part=int(part) if part.isdigit() else None,
+        topic=topic or None,
+        assessment_id=assessment_id,
+        assessment=atype,
+        max_score=max_score,
     )
-    batches = conn.execute("SELECT slot,name FROM batches WHERE assessment_id=? ORDER BY slot", (assessment_id,)).fetchall()
-    topics = conn.execute("SELECT DISTINCT topic FROM questions WHERE assessment_id=? ORDER BY topic", (assessment_id,)).fetchall()
+    # Keep filter metadata compatible with both current and older databases.
+    # Legacy attempts are identified by assessment type when their historical
+    # assessment_id link has not yet been populated.
+    batches = conn.execute(
+        """SELECT slot,name FROM batches
+           WHERE assessment_id=? OR (assessment_id IS NULL AND assessment_type=?)
+           ORDER BY slot""",
+        (assessment_id, atype),
+    ).fetchall()
+    topics = [dict(r) for r in conn.execute(
+        """SELECT DISTINCT q.topic
+           FROM questions q
+           LEFT JOIN batches b ON b.slot=q.batch_slot
+           WHERE (q.assessment_id=? OR (q.assessment_id IS NULL AND b.assessment_type=?))
+             AND q.topic IS NOT NULL AND q.topic<>''
+           ORDER BY q.topic""",
+        (assessment_id, atype),
+    ).fetchall()]
+    if atype == "midterm":
+        known_topics = {str(r.get("topic") or "") for r in topics}
+        for r in conn.execute(
+            "SELECT DISTINCT topic FROM bonus_questions WHERE assessment_type='midterm' AND topic IS NOT NULL AND topic<>'' ORDER BY topic"
+        ).fetchall():
+            value = str(r[0] or "")
+            if value and value not in known_topics:
+                topics.append({"topic": value})
+                known_topics.add(value)
+        topics.sort(key=lambda row: str(row.get("topic") or "").casefold())
+    parts = [int(r[0]) for r in conn.execute(
+        """SELECT DISTINCT q.part
+           FROM questions q
+           LEFT JOIN batches b ON b.slot=q.batch_slot
+           WHERE q.assessment_id=? OR (q.assessment_id IS NULL AND b.assessment_type=?)
+           ORDER BY q.part""",
+        (assessment_id, atype),
+    ).fetchall()]
+    if atype == "midterm" and 3 not in parts:
+        parts.append(3)
     conn.close()
-    template_name = "admin_analysis_placeholder.html" if analysis.get("submitted_students",0)==0 else "admin_analysis.html"
     return render_template(
-        template_name, analysis=analysis, batches=batches, topics=topics,
-        selected_batch=batch_slot, selected_part=part, selected_topic=topic,
-        assessment=atype, assessment_options=assessment_options, selected_assessment=selected_assessment,
-        max_score=max_score, is_legacy=atype in {"midterm","posttest"}
+        "admin_analysis.html",
+        analysis=analysis,
+        batches=batches,
+        topics=topics,
+        parts=parts,
+        selected_batch=batch_slot,
+        selected_part=part,
+        selected_topic=topic,
+        assessment=atype,
+        assessment_options=assessment_options,
+        selected_assessment=selected_assessment,
+        max_score=max_score,
+        is_legacy=atype in {"midterm", "posttest", "dryrun"},
     )
 
 
@@ -2452,12 +2566,22 @@ def admin_analysis_item(qid):
     ).fetchone()
     if not selected_assessment:
         conn.close(); abort(404)
-    analysis = build_item_analysis(conn, assessment_id=selected_assessment["id"], assessment=selected_assessment["assessment_type"])
-    item = next((i for i in analysis["items"] if i["question_id"] == qid), None)
+    max_score = _assessment_max_score(conn, selected_assessment)
+    analysis = build_item_analysis(
+        conn,
+        assessment_id=selected_assessment["id"],
+        assessment=selected_assessment["assessment_type"],
+        max_score=max_score,
+    )
+    item = next((i for i in analysis["items"] if i.get("question_id") == qid), None)
     conn.close()
     return render_template(
-        "admin_analysis_item.html", item=item, question=question, assessment=selected_assessment["assessment_type"],
-        selected_assessment=selected_assessment, is_legacy=selected_assessment["assessment_type"] in {"midterm","posttest"}
+        "admin_analysis_item.html",
+        item=item,
+        question=question,
+        assessment=selected_assessment["assessment_type"],
+        selected_assessment=selected_assessment,
+        is_legacy=selected_assessment["assessment_type"] in {"midterm", "posttest", "dryrun"},
     )
 
 
@@ -2468,17 +2592,54 @@ def export_item_analysis():
     assessment_options, selected_assessment = _resolve_admin_assessment(conn)
     if not selected_assessment:
         conn.close(); abort(404)
-    if selected_assessment["assessment_type"] == "programming_lab":
-        conn.close(); abort(400, "Use the on-screen Caudex task analytics for programming labs.")
-    analysis = build_item_analysis(conn, assessment_id=selected_assessment["id"], assessment=selected_assessment["assessment_type"])
-    conn.close()
+    assessment_id = int(selected_assessment["id"])
+    atype = selected_assessment["assessment_type"]
+    max_score = _assessment_max_score(conn, selected_assessment)
     sio = io.StringIO()
     writer = csv.writer(sio)
-    writer.writerow(["assessment","question_id","batch_slot","part","topic","responses","correct","percent_correct","omitted","discrimination_r","A","B","C","D","correct_key","flags"])
-    for item in analysis["items"]:
-        writer.writerow([selected_assessment["title"],item["question_id"],item["batch_slot"],item["part"],item["topic"],item["n"],item["correct"],item["p_pct"],item["omitted"],item["r_pb_display"],item["option_counts"]["A"],item["option_counts"]["B"],item["option_counts"]["C"],item["option_counts"]["D"],item["correct_option"]," | ".join(item["flags"])])
+
+    if atype == "programming_lab":
+        analysis = build_programming_analysis(conn, assessment_id=assessment_id, max_score=max_score)
+        writer.writerow([
+            "assessment", "task", "title", "points", "students", "mean_score",
+            "mean_attainment_pct", "avg_runs", "full_score_pct", "zero_score_pct",
+            "corrected_task_total_r", "high_low_27", "flags",
+        ])
+        for item in analysis["tasks"]:
+            writer.writerow([
+                selected_assessment["title"], item["item_id"], item["title"], item["points"], item["n"],
+                item["avg_score"], item["attainment_pct"], item["avg_runs"], item["full_score_pct"],
+                item["zero_score_pct"], item["r_pb_display"], item["high_low_display"], " | ".join(item["flags"]),
+            ])
+    else:
+        analysis = build_item_analysis(
+            conn,
+            assessment_id=assessment_id,
+            assessment=atype,
+            max_score=max_score,
+        )
+        writer.writerow([
+            "assessment", "item", "type", "set", "part", "topic", "responses", "correct",
+            "percent_correct", "omitted", "omission_pct", "corrected_point_biserial_r",
+            "high_low_27", "A", "B", "C", "D", "correct_key", "functioning_distractors", "flags",
+        ])
+        for item in analysis["items"]:
+            counts = item.get("option_counts") or {}
+            writer.writerow([
+                selected_assessment["title"], item["item_id"], item["item_type"], item.get("batch_slot") or "all",
+                item["part"], item["topic"], item["n"], item["correct"], item["p_pct"], item["omitted"],
+                item["omission_pct"], item["r_pb_display"], item["high_low_display"], counts.get("A", ""),
+                counts.get("B", ""), counts.get("C", ""), counts.get("D", ""), item.get("correct_option") or "",
+                item.get("functioning_distractors") if item.get("functioning_distractors") is not None else "",
+                " | ".join(item["flags"]),
+            ])
+    conn.close()
     safe = re.sub(r"[^A-Za-z0-9_-]+", "-", selected_assessment["title"]).strip("-") or "assessment"
-    return Response(sio.getvalue(), mimetype="text/csv", headers={"Content-Disposition": f"attachment; filename={safe}-item-analysis.csv"})
+    return Response(
+        sio.getvalue(),
+        mimetype="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={safe}-item-analysis.csv"},
+    )
 
 
 @app.route("/admin/export/session-keys.csv")

@@ -24,7 +24,7 @@
         <a href="{{ url_for('admin_export_scores', assessment_id=assessment.id) }}">Export Scores (.xlsx)</a>
       </div>
     </details>
-    <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=assessment.id) }}" class="assessment-delete-inline" onsubmit="return confirm('Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved.');"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action" type="submit">Delete</button></form>
+    <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=assessment.id) }}" class="assessment-delete-inline" data-confirm="Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action" type="submit">Delete</button></form>
   </div>
 </div>
 
@@ -41,7 +41,7 @@
   <section class="content-card custom-delivery-card">
     <div class="section-heading"><div><h2>Delivery</h2><p class="subtle">One key can be used by every section you authorize.</p></div></div>
     <div class="custom-key-display"><span>Student session key</span><code>{{ assessment.access_code }}</code></div>
-    <form method="post" action="{{ url_for('nextgen.custom_assessment_regenerate_key', assessment_id=assessment.id) }}" onsubmit="return confirm('Generate a new key? The current key will immediately stop working.');">
+    <form method="post" action="{{ url_for('nextgen.custom_assessment_regenerate_key', assessment_id=assessment.id) }}" data-confirm="Generate a new key? The current key will immediately stop working.">
       <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary wide" type="submit">Regenerate Key</button>
     </form>
     <div class="builder-readiness {% if active_count %}ready{% else %}not-ready{% endif %}">
@@ -125,7 +125,7 @@
         <label class="check-row wide-field"><input type="checkbox" name="active" value="1" {% if q.active %}checked{% endif %}><span>Use this question in student attempts</span></label>
         <div class="workspace-edit-actions wide-field"><button class="secondary" type="submit">Save Question</button></div>
       </form>
-      <form method="post" action="{{ url_for('nextgen.custom_question_delete', assessment_id=assessment.id, question_id=q.id) }}" class="custom-question-delete-form" onsubmit="return confirm('Delete this question? If it already has attempt history, Custos will disable it instead.');">
+      <form method="post" action="{{ url_for('nextgen.custom_question_delete', assessment_id=assessment.id, question_id=q.id) }}" class="custom-question-delete-form" data-confirm="Delete this question? If it already has attempt history, Custos will disable it instead.">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action" type="submit">Delete / Disable</button>
       </form>
     </details>
