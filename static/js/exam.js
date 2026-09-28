@@ -50,10 +50,19 @@
 
   const untimed = app.dataset.untimed === '1';
   const isCustomAssessment = app.dataset.custom === '1';
+  // Installed-app (PWA) mode is accepted as secure display only where the page
+  // cannot use real element fullscreen: iPhone/iPad, or any browser without the
+  // Fullscreen API. Elsewhere '(display-mode: fullscreen)' also matches when a
+  // student presses F11 (browser fullscreen), which the page cannot detect
+  // leaving - trusting it there let F11 exit secure mode with no violation.
+  const isAppleTouchDevice = /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const fullscreenApiUsable = Boolean(document.fullscreenEnabled && document.documentElement.requestFullscreen);
   const isInstalledAppMode = () =>
-    window.matchMedia('(display-mode: standalone)').matches ||
-    window.matchMedia('(display-mode: fullscreen)').matches ||
-    window.navigator.standalone === true;
+    (isAppleTouchDevice || !fullscreenApiUsable) && (
+      window.matchMedia('(display-mode: standalone)').matches ||
+      window.matchMedia('(display-mode: fullscreen)').matches ||
+      window.navigator.standalone === true);
   const secureDisplayActive = () => isInstalledAppMode() || Boolean(document.fullscreenElement);
   let current = Math.max(0, Math.min(Number(app.dataset.resumeIndex || 0), Math.max(panels.length - 1, 0)));
   let remaining = untimed ? null : Number(app.dataset.remaining || 0);
