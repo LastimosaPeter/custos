@@ -28,7 +28,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      const revision = encodeURIComponent(window.CUSTOS_ASSET_REVISION || '1.0-goliathus-portable-r1');
+      const revision = encodeURIComponent(window.CUSTOS_ASSET_REVISION || '1.0-goliathus-portable-r2');
       navigator.serviceWorker.register(`/sw.js?v=${revision}`, {scope: '/', updateViaCache: 'none'}).catch(() => {});
     });
   }

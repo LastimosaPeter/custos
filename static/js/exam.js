@@ -70,6 +70,7 @@
     violationCount: Number(app.dataset.violationCount || 0),
     permanent: app.dataset.securityLocked === '1',
     pending: app.dataset.pendingBlackout === '1',
+    resumeRequired: app.dataset.securityResumeRequired === '1',
     tempRemaining: Number(app.dataset.tempLockRemaining || 0)
   };
 
@@ -171,6 +172,10 @@
     try {
       const res = await postJSON('/api/question-review', {question_id: Number(panel.dataset.questionId), flagged: nextFlagged});
       const data = await res.json().catch(() => ({}));
+      if (res.status === 423 && data.locked) {
+        applySecurityState(data);
+        throw new Error('security locked');
+      }
       if (!res.ok || !data.ok) throw new Error('review flag save failed');
       panel.dataset.reviewFlagged = data.flagged ? '1' : '0';
       navButtons[current]?.classList.toggle('review-flagged', Boolean(data.flagged));
@@ -206,7 +211,7 @@
         saveStatus.textContent = 'Saved';
         saveStatus.className = 'save-status saved';
       } catch (_) {
-        saveStatus.textContent = securityState.permanent || securityState.pending || securityState.tempRemaining > 0
+        saveStatus.textContent = securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0
           ? 'Security lock — answer not saved'
           : 'Save failed — retry selection';
         saveStatus.className = 'save-status error';
@@ -235,7 +240,7 @@
       saveStatus.textContent = 'Saved';
       saveStatus.className = 'save-status saved';
     } catch (_) {
-      saveStatus.textContent = securityState.permanent || securityState.pending || securityState.tempRemaining > 0
+      saveStatus.textContent = securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0
         ? 'Security lock — answer not saved'
         : 'Save failed — retry';
       saveStatus.className = 'save-status error';
@@ -269,27 +274,60 @@
     form.addEventListener('submit', () => { intentionalNavigation = true; });
   });
 
+  async function confirmSecurityResume() {
+    if (!securityState.resumeRequired) return true;
+    try {
+      const res = await postJSON('/api/security-resume', {secure_active: secureDisplayActive()});
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data.ok) {
+        if (data.locked) applySecurityState(data);
+        return false;
+      }
+      applySecurityState(data);
+      logEvent('security_resume_client_confirmed', 'Secure display mode restored after instructor unlock');
+      return !securityState.resumeRequired;
+    } catch (_) {
+      return false;
+    }
+  }
+
   async function requestSecureMode() {
     fullscreenError.classList.add('hidden');
     if (securityState.permanent || securityState.pending || securityState.tempRemaining > 0) return;
 
     if (isInstalledAppMode()) {
       secureModeEntered = true;
-      secureOverlay.classList.remove('active');
-      securityOverlay.classList.remove('active');
       document.documentElement.classList.add('pwa-standalone');
       logEvent('standalone_secure_mode_enter', 'Installed Custos app secure mode entered');
       registerActivity();
+      if (securityState.resumeRequired) {
+        const resumed = await confirmSecurityResume();
+        if (!resumed) {
+          securityOverlay.classList.add('active');
+          fullscreenError.classList.remove('hidden');
+          return;
+        }
+      }
+      secureOverlay.classList.remove('active');
+      renderSecurityOverlay();
       return;
     }
 
     try {
       if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
       secureModeEntered = true;
-      secureOverlay.classList.remove('active');
-      securityOverlay.classList.remove('active');
       logEvent('fullscreen_enter', 'Fullscreen secure mode entered');
       registerActivity();
+      if (securityState.resumeRequired) {
+        const resumed = await confirmSecurityResume();
+        if (!resumed) {
+          securityOverlay.classList.add('active');
+          fullscreenError.classList.remove('hidden');
+          return;
+        }
+      }
+      secureOverlay.classList.remove('active');
+      renderSecurityOverlay();
     } catch (e) {
       fullscreenError.classList.remove('hidden');
       if (secureModeDescription && /iPad|iPhone|iPod/.test(navigator.userAgent)) {
@@ -313,6 +351,14 @@
     }
 
     securityOverlay.classList.remove('permanent');
+    if (securityState.resumeRequired) {
+      securityOverlay.classList.add('active');
+      securityTitle.textContent = 'Secure Mode Required';
+      securityCountdown.textContent = 'READY';
+      securityMessage.textContent = 'Your instructor granted another chance. Re-enter secure display mode before Custos allows answers or submission again. Your previous violations remain recorded.';
+      resumeSecureBtn.classList.remove('hidden');
+      return;
+    }
     if (securityState.pending) {
       securityOverlay.classList.add('active');
       securityTitle.textContent = 'Security Event Detected';
@@ -346,12 +392,13 @@
     securityState.violationCount = Number(data.violation_count ?? data.violationCount ?? securityState.violationCount);
     securityState.permanent = Boolean(data.permanent);
     securityState.pending = Boolean(data.pending);
+    securityState.resumeRequired = Boolean(data.resume_required ?? data.resumeRequired ?? securityState.resumeRequired);
     securityState.tempRemaining = Number(data.temp_remaining ?? data.tempRemaining ?? 0);
     renderSecurityOverlay();
   }
 
   async function triggerViolation(source) {
-    if (!secureModeEntered || intentionalNavigation || securityState.permanent || securityState.pending || securityState.tempRemaining > 0 || violationRequestInFlight) return;
+    if (!secureModeEntered || intentionalNavigation || securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0 || violationRequestInFlight) return;
     violationRequestInFlight = true;
     securityOverlay.classList.add('active');
     securityTitle.textContent = 'Security Event Detected';
@@ -396,7 +443,7 @@
   document.addEventListener('fullscreenchange', () => {
     if (!secureModeEntered || intentionalNavigation || isInstalledAppMode()) return;
     if (!document.fullscreenElement) triggerViolation('fullscreen_exit');
-    else if (!securityState.permanent && securityState.tempRemaining <= 0) {
+    else if (!securityState.permanent && !securityState.resumeRequired && securityState.tempRemaining <= 0) {
       secureOverlay.classList.remove('active');
       securityOverlay.classList.remove('active');
     }
@@ -463,7 +510,7 @@
   });
 
   setInterval(() => {
-    if (!secureModeEntered || securityState.permanent || securityState.pending || securityState.tempRemaining > 0) return;
+    if (!secureModeEntered || securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0) return;
     const idle = Date.now() - lastActivity;
     if (idle >= 60000 && !inactivityPrompted) {
       inactivityPrompted = true;
@@ -594,7 +641,7 @@
   }, 250);
 
   setInterval(() => {
-    if (securityState.permanent || securityState.pending || securityState.tempRemaining > 0) refreshSecurityStatus();
+    if (securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0) refreshSecurityStatus();
   }, 3000);
   // Chat is useful during an exam, but polling every 3 seconds from every
   // student creates unnecessary database traffic. Poll quickly only while the

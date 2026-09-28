@@ -8,7 +8,7 @@
     const btn = event.target.closest('[data-monitor-action]');
     if (!btn || !sid) return;
     const action = btn.dataset.monitorAction;
-    const question = action === 'mark_done' ? 'Remove this student from Live Monitor? This will not submit or change the exam.' : action === 'clear_security' ? 'Clear the active security lock? Recorded violations will remain.' : 'Return this attempt to Live Monitor?';
+    const question = action === 'mark_done' ? 'Remove this student from Live Monitor? This will not submit or change the exam.' : action === 'clear_security' ? 'Grant this student another chance? The active lock will clear, but they must re-enter secure mode before answering or submitting. Recorded violations will remain.' : 'Return this attempt to Live Monitor?';
     if (!window.confirm(question)) return;
     btn.disabled = true;
     try {

@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r1"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r2"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -145,6 +145,7 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     security_locked INTEGER NOT NULL DEFAULT 0,
     temp_locked_until TEXT,
     pending_blackout INTEGER NOT NULL DEFAULT 0,
+    security_resume_required INTEGER NOT NULL DEFAULT 0,
     monitor_done INTEGER NOT NULL DEFAULT 0,
     last_question_index INTEGER NOT NULL DEFAULT 0,
     FOREIGN KEY(batch_id) REFERENCES batches(id)
@@ -320,6 +321,7 @@ CREATE TABLE IF NOT EXISTS coding_sessions (
     security_locked INTEGER NOT NULL DEFAULT 0,
     temp_locked_until TEXT,
     pending_blackout INTEGER NOT NULL DEFAULT 0,
+    security_resume_required INTEGER NOT NULL DEFAULT 0,
     flagged_count INTEGER NOT NULL DEFAULT 0,
     ip_address TEXT,
     user_agent TEXT,
@@ -560,6 +562,7 @@ def migrate_schema(conn):
         "security_locked": "INTEGER NOT NULL DEFAULT 0",
         "temp_locked_until": "TEXT",
         "pending_blackout": "INTEGER NOT NULL DEFAULT 0",
+        "security_resume_required": "INTEGER NOT NULL DEFAULT 0",
         "monitor_done": "INTEGER NOT NULL DEFAULT 0",
         "bonus_correct": "INTEGER NOT NULL DEFAULT 0",
         "bonus_score": "INTEGER NOT NULL DEFAULT 0",
@@ -575,6 +578,7 @@ def migrate_schema(conn):
     for name, definition in {
         "first_name": "TEXT",
         "last_name": "TEXT",
+        "security_resume_required": "INTEGER NOT NULL DEFAULT 0",
     }.items():
         if coding_cols and name not in coding_cols:
             conn.execute(f"ALTER TABLE coding_sessions ADD COLUMN {name} {definition}")

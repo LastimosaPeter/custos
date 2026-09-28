@@ -128,13 +128,14 @@ def _coding_security_state(row):
         "violation_count": int(row["violation_count"] or 0),
         "permanent": bool(row["security_locked"]),
         "pending": bool(row["pending_blackout"]),
+        "resume_required": bool(row["security_resume_required"]) if "security_resume_required" in row.keys() else False,
         "temp_remaining": temp_remaining,
     }
 
 
 def _coding_blocked(row):
     state = _coding_security_state(row)
-    return state["permanent"] or state["pending"] or state["temp_remaining"] > 0, state
+    return state["permanent"] or state["pending"] or state["resume_required"] or state["temp_remaining"] > 0, state
 
 
 def _load_coding_session(conn, sid):
@@ -876,10 +877,10 @@ def admin_ide_task_edit(task_id):
 def admin_ide_unlock(sid):
     require_csrf()
     conn = connect()
-    conn.execute("UPDATE coding_sessions SET security_locked=0,temp_locked_until=NULL,pending_blackout=0 WHERE id=?", (sid,))
-    _coding_log(conn, sid, "security_unlocked", f"Unlocked by instructor admin #{session.get('admin_id')}")
+    conn.execute("UPDATE coding_sessions SET security_locked=0,temp_locked_until=NULL,pending_blackout=0,security_resume_required=1 WHERE id=?", (sid,))
+    _coding_log(conn, sid, "security_unlocked", f"Unlock granted by instructor admin #{session.get('admin_id')}; secure-mode re-entry required")
     conn.commit(); conn.close()
-    flash("Coding session unlocked.", "success")
+    flash("Unlock granted. The student must re-enter secure mode before continuing.", "success")
     return redirect(url_for("nextgen.admin_ide_session", sid=sid))
 
 
@@ -913,7 +914,7 @@ def admin_ide_preview(lab_id):
     existing = conn.execute("SELECT * FROM coding_sessions WHERE email=? AND lab_id=?", (email, lab_id)).fetchone()
     if existing:
         sid = existing["id"]
-        conn.execute("UPDATE coding_sessions SET status='in_progress',security_locked=0,temp_locked_until=NULL,pending_blackout=0,is_test=1 WHERE id=?", (sid,))
+        conn.execute("UPDATE coding_sessions SET status='in_progress',security_locked=0,temp_locked_until=NULL,pending_blackout=0,security_resume_required=0,is_test=1 WHERE id=?", (sid,))
     else:
         cur = conn.execute(
             """INSERT INTO coding_sessions(lab_id,email,first_name,last_name,student_name,program,class_section,started_at,status,
@@ -1157,12 +1158,12 @@ def ide_security_violation():
     conn=connect(); cs=_load_coding_session(conn,sid)
     if not cs: conn.close(); return jsonify(ok=False),404
     state=_coding_security_state(cs)
-    if state["permanent"]: conn.close(); return jsonify(ok=True,**state)
+    if state["permanent"] or state["resume_required"]: conn.close(); return jsonify(ok=True,**state)
     cutoff=(datetime.now(APP_TZ)-timedelta(seconds=SECURITY_DEDUPE_SECONDS)).isoformat(timespec="seconds")
     duplicate=conn.execute("SELECT 1 FROM coding_events WHERE session_id=? AND event_type='security_violation' AND created_at>=? ORDER BY id DESC LIMIT 1",(sid,cutoff)).fetchone()
     if duplicate: conn.close(); return jsonify(ok=True,**state)
     count=int(cs["violation_count"] or 0)+1; permanent=count>=MAX_SECURITY_VIOLATIONS
-    conn.execute("UPDATE coding_sessions SET violation_count=?,security_locked=?,pending_blackout=? WHERE id=?",(count,1 if permanent else 0,0 if permanent else 1,sid))
+    conn.execute("UPDATE coding_sessions SET violation_count=?,security_locked=?,pending_blackout=?,security_resume_required=0 WHERE id=?",(count,1 if permanent else 0,0 if permanent else 1,sid))
     _coding_log(conn,sid,"security_violation",f"Violation {count}: {source}")
     if permanent: _coding_log(conn,sid,"security_lock_permanent","Maximum security violations reached")
     conn.commit(); cs=_load_coding_session(conn,sid); state=_coding_security_state(cs); conn.close()
@@ -1175,10 +1176,28 @@ def ide_security_start_lock():
     require_csrf(); sid=session["coding_session_id"]; conn=connect(); cs=_load_coding_session(conn,sid)
     if not cs: conn.close(); return jsonify(ok=False),404
     state=_coding_security_state(cs)
-    if state["permanent"] or not state["pending"]: conn.close(); return jsonify(ok=True,**state)
+    if state["permanent"] or state["resume_required"] or not state["pending"]: conn.close(); return jsonify(ok=True,**state)
     until=(datetime.now(APP_TZ)+timedelta(seconds=TEMP_LOCK_SECONDS)).isoformat(timespec="seconds")
     conn.execute("UPDATE coding_sessions SET pending_blackout=0,temp_locked_until=? WHERE id=?",(until,sid)); _coding_log(conn,sid,"security_blackout_started",f"{TEMP_LOCK_SECONDS}-second coding lock")
     conn.commit(); cs=_load_coding_session(conn,sid); state=_coding_security_state(cs); conn.close(); return jsonify(ok=True,**state)
+
+
+@bp.post("/api/ide/security-resume")
+@ide_session_required
+def ide_security_resume():
+    require_csrf(); sid=session["coding_session_id"]; data=request.get_json(silent=True) or {}
+    if not bool(data.get("secure_active")):
+        return jsonify(ok=False,error="secure_mode_required"),409
+    conn=connect(); cs=_load_coding_session(conn,sid)
+    if not cs: conn.close(); return jsonify(ok=False),404
+    state=_coding_security_state(cs)
+    if state["permanent"] or state["pending"] or state["temp_remaining"]>0:
+        conn.close(); return jsonify(ok=False,locked=True,**state),423
+    if state["resume_required"]:
+        conn.execute("UPDATE coding_sessions SET security_resume_required=0 WHERE id=?",(sid,))
+        _coding_log(conn,sid,"security_resume_confirmed","Student re-entered secure display mode after instructor unlock")
+        conn.commit(); cs=_load_coding_session(conn,sid); state=_coding_security_state(cs)
+    conn.close(); return jsonify(ok=True,**state)
 
 
 @bp.get("/api/ide/security-status")

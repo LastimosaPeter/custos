@@ -32,7 +32,7 @@
       <div class="monitor-card-metrics"><div><span>Violations</span><strong>{{ s.violation_count or 0 }}/3</strong></div><div><span>Flags</span><strong>{{ s.flagged_count or 0 }}</strong></div><div><span>Answered</span><strong>{{ s.answered }}/{{ s.total }}</strong></div><div><span>Chat</span><strong>{{ s.unread_messages or 0 }}</strong></div></div>
       <div class="monitor-last-event"><span>Latest event</span><strong>{{ (s.last_event or 'No event yet')|replace('_',' ') }}</strong>{% if s.last_event_detail %}<small>{{ s.last_event_detail }}</small>{% endif %}</div>
       <div class="monitor-card-actions">
-        {% if s.security_locked or s.pending_blackout %}<button type="button" class="secondary monitor-action-btn" data-monitor-action="clear_security">Clear Lock</button>{% endif %}
+        {% if s.security_locked or s.pending_blackout %}<button type="button" class="secondary monitor-action-btn" data-monitor-action="clear_security">Grant Another Chance</button>{% endif %}
         <a class="secondary button-link" href="{{ url_for('admin_messages') }}?session={{ s.id }}">Message</a>
         <button type="button" class="secondary monitor-action-btn" data-monitor-action="mark_done">Mark Done</button>
         <a class="primary button-link" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review Student</a>

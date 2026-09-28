@@ -8,7 +8,7 @@
 <div class="dashboard-heading">
   <div><div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST SESSION{% else %}SESSION REVIEW{% endif %}</div><h1>{% if ex.is_test and ex.test_label %}{{ ex.test_label }}{% elif ex.last_name or ex.first_name %}{{ ex.last_name or '' }}{% if ex.last_name and ex.first_name %}, {% endif %}{{ ex.first_name or '' }}{% else %}{{ ex.student_name or ex.email }}{% endif %}</h1><p>{% if not ex.is_test and ex.student_name %}{{ ex.program or '—' }} {{ ex.class_section or '' }} · {{ ex.email }} · {% endif %}{{ ex.batch_name }}{% if ex.is_test %} · Excluded from item analysis{% endif %}</p></div>
   <div class="session-security-summary">
-    {% if security.permanent %}<span class="security-state-badge locked">ATTEMPT LOCKED</span>{% elif security.pending %}<span class="security-state-badge temporary">LOCK PENDING</span>{% elif security.temp_remaining > 0 %}<span class="security-state-badge temporary">TEMPORARY LOCK</span>{% else %}<span class="security-state-badge clear">ACTIVE / CLEAR</span>{% endif %}
+    {% if security.permanent %}<span class="security-state-badge locked">ATTEMPT LOCKED</span>{% elif security.resume_required %}<span class="security-state-badge temporary">SECURE RE-ENTRY REQUIRED</span>{% elif security.pending %}<span class="security-state-badge temporary">LOCK PENDING</span>{% elif security.temp_remaining > 0 %}<span class="security-state-badge temporary">TEMPORARY LOCK</span>{% else %}<span class="security-state-badge clear">ACTIVE / CLEAR</span>{% endif %}
     <span class="flag-badge">{{ ex.flagged_count }} proctoring flags</span>
     {% if ex.monitor_done %}<span class="security-state-badge clear">MONITOR DONE</span>{% endif %}
   </div>
@@ -36,15 +36,15 @@
       <span class="violation-count-large">{{ ex.violation_count or 0 }}/3</span>
     </div>
     <div class="security-detail-list">
-      <div><span>Status</span><strong>{% if security.permanent %}Instructor lock active{% elif security.pending %}15-second blackout pending on return{% elif security.temp_remaining > 0 %}Temporary lock ({{ security.temp_remaining }}s remaining){% else %}Not locked{% endif %}</strong></div>
+      <div><span>Status</span><strong>{% if security.permanent %}Instructor lock active{% elif security.resume_required %}Unlock granted; waiting for secure-mode re-entry{% elif security.pending %}15-second blackout pending on return{% elif security.temp_remaining > 0 %}Temporary lock ({{ security.temp_remaining }}s remaining){% else %}Not locked{% endif %}</strong></div>
       <div><span>Terms accepted</span><strong>{{ ex.terms_accepted_at or '—' }}</strong></div>
       <div><span>Violation count</span><strong>{{ ex.violation_count or 0 }}</strong></div>
     </div>
     <div class="session-control-actions" data-session-control data-session-id="{{ ex.id }}">
-      {% if security.permanent or security.pending or security.temp_remaining > 0 %}<button type="button" class="primary" data-monitor-action="clear_security">Clear Active Security Lock</button>{% endif %}
+      {% if security.permanent or security.pending or security.temp_remaining > 0 %}<button type="button" class="primary" data-monitor-action="clear_security">Grant Another Chance</button>{% endif %}
       <button type="button" class="secondary" data-monitor-action="{{ 'restore' if ex.monitor_done else 'mark_done' }}">{{ 'Return to Live Monitor' if ex.monitor_done else 'Mark Done in Monitor' }}</button>
     </div>
-    <p class="micro">Clearing a lock restores access while retaining recorded violations. Mark Done only removes this attempt from Live Monitor; it does not alter answers, scores, or submission status.</p>
+    <p class="micro">Granting another chance clears the active lock but keeps the student server-blocked until secure mode is restored. Recorded violations are retained. Mark Done only removes this attempt from Live Monitor; it does not alter answers, scores, or submission status.</p>
   </div>
 
   <div class="content-card instructor-chat-card" data-admin-chat data-chat-url="{{ url_for('admin_chat_messages', sid=ex.id) }}" data-chat-send-url="{{ url_for('admin_chat_send', sid=ex.id) }}">

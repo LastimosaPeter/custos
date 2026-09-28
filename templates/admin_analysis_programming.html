@@ -1,10 +1,57 @@
 {% extends "base.html" %}
-{% block title %}Custos - {{ selected_assessment.title }} Analytics{% endblock %}
+{% block title %}Custos - {{ selected_assessment.title }} Item Analysis{% endblock %}
 {% block header_right %}{% from "_admin_nav.html" import admin_nav %}{{ admin_nav('') }}{% endblock %}
 {% block content %}
 {% from "_assessment_picker.html" import assessment_picker %}
 {{ assessment_picker(assessment_options, selected_assessment, 'admin_analysis') }}
-<div class="dashboard-heading"><div><div class="eyebrow">INSTRUCTOR VIEW · PROGRAMMING ANALYTICS</div><h1>{{ selected_assessment.title }}</h1><p class="subtle">Caudex task-level performance is shown here so Programming Labs participate in the same assessment analytics area.</p></div><a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Open Caudex IDE</a></div>
-<div class="stat-row three"><div class="stat-card"><span>Attempts</span><strong>{{ summary.attempts or 0 }}</strong><small>real coding sessions</small></div><div class="stat-card"><span>Submitted</span><strong>{{ summary.submitted or 0 }}</strong><small>completed sessions</small></div><div class="stat-card"><span>Mean Score</span><strong>{{ summary.avg_score|round(2) if summary.avg_score is not none else '—' }}</strong><small>out of {{ max_score }}</small></div></div>
-<div class="content-card"><div class="section-heading"><div><h2>Task Performance</h2><p class="subtle">Average score, run count, and full-score completion by programming task.</p></div></div><div class="table-wrap"><table><thead><tr><th>#</th><th>Task</th><th>Points</th><th>Students</th><th>Avg Score</th><th>Avg Runs</th><th>Full Score</th></tr></thead><tbody>{% for t in task_stats %}<tr><td>{{ t.position }}</td><td><strong>{{ t.title }}</strong></td><td>{{ t.points }}</td><td>{{ t.students or 0 }}</td><td>{{ t.avg_score|round(2) if t.avg_score is not none else '—' }}</td><td>{{ t.avg_runs|round(2) if t.avg_runs is not none else '—' }}</td><td>{{ t.full_score_count or 0 }}</td></tr>{% else %}<tr><td colspan="7" class="empty-cell">No programming tasks yet.</td></tr>{% endfor %}</tbody></table></div></div>
+
+<div class="dashboard-heading analysis-page-heading">
+  <div>
+    <div class="eyebrow">INSTRUCTOR VIEW · PROGRAMMING ITEM ANALYSIS</div>
+    <h1>{{ selected_assessment.title }}</h1>
+    <p class="subtle">Each programming task is treated as a scored item and analyzed using task attainment, score discrimination, run behavior, and reliability.</p>
+  </div>
+  <div class="analysis-heading-actions"><a class="secondary button-link" href="{{ url_for('export_item_analysis', assessment_id=selected_assessment.id) }}">Export Analysis CSV</a><a class="primary button-link" href="{{ url_for('nextgen.admin_ide') }}">Open Caudex IDE</a></div>
+</div>
+
+{% if analysis.submitted_students == 0 %}
+<div class="analysis-empty-state"><div class="analysis-empty-icon">&lt;/&gt;</div><div><strong>No submitted programming attempts yet</strong><p>Task-level analytics will appear after real student coding sessions are submitted. Instructor preview sessions are excluded.</p></div></div>
+{% endif %}
+
+<section class="analysis-metric-grid" aria-label="Programming assessment statistics">
+  <article class="analysis-metric-card"><span>Submitted</span><strong>{{ analysis.submitted_students }}</strong><small>real coding sessions</small></article>
+  <article class="analysis-metric-card"><span>Mean Score</span><strong>{{ analysis.score_summary.mean if analysis.score_summary.mean is not none else '—' }}</strong><small>out of {{ max_score }}</small></article>
+  <article class="analysis-metric-card"><span>Mean Percentage</span><strong>{{ (analysis.score_summary.mean_pct|string ~ '%') if analysis.score_summary.mean_pct is not none else '—' }}</strong><small>overall attainment</small></article>
+  <article class="analysis-metric-card"><span>Score SD</span><strong>{{ analysis.score_summary.sd if analysis.score_summary.sd is not none else '—' }}</strong><small>score spread</small></article>
+  <article class="analysis-metric-card"><span>{{ analysis.reliability.label }}</span><strong>{{ analysis.reliability.value if analysis.reliability.value is not none else '—' }}</strong><small>{{ analysis.reliability.band }}</small></article>
+  <article class="analysis-metric-card {% if analysis.flagged_items %}needs-review{% endif %}"><span>Tasks for Review</span><strong>{{ analysis.flagged_items }}</strong><small>automatic review signals</small></article>
+</section>
+
+<div class="analysis-two-column">
+  <section class="content-card analysis-card">
+    <div class="section-heading compact"><div><h2>Score Distribution</h2><p class="subtle">Submitted coding sessions grouped by percentage score.</p></div></div>
+    {% if analysis.submitted_students %}<div class="analysis-distribution">{% for bucket in analysis.score_summary.distribution %}<div class="analysis-distribution-row"><span>{{ bucket.label }}</span><div class="analysis-bar"><span style="width:{{ bucket.pct }}%"></span></div><strong>{{ bucket.count }}</strong></div>{% endfor %}</div><div class="analysis-mini-stats"><span><strong>{{ analysis.score_summary.minimum if analysis.score_summary.minimum is not none else '—' }}</strong> Min</span><span><strong>{{ analysis.score_summary.median if analysis.score_summary.median is not none else '—' }}</strong> Median</span><span><strong>{{ analysis.score_summary.maximum if analysis.score_summary.maximum is not none else '—' }}</strong> Max</span></div>{% else %}<p class="empty-cell">No score distribution is available yet.</p>{% endif %}
+  </section>
+  <section class="content-card analysis-card">
+    <div class="section-heading compact"><div><h2>Measurement Diagnostics</h2><p class="subtle">Reliability is calculated across scored programming tasks when enough complete submissions are available.</p></div></div>
+    <div class="analysis-diagnostic-list"><div><span>Internal consistency</span><strong>{{ analysis.reliability.value if analysis.reliability.value is not none else '—' }}</strong></div><div><span>Interpretation</span><strong>{{ analysis.reliability.band }}</strong></div><div><span>Standard error of measurement</span><strong>{{ analysis.reliability.sem if analysis.reliability.sem is not none else '—' }}</strong></div><div><span>Analyzed tasks</span><strong>{{ analysis.tasks|length }}</strong></div></div>
+    {% if analysis.reliability.note %}<p class="analysis-note">{{ analysis.reliability.note }}</p>{% endif %}
+  </section>
+</div>
+
+<section class="content-card analysis-card">
+  <div class="section-heading compact"><div><h2>Per-Task Diagnostics</h2><p class="subtle">Task attainment is the average proportion of available points earned. Discrimination compares task performance with the rest of the lab.</p></div></div>
+  <div class="analysis-guide"><span><strong>Attainment</strong> = mean % of points earned</span><span><strong>Task-total r</strong> = task vs. rest-of-lab</span><span><strong>High–Low D</strong> = top 27% minus bottom 27%</span><span><strong>Runs</strong> = average executions before submission</span></div>
+  <div class="table-wrap">
+    <table class="analysis-table analysis-table-v2">
+      <thead><tr><th>Task</th><th>Points</th><th>N</th><th>Attainment</th><th>Avg Runs</th><th>Full Score</th><th>Zero Score</th><th>Task-total r</th><th>High–Low D</th><th>Review</th></tr></thead>
+      <tbody>
+      {% for t in analysis.tasks %}
+      <tr class="{% if t.flags %}review-row{% endif %}"><td><strong>{{ t.item_id }} · {{ t.title }}</strong></td><td>{{ t.points }}</td><td>{{ t.n }}</td><td><strong>{{ (t.attainment_pct|string ~ '%') if t.attainment_pct is not none else '—' }}</strong><small>{{ t.avg_score if t.avg_score is not none else '—' }} avg points</small></td><td>{{ t.avg_runs if t.avg_runs is not none else '—' }}</td><td><strong>{{ t.full_score_pct }}%</strong><small>{{ t.full_score_count }} students</small></td><td><strong>{{ t.zero_score_pct }}%</strong><small>{{ t.zero_score_count }} students</small></td><td><strong>{{ t.r_pb_display }}</strong><small>{{ t.discrimination_band }}</small></td><td><strong>{{ t.high_low_display }}</strong><small>{{ t.high_low_band }}</small></td><td>{% if t.flags %}<span class="review-pill">{{ t.flags|length }} flag{% if t.flags|length != 1 %}s{% endif %}</span><div class="analysis-row-flags">{{ t.flags|join(' · ') }}</div>{% else %}<span class="ok-pill">No flag</span>{% endif %}</td></tr>
+      {% else %}<tr><td colspan="10" class="empty-cell">No active programming tasks are configured.</td></tr>{% endfor %}
+      </tbody>
+    </table>
+  </div>
+  <p class="analysis-method-note">{{ analysis.method_note }} These statistics should support instructor review rather than act as automatic grading-policy decisions.</p>
+</section>
 {% endblock %}
