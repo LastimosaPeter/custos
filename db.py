@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r2-google"
+DB_SCHEMA_VERSION = "1.0-goliathus-portable-r3-google-grades"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -387,6 +387,11 @@ CREATE TABLE IF NOT EXISTS classroom_rosters (
     imported_by_admin_id INTEGER,
     imported_at TEXT NOT NULL,
     student_count INTEGER NOT NULL DEFAULT 0,
+    coursework_id TEXT,
+    coursework_title TEXT,
+    max_points REAL,
+    last_synced_at TEXT,
+    last_sync_summary TEXT,
     UNIQUE(assessment_id, course_id),
     FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
 );
@@ -598,6 +603,17 @@ def migrate_schema(conn):
     for name, definition in session_additions.items():
         if name not in session_cols:
             conn.execute(f"ALTER TABLE exam_sessions ADD COLUMN {name} {definition}")
+
+    roster_cols = _table_columns(conn, "classroom_rosters") if "classroom_rosters" in _table_names(conn) else set()
+    for name, definition in {
+        "coursework_id": "TEXT",
+        "coursework_title": "TEXT",
+        "max_points": "REAL",
+        "last_synced_at": "TEXT",
+        "last_sync_summary": "TEXT",
+    }.items():
+        if roster_cols and name not in roster_cols:
+            conn.execute(f"ALTER TABLE classroom_rosters ADD COLUMN {name} {definition}")
 
     coding_cols = _table_columns(conn, "coding_sessions") if "coding_sessions" in _table_names(conn) else set()
     for name, definition in {

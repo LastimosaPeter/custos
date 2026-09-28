@@ -45,6 +45,11 @@ CLASSROOM_SCOPES = (
     "https://www.googleapis.com/auth/classroom.rosters.readonly",
     "https://www.googleapis.com/auth/classroom.profile.emails",
 )
+# Create the Custos-owned Classroom assignment and write its grades. Google
+# only lets an app grade coursework that the same Cloud project created, so
+# Custos always creates the assignment itself (never grades one made by hand).
+GRADE_SCOPE = "https://www.googleapis.com/auth/classroom.coursework.students"
+ALL_CLASSROOM_SCOPES = CLASSROOM_SCOPES + (GRADE_SCOPE,)
 CLASSROOM_API = "https://classroom.googleapis.com/v1"
 TOKENINFO_URL = "https://oauth2.googleapis.com/tokeninfo"
 HTTP_TIMEOUT = 15
@@ -241,9 +246,9 @@ def _assessment_or_404(conn, assessment_id):
     return row
 
 
-def _checked_access_token(payload):
+def _checked_access_token(payload, required=CLASSROOM_SCOPES):
     """Confirm the browser-supplied access token was issued to THIS client id
-    with the roster scopes, so a token minted for another app can't be used."""
+    with the needed scopes, so a token minted for another app can't be used."""
     token = str(payload.get("access_token", ""))
     if not token or len(token) > 4096:
         raise GoogleAuthError("Google Classroom authorization is missing. Click Connect again.")
@@ -257,14 +262,30 @@ def _checked_access_token(payload):
     if data.get("aud") != GOOGLE_CLIENT_ID and data.get("azp") != GOOGLE_CLIENT_ID:
         raise GoogleAuthError("Google Classroom authorization was not issued for Custos.")
     granted = set(str(data.get("scope", "")).split())
-    if not set(CLASSROOM_SCOPES) <= granted:
+    if not set(required) <= granted:
         raise GoogleAuthError("Please allow all requested Google Classroom permissions and try again.")
     return token
 
 
+def _classroom_call(token, method, path, params=None, body=None):
+    try:
+        resp = requests.request(method, f"{CLASSROOM_API}{path}", params=params, json=body,
+                                headers={"Authorization": f"Bearer {token}"}, timeout=HTTP_TIMEOUT)
+    except requests.RequestException:
+        raise GoogleAuthError("Could not reach Google Classroom. Try again.") from None
+    if resp.status_code == 404:
+        raise LookupError(path)
+    if resp.status_code == 403:
+        raise GoogleAuthError("Google Classroom refused this change (only the course's teachers can grade, "
+                              "and only assignments Custos created can be graded by Custos).")
+    if resp.status_code not in (200, 201):
+        raise GoogleAuthError("Google Classroom request failed. Try again.")
+    return resp.json()
+
+
 def _classroom_get(token, path, params=None):
     items, page_token = [], None
-    key = "courses" if path == "/courses" else "students"
+    key = "courses" if path == "/courses" else ("studentSubmissions" if path.endswith("/studentSubmissions") else "students")
     for _ in range(50):  # hard cap: 50 pages
         query = dict(params or {}, pageSize=100)
         if page_token:
@@ -284,6 +305,10 @@ def _classroom_get(token, path, params=None):
         if not page_token:
             break
     return items
+
+
+def _student_sections_json():
+    return {k: sorted(v) for k, v in _section_choices().items()}
 
 
 def _section_choices():
@@ -402,6 +427,165 @@ def classroom_roster_delete(assessment_id, roster_id):
 
 
 # --------------------------------------------------------------------------
+# Grade sync: send finished scores to a Custos-created Classroom assignment
+# --------------------------------------------------------------------------
+
+LEGACY_MAX_POINTS = 50  # Part I (capped at 30) + Part II (20); Midterm bonus is extra credit
+
+
+def default_max_points(conn, assessment):
+    if assessment["assessment_type"] == "custom":
+        rows = conn.execute(
+            "SELECT points FROM questions WHERE assessment_id=? AND COALESCE(active,1)=1 ORDER BY COALESCE(position,id),id",
+            (assessment["id"],),
+        ).fetchall()
+        limit = int(assessment["question_limit"] or 0)
+        if limit > 0:
+            rows = rows[:limit]
+        return float(sum(int(r["points"] or 1) for r in rows) or 1)
+    return float(LEGACY_MAX_POINTS)
+
+
+def final_score(attempt):
+    """Instructor-adjusted total when present, else the automatic total."""
+    keys = attempt.keys()
+    if "admin_total" in keys and attempt["admin_total"] is not None:
+        return float(attempt["admin_total"])
+    return float(attempt["auto_total"] or 0)
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/classroom/<int:roster_id>/sync")
+def classroom_sync_grades(assessment_id, roster_id):
+    _require_admin()
+    _require_csrf_header()
+    payload = request.get_json(silent=True) or {}
+    conn = connect()
+    try:
+        assessment = _assessment_or_404(conn, assessment_id)
+        roster = conn.execute(
+            "SELECT * FROM classroom_rosters WHERE id=? AND assessment_id=?", (roster_id, assessment_id)
+        ).fetchone()
+        if not roster:
+            abort(404)
+        default_max = default_max_points(conn, assessment)
+        students = conn.execute(
+            "SELECT email, google_user_id, first_name, last_name FROM classroom_roster_students WHERE roster_id=?",
+            (roster_id,),
+        ).fetchall()
+        attempts = {
+            r["email"]: r for r in conn.execute(
+                """SELECT * FROM exam_sessions WHERE assessment_id=? AND status='submitted'
+                   AND COALESCE(is_test,0)=0 ORDER BY id""", (assessment_id,),
+            ).fetchall()
+        }
+    finally:
+        conn.close()
+
+    try:
+        max_points = float(payload.get("max_points") or roster["max_points"] or default_max)
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "error": "Max points must be a number."}), 400
+    if not 0 < max_points <= 1000:
+        return jsonify({"ok": False, "error": "Max points must be between 1 and 1000."}), 400
+
+    course_id = roster["course_id"]
+    coursework_id = roster["coursework_id"]
+    created = False
+    try:
+        token = _checked_access_token(payload, required=ALL_CLASSROOM_SCOPES)
+        if coursework_id:
+            try:
+                _classroom_call(token, "GET", f"/courses/{course_id}/courseWork/{coursework_id}")
+            except LookupError:
+                coursework_id = None  # deleted in Classroom: create a fresh one
+        if not coursework_id:
+            from flask import url_for
+
+            title = str(payload.get("title") or assessment["title"])[:200]
+            cw = _classroom_call(token, "POST", f"/courses/{course_id}/courseWork", body={
+                "title": title,
+                "description": f"Scores are sent from Custos ({url_for('index', _external=True)}). "
+                               "Take the assessment in Custos, not here.",
+                "workType": "ASSIGNMENT",
+                "state": "PUBLISHED",
+                "maxPoints": max_points,
+            })
+            coursework_id, created = cw["id"], True
+        submissions = _classroom_get(token, f"/courses/{course_id}/courseWork/{coursework_id}/studentSubmissions")
+    except GoogleAuthError as exc:
+        return jsonify({"ok": False, "error": str(exc)}), 400
+    except LookupError:
+        return jsonify({"ok": False, "error": "That Google Classroom course is no longer available."}), 400
+
+    by_user = {s.get("userId"): s for s in submissions}
+    summary = {"sent": 0, "unchanged": 0, "not_submitted": 0, "not_in_classroom": 0, "failed": 0}
+    for st in students:
+        attempt = attempts.get(st["email"])
+        if not attempt:
+            summary["not_submitted"] += 1
+            continue
+        sub = by_user.get(st["google_user_id"])
+        if not sub:
+            summary["not_in_classroom"] += 1
+            continue
+        grade = round(final_score(attempt), 2)
+        if sub.get("assignedGrade") == grade and sub.get("draftGrade") == grade:
+            summary["unchanged"] += 1
+            continue
+        try:
+            _classroom_call(token, "PATCH",
+                            f"/courses/{course_id}/courseWork/{coursework_id}/studentSubmissions/{sub['id']}",
+                            params={"updateMask": "draftGrade,assignedGrade"},
+                            body={"draftGrade": grade, "assignedGrade": grade})
+            summary["sent"] += 1
+        except (GoogleAuthError, LookupError):
+            summary["failed"] += 1
+
+    import json as _json
+
+    conn = connect()
+    try:
+        conn.execute(
+            """UPDATE classroom_rosters SET coursework_id=?, coursework_title=COALESCE(?, coursework_title),
+               max_points=?, last_synced_at=?, last_sync_summary=? WHERE id=?""",
+            (coursework_id, (payload.get("title") or assessment["title"])[:200] if created else None,
+             max_points, iso_now(), _json.dumps(summary), roster_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+    return jsonify({"ok": True, "created_assignment": created, **summary})
+
+
+# --------------------------------------------------------------------------
+# Live Monitor: rostered students who haven't started
+# --------------------------------------------------------------------------
+
+@bp.get("/admin/monitor/not-started")
+def monitor_not_started():
+    _require_admin()
+    conn = connect()
+    try:
+        rows = conn.execute(
+            """SELECT r.assessment_id, a.title, r.program, r.class_section, s.first_name, s.last_name, s.email
+               FROM classroom_roster_students s
+               JOIN classroom_rosters r ON r.id=s.roster_id
+               JOIN assessments a ON a.id=r.assessment_id AND a.deleted_at IS NULL AND COALESCE(a.active,1)=1
+               WHERE NOT EXISTS (SELECT 1 FROM exam_sessions e WHERE e.assessment_id=r.assessment_id
+                                 AND e.email=s.email AND COALESCE(e.is_test,0)=0)
+               ORDER BY a.title, r.program, r.class_section, s.last_name, s.first_name"""
+        ).fetchall()
+    finally:
+        conn.close()
+    out = {}
+    for r in rows:
+        item = out.setdefault(str(r["assessment_id"]), {"title": r["title"], "students": []})
+        item["students"].append({"name": f"{r['first_name']} {r['last_name']}".strip() or r["email"],
+                                 "email": r["email"], "section": f"{r['program']}{r['class_section']}"})
+    return jsonify({"ok": True, "assessments": out})
+
+
+# --------------------------------------------------------------------------
 # Helpers used by the exam login and templates
 # --------------------------------------------------------------------------
 
@@ -445,6 +629,40 @@ def csp_additions():
 def register(app):
     app.register_blueprint(bp)
 
+    def _rosters_for(assessment_id):
+        conn = connect()
+        try:
+            return rosters_for_assessment(conn, assessment_id)
+        finally:
+            conn.close()
+
+    def _assessment_id_for_type(assessment_type):
+        conn = connect()
+        try:
+            row = conn.execute(
+                "SELECT id FROM assessments WHERE assessment_type=? AND deleted_at IS NULL ORDER BY id LIMIT 1",
+                (assessment_type,),
+            ).fetchone()
+            return row["id"] if row else None
+        finally:
+            conn.close()
+
+    def _default_max_for(assessment_id):
+        conn = connect()
+        try:
+            row = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
+            return default_max_points(conn, row) if row else LEGACY_MAX_POINTS
+        finally:
+            conn.close()
+
+    import json as _json
+
+    app.jinja_env.filters["from_json"] = _json.loads
+    app.jinja_env.globals.update(
+        classroom_rosters=_rosters_for, assessment_id_for_type=_assessment_id_for_type,
+        classroom_default_max=_default_max_for,
+    )
+
     @app.context_processor
     def _google_context():
         return {
@@ -453,5 +671,6 @@ def register(app):
             "google_student": google_student_identity(),
             "google_student_required": STUDENT_GOOGLE_LOGIN_REQUIRED,
             "google_allowed_domains": sorted(GOOGLE_ALLOWED_DOMAINS),
-            "classroom_scopes": " ".join(CLASSROOM_SCOPES),
+            "classroom_scopes": " ".join(ALL_CLASSROOM_SCOPES),
+            "student_sections": _student_sections_json(),
         }

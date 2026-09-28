@@ -1,0 +1,4 @@
+{% if google_enabled %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="{{ url_for('static', filename='js/google_auth.js', v=app_asset_revision) }}" defer></script>
+{% endif %}

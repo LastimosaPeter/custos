@@ -108,8 +108,12 @@
     } catch (err) { say(err.message); }
   };
 
+  // One token client for the whole card; `then` is what to do once Google
+  // hands back a short-lived access token (it is never stored).
   let tokenClient = null;
-  card.querySelector("[data-classroom-connect]").addEventListener("click", () => {
+  let then = null;
+  const withToken = (next) => {
+    then = next;
     whenGoogle(hasOAuth, () => {
       if (!tokenClient) {
         tokenClient = google.accounts.oauth2.initTokenClient({
@@ -118,11 +122,33 @@
           callback: (resp) => {
             if (resp.error) { say("Google Classroom access was not granted."); return; }
             accessToken = resp.access_token;
-            loadCourses();
+            if (then) then();
           },
         });
       }
       tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+    });
+  };
+  card.querySelector("[data-classroom-connect]").addEventListener("click", () => withToken(loadCourses));
+
+  card.querySelectorAll("[data-grade-sync]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest("tr");
+      const maxInput = row && row.querySelector("[data-max-points]");
+      withToken(async () => {
+        btn.disabled = true;
+        say("Sending scores to Google Classroom…");
+        try {
+          const d = await post(btn.dataset.gradeSync, csrf, {
+            access_token: accessToken, max_points: maxInput ? maxInput.value : undefined,
+          });
+          const parts = [`${d.sent} sent`, `${d.unchanged} unchanged`, `${d.not_submitted} not submitted yet`];
+          if (d.not_in_classroom) parts.push(`${d.not_in_classroom} not in the Classroom assignment`);
+          if (d.failed) parts.push(`${d.failed} failed`);
+          say(`${d.created_assignment ? "Created the Classroom assignment. " : ""}Scores: ${parts.join(", ")}.`);
+          setTimeout(() => window.location.reload(), 2500);
+        } catch (err) { say(err.message); btn.disabled = false; }
+      });
     });
   });
 

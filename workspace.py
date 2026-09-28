@@ -271,11 +271,31 @@ def instructor_add():
     email = request.form.get("email", "").strip().lower() or None
     password = request.form.get("temporary_password", "")
     subject_id = request.form.get("subject_id", "").strip()
-    if len(username) < 3 or len(display_name) < 2 or len(password) < 10:
-        flash("Use a username, display name, and a temporary password of at least 10 characters.", "error")
+    from google_integration import google_enabled
+
+    google_invite = google_enabled() and email and not username and not password
+    if google_invite:
+        # Invite by Google email: no password login at all - the account opens
+        # only through "Sign in with Google" with this exact email.
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(display_name) < 2:
+            flash("Enter the instructor's Google email and a display name.", "error")
+            return redirect(url_for("nextgen.workspace"))
+        password = secrets.token_urlsafe(48)
+        base = re.sub(r"[^a-z0-9._-]", "", email.split("@", 1)[0].lower())[:40] or "instructor"
+        username = base
+    elif len(username) < 3 or len(display_name) < 2 or len(password) < 10:
+        flash("Use a username, display name, and a temporary password of at least 10 characters"
+              + (", or leave username and password blank to invite by Google email." if google_enabled() else "."), "error")
         return redirect(url_for("nextgen.workspace"))
     conn = connect()
     try:
+        if email and conn.execute("SELECT 1 FROM admins WHERE LOWER(COALESCE(email,''))=?", (email,)).fetchone():
+            raise ValueError(f"an account already uses {email}")
+        if google_invite:
+            suffix = 1
+            while conn.execute("SELECT 1 FROM admins WHERE username=?", (username,)).fetchone():
+                suffix += 1
+                username = f"{base}{suffix}"
         cur = conn.execute(
             """INSERT INTO admins(username,password_hash,display_name,email,role,active)
                VALUES(?,?,?,?, 'instructor',1) RETURNING id""",
@@ -295,7 +315,8 @@ def instructor_add():
                 (int(subject_id), instructor_id),
             )
         conn.commit()
-        flash(f"Instructor account {username} created.", "success")
+        flash(f"{display_name} can now sign in with Google as {email}." if google_invite
+              else f"Instructor account {username} created.", "success")
     except Exception as exc:
         conn.rollback()
         flash(f"Could not create instructor: {exc}", "error")
@@ -560,17 +581,10 @@ def custom_assessment(assessment_id):
     active_questions = [q for q in questions if q["active"]]
     max_score = sum(int(q["points"] or 1) for q in active_questions)
     conn.close()
-    from google_integration import rosters_for_assessment
-    from app import STUDENT_SECTIONS
-
-    conn = connect()
-    rosters = rosters_for_assessment(conn, assessment_id)
-    conn.close()
     return render_template(
         "admin_custom_assessment.html", assessment=assessment, batch=batch, questions=questions,
         summary=summary, sessions=sessions, active_count=len(active_questions), max_score=max_score,
         assessment_label=assessment["display_type"] or "Custom Assessment",
-        rosters=rosters, student_sections={k: sorted(v) for k, v in STUDENT_SECTIONS.items()},
     )
 
 
