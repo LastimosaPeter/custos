@@ -1,0 +1,8 @@
+Custos local font drop-in folder
+
+Place your own locally licensed font archives here after extracting this Custos package, for example:
+- JetBrainsMono-2.304.zip
+- Gotham-font-family-www.Dfonts.org.zip
+
+The downloadable Custos package does not redistribute font binaries.
+Only commit or deploy fonts when your license permits it.
