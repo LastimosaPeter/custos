@@ -4,6 +4,10 @@
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav('') }}
 {% endblock %}
+{% block head_extra %}{% if google_enabled %}
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script src="{{ url_for('static', filename='js/google_auth.js', v=app_asset_revision) }}" defer></script>
+{% endif %}{% endblock %}
 {% block content %}
 <div class="dashboard-heading custom-builder-heading">
   <div>
@@ -33,6 +37,39 @@
   <div class="stat-card"><span>Submissions</span><strong>{{ summary.submitted or 0 }}</strong><small>of {{ summary.attempts or 0 }} attempts</small></div>
   <div class="stat-card"><span>Class Mean</span><strong>{{ '%.2f'|format(summary.avg_score) if summary.avg_score is not none else '—' }}</strong><small>automatic score</small></div>
 </div>
+
+{% if google_enabled %}
+<section class="content-card classroom-card" data-classroom
+         data-client-id="{{ google_client_id }}" data-scopes="{{ classroom_scopes }}" data-csrf="{{ csrf_token() }}"
+         data-courses-url="{{ url_for('google.classroom_courses', assessment_id=assessment.id) }}"
+         data-import-url="{{ url_for('google.classroom_import', assessment_id=assessment.id) }}"
+         data-sections='{{ student_sections|tojson }}'>
+  <div class="section-heading"><div><h2>Google Classroom roster</h2>
+    <p class="subtle">{% if rosters %}Only students on these class lists can start this assessment. Their name and section come from Google Classroom.{% else %}Link a Google Classroom course to limit this assessment to its students. Until then, anyone with the session key can start it.{% endif %}</p></div></div>
+  {% if rosters %}
+  <table class="data-table">
+    <thead><tr><th>Course</th><th>Custos section</th><th>Students</th><th>Imported</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rosters %}
+      <tr><td>{{ r.course_name }}{% if r.course_section %} · {{ r.course_section }}{% endif %}</td>
+          <td>{{ r.program }}-{{ r.class_section }}</td><td>{{ r.student_count }}</td><td>{{ r.imported_at[:16]|replace('T', ' ') }}</td>
+          <td><button type="button" class="danger" data-roster-delete="{{ url_for('google.classroom_roster_delete', assessment_id=assessment.id, roster_id=r.id) }}">Remove</button></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+  <div class="classroom-steps">
+    <button type="button" class="primary" data-classroom-connect>{% if rosters %}Import or refresh a course{% else %}Connect Google Classroom{% endif %}</button>
+    <div class="classroom-import" data-classroom-import hidden>
+      <label>Course <select data-course-select></select></label>
+      <label>Program <select data-program-select></select></label>
+      <label>Section <select data-section-select></select></label>
+      <button type="button" class="primary" data-classroom-do-import>Import students</button>
+    </div>
+    <p class="micro" data-classroom-status></p>
+  </div>
+</section>
+{% endif %}
 
 <div class="custom-builder-grid">
   <section class="content-card custom-delivery-card">

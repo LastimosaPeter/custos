@@ -1,0 +1,379 @@
+"""Tests for Google sign-in + Google Classroom roster import (google_integration.py).
+
+Google itself is mocked at the network edge only: google.oauth2's ID-token
+verifier and the HTTP calls to tokeninfo/Classroom. Every Custos-side check
+(domains, verified email, token audience/scopes, roster enforcement) runs for real.
+
+Run:  pytest -q tests/test_google_integration.py
+"""
+import os
+import re
+import subprocess
+import sys
+import tempfile
+
+import pytest
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CLIENT_ID = "test-client.apps.googleusercontent.com"
+_tmp = tempfile.mkdtemp(prefix="custos-google-test-")
+os.environ.update({
+    "SECRET_KEY": "x" * 64, "ADMIN_USERNAME": "admin", "ADMIN_PASSWORD": "test-admin-password-123",
+    "DATABASE_URL": "", "EXAM_DB_PATH": os.path.join(_tmp, "test.db"), "AUTO_INIT_DB": "1",
+    "GOOGLE_CLIENT_ID": CLIENT_ID, "GOOGLE_ALLOWED_DOMAINS": "adnu.edu.ph,gbox.adnu.edu.ph",
+    "STUDENT_GOOGLE_LOGIN_REQUIRED": "1", "CODE_RUNNER_BACKEND": "disabled",
+})
+sys.path.insert(0, ROOT)
+
+import app as custos  # noqa: E402
+import google_integration as gi  # noqa: E402
+from db import connect, iso_now  # noqa: E402
+
+ACCESS_KEY = "CUSTOM-TEST-KEY1"
+CLASSROOM_SCOPES = " ".join(gi.CLASSROOM_SCOPES)
+
+
+# --------------------------------------------------------------------------- fixtures
+
+@pytest.fixture(scope="module")
+def assessment_id():
+    import workspace
+
+    conn = connect()
+    sid = conn.execute(
+        "INSERT INTO subjects(code,name,term,school_year,active,created_at) VALUES ('CSDC101','Test','1','2026',1,?) RETURNING id",
+        (iso_now(),),
+    ).fetchone()[0]
+    aid = conn.execute(
+        """INSERT INTO assessments(subject_id,title,slug,assessment_type,display_type,access_code,active,created_at)
+           VALUES (?, 'Google Test Quiz', 'google-test-quiz', 'custom', 'Quiz', ?, 1, ?) RETURNING id""",
+        (sid, ACCESS_KEY, iso_now()),
+    ).fetchone()[0]
+    assessment = conn.execute("SELECT * FROM assessments WHERE id=?", (aid,)).fetchone()
+    batch = workspace._ensure_custom_batch(conn, assessment)
+    conn.execute(
+        """INSERT INTO questions(part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,
+           correct_option,explanation,points,position,active,created_by,subject_id,assessment_id)
+           VALUES (1,?, 'T', '2+2?', '', '3', '4', '5', '6', 'B', '', 1, 1, 1, 'instructor', ?, ?)""",
+        (batch["slot"], sid, aid),
+    )
+    conn.execute("UPDATE admins SET email='teacher@adnu.edu.ph' WHERE username='admin'")
+    conn.commit()
+    conn.close()
+    return aid
+
+
+@pytest.fixture
+def client():
+    custos.app.config["TESTING"] = True
+    with custos.app.test_client() as c:
+        yield c
+
+
+def _csrf(client):
+    client.get("/login")
+    with client.session_transaction() as s:
+        return s["csrf_token"]
+
+
+def _claims(email, hd=None, verified=True, **extra):
+    c = {"iss": "https://accounts.google.com", "aud": CLIENT_ID, "email": email, "email_verified": verified,
+         "sub": "sub-" + email.split("@")[0], "given_name": "Gina", "family_name": "Google", "name": "Gina Google"}
+    if hd is not None:
+        c["hd"] = hd
+    c.update(extra)
+    return c
+
+
+@pytest.fixture
+def google_token(monkeypatch):
+    """Map fake credential strings to claims; anything else fails verification."""
+    registry = {}
+
+    def fake_verify(credential, request, audience, clock_skew_in_seconds=0):
+        assert audience == CLIENT_ID
+        if credential not in registry:
+            raise ValueError("bad token")
+        return dict(registry[credential])
+
+    from google.oauth2 import id_token
+    monkeypatch.setattr(id_token, "verify_oauth2_token", fake_verify)
+    return registry
+
+
+class FakeResp:
+    def __init__(self, status, data):
+        self.status_code, self._data = status, data
+
+    def json(self):
+        return self._data
+
+
+@pytest.fixture
+def google_api(monkeypatch):
+    """Fake tokeninfo + Classroom. state is mutable per test."""
+    state = {
+        "tokeninfo": {"aud": CLIENT_ID, "azp": CLIENT_ID, "scope": CLASSROOM_SCOPES},
+        "courses": [{"id": "111", "name": "CSDC101", "section": "ZT-11"}],
+        "students": {"111": [
+            {"userId": "u1", "profile": {"id": "u1", "emailAddress": "ana@gbox.adnu.edu.ph",
+                                         "name": {"givenName": "Ana", "familyName": "Roster"}}},
+            {"userId": "u2", "profile": {"id": "u2", "emailAddress": "ben@adnu.edu.ph",
+                                         "name": {"givenName": "Ben", "familyName": "Roster"}}},
+            {"userId": "u3", "profile": {"id": "u3", "emailAddress": "outsider@gmail.com",
+                                         "name": {"givenName": "Out", "familyName": "Sider"}}},
+        ]},
+        "calls": [],
+    }
+
+    def fake_get(url, params=None, headers=None, timeout=None):
+        state["calls"].append(url)
+        if url == gi.TOKENINFO_URL:
+            return FakeResp(200, state["tokeninfo"]) if params.get("access_token") == "good-token" else FakeResp(400, {})
+        assert headers["Authorization"] == "Bearer good-token"
+        if url.endswith("/courses"):
+            return FakeResp(200, {"courses": state["courses"]})
+        m = re.search(r"/courses/([^/]+)/students$", url)
+        return FakeResp(200, {"students": state["students"].get(m.group(1), [])})
+
+    monkeypatch.setattr(gi.requests, "get", fake_get)
+    return state
+
+
+def _student_signin(client, registry, email, hd):
+    registry[f"cred-{email}"] = _claims(email, hd=hd)
+    csrf = _csrf(client)
+    return client.post("/auth/google/student", json={"credential": f"cred-{email}"}, headers={"X-CSRFToken": csrf})
+
+
+def _admin_login(client):
+    csrf = _csrf(client)
+    r = client.post("/admin/login", data={"username": "admin", "password": "test-admin-password-123", "csrf_token": csrf})
+    assert r.status_code == 302
+    with client.session_transaction() as s:
+        return s["csrf_token"]
+
+
+def _exam_login(client, form=None):
+    with client.session_transaction() as s:
+        csrf = s["csrf_token"]
+    data = {"csrf_token": csrf, "first_name": "Typed", "last_name": "Name", "program": "ZT",
+            "class_section": "11", "session_key": ACCESS_KEY}
+    data.update(form or {})
+    return client.post("/login", data=data)
+
+
+# --------------------------------------------------------------------------- pages / headers
+
+def test_login_page_shows_google_button_and_hides_form(client):
+    html = client.get("/login").get_data(as_text=True)
+    assert "accounts.google.com/gsi/client" in html
+    assert "data-google-signin" in html and CLIENT_ID in html
+    assert 'name="session_key"' not in html  # form hidden until signed in
+    assert 'name="email"' not in html
+
+
+def test_csp_allows_google_identity_services_and_referrer_only_on_signin_pages(client):
+    r = client.get("/login")
+    csp = r.headers["Content-Security-Policy"]
+    assert "https://accounts.google.com/gsi/client" in csp and "frame-src https://accounts.google.com/gsi/" in csp
+    assert r.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
+    assert client.get("/").headers["Referrer-Policy"] == "no-referrer"
+
+
+# --------------------------------------------------------------------------- student sign-in
+
+def test_student_signin_requires_csrf(client, google_token):
+    google_token["c"] = _claims("ana@adnu.edu.ph", hd="adnu.edu.ph")
+    client.get("/login")
+    assert client.post("/auth/google/student", json={"credential": "c"}).status_code == 400
+
+
+@pytest.mark.parametrize("email,hd", [("ana@adnu.edu.ph", "adnu.edu.ph"), ("ana@gbox.adnu.edu.ph", "gbox.adnu.edu.ph")])
+def test_student_signin_accepts_both_school_domains(client, google_token, email, hd):
+    r = _student_signin(client, google_token, email, hd)
+    assert r.status_code == 200 and r.get_json()["email"] == email
+    html = client.get("/login").get_data(as_text=True)
+    assert email in html and 'name="session_key"' in html and 'name="email"' not in html
+
+
+@pytest.mark.parametrize("email,hd", [
+    ("someone@gmail.com", None),              # consumer account
+    ("spoof@adnu.edu.ph", None),              # no Workspace hd claim
+    ("x@evil.com", "adnu.edu.ph"),            # hd mismatch with email domain
+    ("x@notadnu.edu.ph", "notadnu.edu.ph"),   # other Workspace domain
+])
+def test_student_signin_rejects_non_school_accounts(client, google_token, email, hd):
+    r = _student_signin(client, google_token, email, hd)
+    assert r.status_code == 401 and "school Google account" in r.get_json()["error"]
+    with client.session_transaction() as s:
+        assert "google_student" not in s
+
+
+def test_student_signin_rejects_unverified_email_and_bad_token(client, google_token):
+    google_token["unverified"] = _claims("ana@adnu.edu.ph", hd="adnu.edu.ph", verified=False)
+    csrf = _csrf(client)
+    assert client.post("/auth/google/student", json={"credential": "unverified"}, headers={"X-CSRFToken": csrf}).status_code == 401
+    assert client.post("/auth/google/student", json={"credential": "forged"}, headers={"X-CSRFToken": csrf}).status_code == 401
+    assert client.post("/auth/google/student", json={"credential": "x" * 5000}, headers={"X-CSRFToken": csrf}).status_code == 401
+
+
+def test_exam_login_requires_google_when_required(client, assessment_id):
+    _csrf(client)
+    r = _exam_login(client, {"email": "typed@adnu.edu.ph"})
+    assert r.status_code == 200 and "Sign in with your school Google account first" in r.get_data(as_text=True)
+
+
+def test_typed_email_is_ignored_and_google_email_used(client, google_token, assessment_id):
+    _student_signin(client, google_token, "cara@adnu.edu.ph", "adnu.edu.ph")
+    r = _exam_login(client, {"email": "someone.else@adnu.edu.ph"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/instructions")
+    with client.session_transaction() as s:
+        assert s["pending_email"] == "cara@adnu.edu.ph"
+        assert s["pending_google_sub"] == "sub-cara"
+
+
+def test_start_records_google_auth_method(client, google_token, assessment_id):
+    _student_signin(client, google_token, "dina@adnu.edu.ph", "adnu.edu.ph")
+    _exam_login(client)
+    with client.session_transaction() as s:
+        csrf = s["csrf_token"]
+    r = client.post("/start", data={"csrf_token": csrf, "terms_accept": "yes"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/exam")
+    conn = connect()
+    row = conn.execute("SELECT auth_method, google_sub FROM exam_sessions WHERE email='dina@adnu.edu.ph'").fetchone()
+    conn.close()
+    assert row["auth_method"] == "google" and row["google_sub"] == "sub-dina"
+
+
+def test_start_rejected_if_google_identity_changed(client, google_token, assessment_id):
+    _student_signin(client, google_token, "eve@adnu.edu.ph", "adnu.edu.ph")
+    _exam_login(client)
+    with client.session_transaction() as s:
+        s["google_student"] = dict(s["google_student"], email="mallory@adnu.edu.ph")
+        csrf = s["csrf_token"]
+    r = client.post("/start", data={"csrf_token": csrf, "terms_accept": "yes"})
+    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+
+
+def test_student_logout_forgets_google_identity(client, google_token):
+    _student_signin(client, google_token, "fay@adnu.edu.ph", "adnu.edu.ph")
+    client.get("/logout")
+    with client.session_transaction() as s:
+        assert "google_student" not in s
+
+
+# --------------------------------------------------------------------------- instructor sign-in
+
+def test_admin_google_signin_matches_account_email(client, google_token):
+    google_token["t"] = _claims("teacher@adnu.edu.ph", hd="adnu.edu.ph")
+    csrf = _csrf(client)
+    r = client.post("/auth/google/admin", json={"credential": "t"}, headers={"X-CSRFToken": csrf})
+    assert r.status_code == 200 and r.get_json()["redirect"].endswith("/admin/workspace")
+    with client.session_transaction() as s:
+        assert s["admin_id"] and s["admin_auth_method"] == "google"
+
+
+def test_admin_google_signin_unknown_email_refused(client, google_token):
+    google_token["u"] = _claims("stranger@adnu.edu.ph", hd="adnu.edu.ph")
+    csrf = _csrf(client)
+    r = client.post("/auth/google/admin", json={"credential": "u"}, headers={"X-CSRFToken": csrf})
+    assert r.status_code == 403
+    with client.session_transaction() as s:
+        assert "admin_id" not in s
+
+
+def test_admin_login_page_has_google_button(client):
+    assert "/auth/google/admin" in client.get("/admin/login").get_data(as_text=True)
+
+
+# --------------------------------------------------------------------------- classroom
+
+def test_classroom_endpoints_require_admin(client, assessment_id):
+    csrf = _csrf(client)
+    r = client.post(f"/admin/assessment/{assessment_id}/classroom/courses", json={"access_token": "good-token"},
+                    headers={"X-CSRFToken": csrf})
+    assert r.status_code == 401
+
+
+def test_classroom_token_must_be_issued_to_custos(client, google_api, assessment_id):
+    csrf = _admin_login(client)
+    url = f"/admin/assessment/{assessment_id}/classroom/courses"
+    google_api["tokeninfo"] = {"aud": "other-app", "azp": "other-app", "scope": CLASSROOM_SCOPES}
+    r = client.post(url, json={"access_token": "good-token"}, headers={"X-CSRFToken": csrf})
+    assert r.status_code == 400 and "not issued for Custos" in r.get_json()["error"]
+    google_api["tokeninfo"] = {"aud": CLIENT_ID, "scope": gi.CLASSROOM_SCOPES[0]}
+    r = client.post(url, json={"access_token": "good-token"}, headers={"X-CSRFToken": csrf})
+    assert r.status_code == 400 and "permissions" in r.get_json()["error"]
+    r = client.post(url, json={"access_token": "expired"}, headers={"X-CSRFToken": csrf})
+    assert r.status_code == 400
+
+
+def test_classroom_import_and_roster_enforcement(client, google_api, google_token, assessment_id):
+    csrf = _admin_login(client)
+    base = f"/admin/assessment/{assessment_id}/classroom"
+    r = client.post(f"{base}/courses", json={"access_token": "good-token"}, headers={"X-CSRFToken": csrf})
+    assert r.get_json()["courses"] == [{"id": "111", "name": "CSDC101", "section": "ZT-11"}]
+    # invalid section mapping and foreign course are refused
+    bad = client.post(f"{base}/import", json={"access_token": "good-token", "course_id": "111", "program": "ZS", "class_section": "13"},
+                      headers={"X-CSRFToken": csrf})
+    assert bad.status_code == 400
+    bad = client.post(f"{base}/import", json={"access_token": "good-token", "course_id": "999", "program": "ZT", "class_section": "12"},
+                      headers={"X-CSRFToken": csrf})
+    assert bad.status_code == 400
+    r = client.post(f"{base}/import", json={"access_token": "good-token", "course_id": "111", "program": "ZT", "class_section": "12"},
+                    headers={"X-CSRFToken": csrf})
+    assert r.get_json() == {"ok": True, "imported": 2, "skipped": 1}
+    # re-import is idempotent (replaces the list, no duplicates)
+    r = client.post(f"{base}/import", json={"access_token": "good-token", "course_id": "111", "program": "ZT", "class_section": "12"},
+                    headers={"X-CSRFToken": csrf})
+    assert r.get_json()["imported"] == 2
+    conn = connect()
+    assert conn.execute("SELECT COUNT(*) FROM classroom_roster_students").fetchone()[0] == 2
+    conn.close()
+    page = client.get(f"/admin/assessment/{assessment_id}").get_data(as_text=True)
+    assert "Google Classroom roster" in page and "ZT-12" in page
+
+    # A rostered student: name + section come from the roster, not the form
+    client.get("/admin/logout")
+    _student_signin(client, google_token, "ana@gbox.adnu.edu.ph", "gbox.adnu.edu.ph")
+    r = _exam_login(client, {"first_name": "Fake", "last_name": "Person", "class_section": "11"})
+    assert r.status_code == 302
+    with client.session_transaction() as s:
+        assert (s["pending_first_name"], s["pending_last_name"]) == ("Ana", "Roster")
+        assert (s["pending_program"], s["pending_class_section"]) == ("ZT", "12")
+
+    # A school account NOT on the roster is refused even with the right key
+    client.get("/logout")
+    _student_signin(client, google_token, "notlisted@adnu.edu.ph", "adnu.edu.ph")
+    r = _exam_login(client)
+    assert r.status_code == 200 and "isn&#39;t on the class list" in r.get_data(as_text=True)
+
+    # Removing the roster lifts the restriction
+    client.get("/logout")
+    csrf = _admin_login(client)
+    conn = connect()
+    rid = conn.execute("SELECT id FROM classroom_rosters WHERE assessment_id=?", (assessment_id,)).fetchone()["id"]
+    conn.close()
+    assert client.post(f"{base}/{rid}/delete", headers={"X-CSRFToken": csrf}).get_json()["ok"]
+    client.get("/admin/logout")
+    _student_signin(client, google_token, "notlisted@adnu.edu.ph", "adnu.edu.ph")
+    assert _exam_login(client).status_code == 302
+
+
+# --------------------------------------------------------------------------- feature off
+
+def test_feature_off_keeps_classic_form():
+    """With no GOOGLE_CLIENT_ID, Custos behaves exactly as before (separate process
+    because the configuration is read at import time)."""
+    env = dict(os.environ, GOOGLE_CLIENT_ID="", EXAM_DB_PATH=os.path.join(_tmp, "off.db"))
+    code = (
+        "import app; c=app.app.test_client(); r=c.get('/login'); h=r.get_data(as_text=True);"
+        "assert 'accounts.google.com' not in h and 'name=\"email\"' in h and 'name=\"session_key\"' in h, h[:300];"
+        "assert 'accounts.google.com' not in r.headers['Content-Security-Policy'];"
+        "assert 'frame-src' not in r.headers['Content-Security-Policy'];"
+        "assert c.post('/auth/google/student', json={}).status_code in (400, 401);"
+        "assert 'auth/google/admin' not in c.get('/admin/login').get_data(as_text=True); print('OFF_OK')"
+    )
+    out = subprocess.run([sys.executable, "-c", code], cwd=ROOT, env=env, capture_output=True, text=True, timeout=120)
+    assert "OFF_OK" in out.stdout, out.stderr[-2000:]

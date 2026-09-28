@@ -19,6 +19,12 @@ from werkzeug.security import check_password_hash
 
 from db import APP_TZ, DATABASE_ENGINE, connect, ensure_db_initialized, init_db, iso_now, unique_session_key
 from item_analysis import build_item_analysis
+from google_integration import (
+    STUDENT_GOOGLE_LOGIN_REQUIRED, csp_additions, google_student_identity, roster_entry,
+)
+
+# Pages that render a Google sign-in button or the Classroom connector.
+GOOGLE_SIGNIN_ENDPOINTS = {"student_login", "admin_login", "nextgen.custom_assessment"}
 
 load_dotenv()
 
@@ -42,7 +48,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r1")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r2-google")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -374,12 +380,18 @@ def add_security_headers(resp):
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
     resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    g_csp = csp_additions()
     resp.headers["Content-Security-Policy"] = (
         "default-src 'self'; img-src 'self' data:; "
-        "style-src 'self' https://fonts.googleapis.com; "
+        f"style-src 'self' https://fonts.googleapis.com {g_csp.get('style-src', '')}; "
         "font-src 'self' https://fonts.gstatic.com; "
-        "script-src 'self'; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+        f"script-src 'self' {g_csp.get('script-src', '')}; connect-src 'self' {g_csp.get('connect-src', '')}; "
+        + (f"frame-src {g_csp['frame-src']}; " if g_csp else "")
+        + "frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
     )
+    if g_csp and request.endpoint in GOOGLE_SIGNIN_ENDPOINTS:
+        # Google's sign-in button needs the page origin; send it only on these pages.
+        resp.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
 
     # Versioned static assets are immutable for the lifetime of a release. The
     # old build marked every response no-store, forcing CSS/images/JS to download
@@ -441,7 +453,15 @@ def index():
 def student_login():
     if request.method == "POST":
         require_csrf()
-        email = request.form.get("email", "").strip().lower()
+        google_ident = google_student_identity()
+        if STUDENT_GOOGLE_LOGIN_REQUIRED and not google_ident:
+            flash("Sign in with your school Google account first.", "error")
+            return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
+        if google_ident:
+            # The verified Google email is authoritative; a typed email is ignored.
+            email = google_ident["email"]
+        else:
+            email = request.form.get("email", "").strip().lower()
         session_key = request.form.get("session_key", "").strip().upper()
         identity, identity_error = parse_student_identity(request.form)
         if identity_error:
@@ -449,7 +469,7 @@ def student_login():
             return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
         first_name, last_name, student_name, program, class_section = identity
         email_re = rf"^[A-Za-z0-9._%+\-]+@{re.escape(ALLOWED_EMAIL_DOMAIN)}$"
-        if not re.match(email_re, email):
+        if not google_ident and not re.match(email_re, email):
             flash(f"Use your @{ALLOWED_EMAIL_DOMAIN} account.", "error")
             return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
 
@@ -463,6 +483,18 @@ def student_login():
         assessment = None
         if "assessment_id" in batch.keys() and batch["assessment_id"]:
             assessment = conn.execute("SELECT * FROM assessments WHERE id=?", (batch["assessment_id"],)).fetchone()
+        # Google Classroom roster: when the assessment has one, only rostered
+        # students may start it, and name/section come from the roster.
+        has_roster, rostered = roster_entry(conn, assessment["id"] if assessment else None, email)
+        if has_roster:
+            if not rostered:
+                conn.close()
+                flash("Your Google account isn't on the class list for this assessment. Ask your instructor.", "error")
+                return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
+            first_name = rostered["first_name"] or first_name
+            last_name = rostered["last_name"] or last_name
+            student_name = f"{first_name} {last_name}".strip()
+            program, class_section = rostered["program"], rostered["class_section"]
         if assessment and assessment["assessment_type"] == "custom":
             allowed = {x.strip().upper() for x in str(assessment["allowed_sections"] or "").split(",") if x.strip()}
             student_section = f"{program}{class_section}"
@@ -495,6 +527,7 @@ def student_login():
                 session["pending_class_section"] = class_section
                 session["pending_batch_id"] = batch["id"]
                 session["pending_session_key"] = session_key
+                session["pending_google_sub"] = google_ident["sub"] if google_ident else ""
                 return redirect(url_for("instructions"))
             session["student_session_id"] = existing["id"]
             conn.close()
@@ -514,6 +547,7 @@ def student_login():
         session["pending_class_section"] = class_section
         session["pending_batch_id"] = batch["id"]
         session["pending_session_key"] = session_key
+        session["pending_google_sub"] = google_ident["sub"] if google_ident else ""
         return redirect(url_for("instructions"))
 
     return render_template("student_login.html", domain=ALLOWED_EMAIL_DOMAIN)
@@ -580,6 +614,11 @@ def start_exam():
     if request.form.get("terms_accept") != "yes":
         flash("You must accept the assessment monitoring and integrity terms before starting.", "error")
         return redirect(url_for("instructions"))
+    google_ident = google_student_identity()
+    if STUDENT_GOOGLE_LOGIN_REQUIRED and (not google_ident or google_ident["email"] != email):
+        flash("Sign in with your school Google account first.", "error")
+        return redirect(url_for("student_login"))
+    pending_google_sub = session.get("pending_google_sub", "")
 
     conn = connect()
     batch = conn.execute("SELECT * FROM batches WHERE id=?", (batch_id,)).fetchone()
@@ -614,9 +653,9 @@ def start_exam():
         conn.commit()
     else:
         cur = conn.execute(
-            """INSERT INTO exam_sessions(email,first_name,last_name,student_name,program,class_section,batch_id,assessment_id,started_at,ip_address,user_agent,terms_accepted_at)
-               VALUES (?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",
-            (email, first_name, last_name, student_name, program, class_section, batch_id, batch["assessment_id"], accepted_at, request.remote_addr, request.headers.get("User-Agent", "")[:500], accepted_at),
+            """INSERT INTO exam_sessions(email,first_name,last_name,student_name,program,class_section,batch_id,assessment_id,started_at,ip_address,user_agent,terms_accepted_at,auth_method,google_sub)
+               VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?) RETURNING id""",
+            (email, first_name, last_name, student_name, program, class_section, batch_id, batch["assessment_id"], accepted_at, request.remote_addr, request.headers.get("User-Agent", "")[:500], accepted_at, "google" if pending_google_sub else "form", pending_google_sub or None),
         )
         sid = cur.fetchone()[0]
         try:
@@ -642,6 +681,7 @@ def start_exam():
     session.pop("pending_class_section", None)
     session.pop("pending_batch_id", None)
     session.pop("pending_session_key", None)
+    session.pop("pending_google_sub", None)
     session["student_session_id"] = sid
     return redirect(url_for("exam"))
 
@@ -1104,7 +1144,7 @@ def result():
 
 @app.route("/logout")
 def student_logout():
-    for key in ("student_session_id", "pending_email", "pending_first_name", "pending_last_name", "pending_student_name", "pending_program", "pending_class_section", "pending_batch_id", "pending_session_key"):
+    for key in ("student_session_id", "pending_email", "pending_first_name", "pending_last_name", "pending_student_name", "pending_program", "pending_class_section", "pending_batch_id", "pending_session_key", "pending_google_sub", "google_student"):
         session.pop(key, None)
     return redirect(url_for("student_login"))
 
@@ -2612,6 +2652,8 @@ def export_questions():
 # Custos 1.0 · Goliathus: subjects, multi-assessment workspace, and secure C++ Programming Lab.
 from workspace import register as register_nextgen
 register_nextgen(app)
+from google_integration import register as register_google
+register_google(app)
 
 
 if __name__ == "__main__":

@@ -3815,3 +3815,16 @@ button,.button-link{ text-align:center; line-height:1.22; }
   width:100%;
   text-align:left!important;
 }
+
+/* Google sign-in + Google Classroom roster (google_integration.py) */
+.google-signin-block{display:grid;justify-items:center;gap:10px;margin:22px 0 6px}
+.google-signin-block [data-google-button]{min-height:44px;width:100%;display:flex;justify-content:center}
+.google-error{margin:0;padding:10px 12px;border-radius:6px;border:1px solid #e3aaa5;background:#fff7f6;color:#7d1b13;font-size:14px}
+.google-identity{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 0;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--soft);font-size:14px}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:22px 0 0;color:var(--muted);font-size:13px}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;border-top:1px solid var(--line)}
+.classroom-card table{margin:6px 0 14px}
+.classroom-steps{display:grid;gap:12px;justify-items:start}
+.classroom-import{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.classroom-import label{display:grid;gap:6px;font-weight:700;font-size:14px}
+.classroom-import select{min-width:140px;padding:10px;border:1px solid #bfc8d2;border-radius:6px;font:inherit;background:#fff}

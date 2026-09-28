@@ -560,10 +560,17 @@ def custom_assessment(assessment_id):
     active_questions = [q for q in questions if q["active"]]
     max_score = sum(int(q["points"] or 1) for q in active_questions)
     conn.close()
+    from google_integration import rosters_for_assessment
+    from app import STUDENT_SECTIONS
+
+    conn = connect()
+    rosters = rosters_for_assessment(conn, assessment_id)
+    conn.close()
     return render_template(
         "admin_custom_assessment.html", assessment=assessment, batch=batch, questions=questions,
         summary=summary, sessions=sessions, active_count=len(active_questions), max_score=max_score,
         assessment_label=assessment["display_type"] or "Custom Assessment",
+        rosters=rosters, student_sections={k: sorted(v) for k, v in STUDENT_SECTIONS.items()},
     )
 
 
