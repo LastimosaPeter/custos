@@ -88,7 +88,7 @@
       <div><span>Internal consistency</span><strong>{{ analysis.reliability.value if analysis.reliability.value is not none else '—' }}</strong></div>
       <div><span>Interpretation</span><strong>{{ analysis.reliability.band }}</strong></div>
       <div><span>Standard error of measurement</span><strong>{{ analysis.reliability.sem if analysis.reliability.sem is not none else '—' }}</strong></div>
-      <div><span>Analyzed items</span><strong>{{ analysis.items|length }}</strong></div>
+      <div><span>Analyzed items</span><strong>{{ analysis["items"]|length }}</strong></div>
     </div>
     {% if analysis.reliability.note %}<p class="analysis-note">{{ analysis.reliability.note }}</p>{% endif %}
   </section>
@@ -119,7 +119,7 @@
   <div class="analysis-topic-list">
     {% for t in analysis.topic_summary %}
     <div class="analysis-topic-row">
-      <div class="analysis-topic-label"><strong>{% if is_legacy %}Part {{ t.part }} · {% endif %}{{ t.topic }}</strong><small>{{ t.items }} item{% if t.items != 1 %}s{% endif %} · {{ t.correct }}/{{ t.attempts }} correct</small></div>
+      <div class="analysis-topic-label"><strong>{% if is_legacy %}Part {{ t.part }} · {% endif %}{{ t.topic }}</strong><small>{{ t["items"] }} item{% if t["items"] != 1 %}s{% endif %} · {{ t.correct }}/{{ t.attempts }} correct</small></div>
       <div class="analysis-bar"><span style="width:{{ t.pct }}%"></span></div>
       <strong>{{ t.pct }}%</strong>
       <small class="analysis-topic-disc">Avg r: {{ t.avg_discrimination if t.avg_discrimination is not none else '—' }}</small>
@@ -159,7 +159,7 @@
     <table class="analysis-table analysis-table-v2">
       <thead><tr><th>Item</th><th>Set</th><th>Topic</th><th>N</th><th>Difficulty</th><th>Point-biserial</th><th>High–Low D</th><th>Omitted</th><th>Distractors</th><th>Review</th></tr></thead>
       <tbody>
-      {% for i in analysis.items %}
+      {% for i in analysis["items"] %}
       <tr class="{% if i.flags %}review-row{% endif %}">
         <td>{% if i.question_id %}<a class="analysis-item-link" href="{{ url_for('admin_analysis_item', qid=i.question_id) }}">{{ i.item_id }}</a>{% else %}<strong>{{ i.item_id }}</strong>{% endif %}<small class="analysis-item-type">{{ 'MCQ' if i.item_type == 'mcq' else 'Short answer' }}</small></td>
         <td>{{ i.batch_name or 'All sets' }}</td>

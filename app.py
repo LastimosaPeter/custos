@@ -42,7 +42,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r3")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r4")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -2379,11 +2379,20 @@ def admin_analysis():
     try:
         return _admin_analysis_impl()
     except Exception as exc:
-        # Analytics is an instructor-only diagnostic page. If a deployment is
-        # carrying an older schema, repair it once and retry instead of surfacing
-        # a generic Vercel 500 page. The original traceback is still written to
-        # Vercel logs for diagnosis.
-        app.logger.exception("Item Analysis failed; attempting one schema repair retry")
+        # Only database-driver errors should trigger an automatic schema repair.
+        # Template/programming errors cannot be fixed by a migration and retrying
+        # them adds needless latency on serverless deployments.
+        exc_module = type(exc).__module__.lower()
+        is_database_error = exc_module.startswith("sqlite3") or exc_module.startswith("psycopg")
+        if not is_database_error:
+            app.logger.exception("Item Analysis failed")
+            return render_template(
+                "admin_analysis_error.html",
+                error_type=type(exc).__name__,
+                assessment=session.get("admin_assessment", "posttest"),
+            ), 500
+
+        app.logger.exception("Item Analysis database error; attempting one schema repair retry")
         try:
             ensure_db_initialized(
                 admin_username=os.getenv("ADMIN_USERNAME", "admin"),
