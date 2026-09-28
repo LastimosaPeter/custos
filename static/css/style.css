@@ -3940,3 +3940,8 @@ button,.button-link{ text-align:center; line-height:1.22; }
 .monitor-not-started ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px}
 .monitor-not-started li{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-size:14px}
 .monitor-not-started li span{display:block;color:var(--muted);font-size:12px}
+.custos-role-grid.single{grid-template-columns:minmax(0,520px);justify-content:center}
+.link-button{background:none;border:0;padding:6px 0;color:var(--accent);font-weight:700;font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.teacher-link-block{display:grid;justify-items:center;gap:6px;margin:14px 0 4px}
+.instructor-take-exam{margin:18px 0 0;border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.instructor-take-exam summary{cursor:pointer;font-weight:700;color:var(--muted)}

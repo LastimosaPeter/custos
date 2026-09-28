@@ -62,6 +62,7 @@
           client = google.accounts.oauth2.initTokenClient({
             client_id: block.dataset.clientId,
             scope: block.dataset.scopes,
+            ...(block.dataset.loginHint ? { login_hint: block.dataset.loginHint } : {}),
             callback: async (resp) => {
               if (resp.error) { errorBox.textContent = "Google sign-in was cancelled."; errorBox.hidden = false; return; }
               btn.disabled = true;

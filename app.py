@@ -48,7 +48,7 @@ APP_NAME = os.getenv("APP_NAME", "Custos")
 APP_VERSION = os.getenv("APP_VERSION", "1.0")
 APP_RELEASE_SPECIES = os.getenv("APP_RELEASE_SPECIES", "Goliathus")
 APP_RELEASE_COMMON_NAME = os.getenv("APP_RELEASE_COMMON_NAME", "Goliathus release")
-APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r8-classroom")
+APP_ASSET_REVISION = os.getenv("APP_ASSET_REVISION", "1.0-goliathus-portable-r9-single-signin")
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -1208,6 +1208,9 @@ def student_logout():
 
 @app.route("/admin/login", methods=["GET", "POST"])
 def admin_login():
+    if instructor_scope.active() and request.method == "GET" and not request.args.get("password"):
+        # Classroom mode: one sign-in for everyone; /admin/login?password=1 is the owner emergency path.
+        return redirect(url_for("student_login"))
     if request.method == "POST":
         require_csrf()
         username = request.form.get("username", "")

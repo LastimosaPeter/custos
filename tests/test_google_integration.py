@@ -304,8 +304,10 @@ def test_admin_google_signin_unknown_email_refused(client, google_token):
 
 
 def test_admin_login_page_has_google_button(client):
-    # Classroom-instructor mode (see conftest.py): Google + Classroom teacher check
-    assert "/auth/google/instructor" in client.get("/admin/login").get_data(as_text=True)
+    # Classroom-instructor mode (see conftest.py): one sign-in page for everyone
+    r = client.get("/admin/login")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+    assert "/auth/google/student" in client.get("/login").get_data(as_text=True)
 
 
 # --------------------------------------------------------------------------- classroom
@@ -566,4 +568,5 @@ def test_invite_instructor_by_google_email(client, google_token):
     google_token["inv"] = _claims("prof.invite@gbox.adnu.edu.ph", hd="gbox.adnu.edu.ph")
     csrf = _csrf(client)
     r = client.post("/auth/google/student", json={"credential": "inv"}, headers={"X-CSRFToken": csrf})
-    assert r.get_json()["role"] == "instructor"
+    # Classroom mode: known instructors are offered "Continue to my courses" (Classroom re-check)
+    assert r.get_json()["role"] == "instructor_check"

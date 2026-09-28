@@ -181,12 +181,8 @@ def student_google_signin():
             conn.commit()
     finally:
         conn.close()
-    if admin and scope.active() and admin["role"] != "owner":
-        # Classroom instructors are re-checked against Google Classroom at every sign-in.
-        from flask import url_for
-
-        return jsonify({"ok": True, "role": "instructor", "redirect": url_for("admin_login")})
-    if admin:
+    known_instructor = bool(admin and scope.active() and admin["role"] != "owner")
+    if admin and not known_instructor:
         return jsonify({"ok": True, "role": "instructor", "redirect": _sign_in_admin(admin)})
     try:
         verify_student_claims(claims)
@@ -198,8 +194,12 @@ def student_google_signin():
         "given_name": str(claims.get("given_name", ""))[:60],
         "family_name": str(claims.get("family_name", ""))[:60],
         "name": str(claims.get("name", ""))[:120],
+        # Classroom mode: a known instructor is offered "Continue to my courses",
+        # which re-runs the Classroom teacher check before opening the Workspace.
+        "known_instructor": known_instructor,
     }
-    return jsonify({"ok": True, "role": "student", "email": canonical_email(claims["email"])})
+    return jsonify({"ok": True, "role": "instructor_check" if known_instructor else "student",
+                    "email": canonical_email(claims["email"])})
 
 
 @bp.post("/auth/google/student/signout")
@@ -291,6 +291,11 @@ def instructor_google_signin():
             pass
         name = str(profile.get("name") or email)[:120]
         owner = scope.is_owner_email(email)
+        if not owner and (_email_domain(email) not in GOOGLE_ALLOWED_DOMAINS
+                          and _email_domain(canonical_email(email)) not in GOOGLE_ALLOWED_DOMAINS
+                          or str(profile.get("hd", "")).lower() not in GOOGLE_ALLOWED_DOMAINS):
+            allowed = " or ".join(f"@{d}" for d in sorted(GOOGLE_ALLOWED_DOMAINS))
+            raise GoogleAuthError(f"Use your school Google account ({allowed}).")
         courses = []
         if CLASSROOM_SCOPES[0] in granted:
             courses = _classroom_get(token, "/courses", {"teacherId": "me", "courseStates": "ACTIVE"})

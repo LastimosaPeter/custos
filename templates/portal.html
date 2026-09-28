@@ -27,6 +27,24 @@
   <section class="custos-role-section" aria-labelledby="role-question">
     <div class="custos-role-heading">
       <span>CONTINUE TO CUSTOS</span>
+{% if classroom_instructors %}
+      <h2 id="role-question">Sign in to Custos</h2>
+      <p>One sign-in for everyone. Custos recognizes teachers from Google Classroom and takes students to their assessment.</p>
+    </div>
+
+    <div class="custos-role-grid single">
+      <a class="custos-role-card student" href="{{ url_for('student_login') }}">
+        <div class="custos-role-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 19v-1.2c0-2.6 2.6-4.6 6.5-4.6s6.5 2 6.5 4.6V19" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        </div>
+        <div class="custos-role-copy">
+          <div class="custos-role-kicker">ADNU GOOGLE ACCOUNT</div>
+          <h3>Sign in with Google</h3>
+          <p>Use your @adnu.edu.ph or @gbox.adnu.edu.ph account.</p>
+          <span class="custos-role-action">Continue <b>→</b></span>
+        </div>
+      </a>
+{% else %}
       <h2 id="role-question">Are you a Student or an Instructor?</h2>
       <p>Choose your role to continue to the appropriate workspace.</p>
     </div>
@@ -55,6 +73,7 @@
           <span class="custos-role-action">Go to Instructor View <b>→</b></span>
         </div>
       </a>
+{% endif %}
     </div>
   </section>
 </div>

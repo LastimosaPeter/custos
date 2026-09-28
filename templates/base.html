@@ -38,8 +38,9 @@
     <button class="mobile-nav-toggle" type="button" aria-expanded="false" aria-label="Open navigation" title="Menu"><span aria-hidden="true">☰</span></button>
     {% block header_right %}
     <nav class="site-nav" aria-label="Primary navigation">
+      {% if classroom_instructors %}<a href="{{ url_for('student_login') }}">Sign in</a>{% else %}
       <a href="{{ url_for('student_login') }}">Student View</a>
-      <a href="{{ url_for('admin_login') }}">Instructor View</a>
+      <a href="{{ url_for('admin_login') }}">Instructor View</a>{% endif %}
       <span class="site-nav-divider" aria-hidden="true"></span>
       <a class="nav-coming-soon" href="{{ url_for('nextgen.ide_coming_soon') }}" data-tooltip="Coming soon" aria-label="IDE — coming soon">IDE</a>
     </nav>

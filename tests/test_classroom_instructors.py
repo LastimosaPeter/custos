@@ -40,7 +40,11 @@ def google(monkeypatch):
                 return R(400, {})
             return R(200, {"aud": CLIENT_ID, "azp": CLIENT_ID, "email": person[0], "email_verified": "true", "scope": SCOPE})
         if url == gi.USERINFO_URL:
-            return R(200, {"name": person[1], "email": person[0]})
+            info = {"name": person[1], "email": person[0]}
+            domain = person[0].rsplit("@", 1)[1]
+            if domain.endswith("adnu.edu.ph"):
+                info["hd"] = domain  # Google includes hd for Workspace accounts
+            return R(200, info)
         if url.endswith("/courses"):
             return R(200, {"courses": person[2]})
         raise AssertionError(url)
@@ -57,7 +61,7 @@ def client():
 
 
 def csrf(c):
-    c.get("/admin/login")
+    c.get("/login")
     with c.session_transaction() as s:
         return s["csrf_token"]
 
@@ -94,10 +98,21 @@ def subject_for(course_id):
 
 # ------------------------------------------------------------------ sign-in
 
-def test_login_page_is_google_only_with_owner_emergency_link(client):
-    html = client.get("/admin/login").get_data(as_text=True)
-    assert "data-google-instructor-signin" in html and 'name="password"' not in html
-    assert 'name="password"' in client.get("/admin/login?password=1").get_data(as_text=True)
+def test_single_sign_in_everywhere(client):
+    r = client.get("/admin/login")
+    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+    assert 'name="password"' in client.get("/admin/login?password=1").get_data(as_text=True)  # owner emergency
+    login = client.get("/login").get_data(as_text=True)
+    assert "Sign in to Custos" in login and "data-google-signin" in login and 'name="session_key"' not in login
+    home = client.get("/").get_data(as_text=True)
+    assert "Sign in with Google" in home and "Go to Instructor View" not in home
+    assert ">Instructor View<" not in home and ">Sign in<" in home
+
+
+def test_non_adnu_teacher_refused(client, google):
+    google["people"]["tok-gmail-teacher"] = ["someone@gmail.com", "Gmail Teacher", [{"id": "c909", "name": "X"}]]
+    r = sign_in(client, "tok-gmail-teacher")
+    assert r.status_code == 401 and "school Google account" in r.get_json()["error"]
 
 
 def test_classroom_teacher_becomes_instructor_with_course_subject(client, google):
@@ -184,9 +199,24 @@ def test_student_page_sends_known_instructor_to_recheck(client, google, monkeypa
         "hd": "adnu.edu.ph", "sub": "s-a"})
     t = csrf(client)
     r = client.post("/auth/google/student", json={"credential": "x"}, headers={"X-CSRFToken": t})
-    assert r.get_json()["role"] == "instructor" and r.get_json()["redirect"].endswith("/admin/login")
+    assert r.get_json()["role"] == "instructor_check" and "redirect" not in r.get_json()
     with client.session_transaction() as s:
         assert "admin_id" not in s  # not signed in until the Classroom re-check
+        assert s["google_student"]["known_instructor"] is True
+    page = client.get("/login").get_data(as_text=True)
+    assert "Continue to my courses" in page and "Take an assessment instead" in page
+
+
+def test_student_sees_im_a_teacher_link(client, google, monkeypatch):
+    from google.oauth2 import id_token
+    monkeypatch.setattr(id_token, "verify_oauth2_token", lambda *a, **k: {
+        "iss": "accounts.google.com", "aud": CLIENT_ID, "email": "pupil.z@gbox.adnu.edu.ph", "email_verified": True,
+        "hd": "gbox.adnu.edu.ph", "sub": "s-z", "name": "Pupil Z"})
+    t = csrf(client)
+    assert client.post("/auth/google/student", json={"credential": "x"}, headers={"X-CSRFToken": t}).get_json()["role"] == "student"
+    page = client.get("/login").get_data(as_text=True)
+    assert "I&#39;m a teacher" in page or "I'm a teacher" in page
+    assert 'name="session_key"' in page and "Continue to my courses" not in page
 
 
 # ------------------------------------------------------------------ scoping
@@ -236,7 +266,7 @@ def test_instructors_see_only_their_own_courses(client, google):
     # owner-only and unknown pages are refused
     for path in ("/admin/ide", "/admin/export/session-keys.csv?assessment=midterm"):
         assert client.get(path).status_code == 403, path
-    t = client.get("/admin/login")  # refresh csrf
+    client.get("/login")  # refresh csrf
     with client.session_transaction() as s:
         tok = s["csrf_token"]
     assert client.post("/admin/workspace/subject/add", data={"csrf_token": tok, "code": "X", "name": "Y"}).status_code == 403

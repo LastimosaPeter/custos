@@ -7,15 +7,31 @@
   <div class="security-orb small custos-portal-mark" aria-hidden="true">
     <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
   </div>
-  <div class="eyebrow">STUDENT VIEW · CSDC101 ASSESSMENT</div>
-  <h1>Enter Exam Session</h1>
+  {% set instructor_first = classroom_instructors and google_student and google_student.known_instructor %}
+  {% if classroom_instructors and not google_student %}
+  <div class="eyebrow">CUSTOS · SIGN IN</div>
+  <h1>Sign in to Custos</h1>
+  <p class="lead">Use your ADNU Google account. Teachers go to their courses; students continue to their assessment.</p>
+  {% else %}
+  <div class="eyebrow">{% if instructor_first %}INSTRUCTOR{% else %}STUDENT VIEW · CSDC101 ASSESSMENT{% endif %}</div>
+  <h1>{% if instructor_first %}Welcome back{% else %}Enter Exam Session{% endif %}</h1>
+  {% endif %}
   {% if google_enabled %}
-  <p class="lead">Sign in with your school Google account, then enter the <strong>session key announced by your instructor</strong>.</p>
+  {% if not classroom_instructors %}<p class="lead">Sign in with your school Google account, then enter the <strong>session key announced by your instructor</strong>.</p>{% endif %}
   {% if google_student %}
   <div class="google-identity" data-google-identity>
     <span>Signed in as <strong>{{ google_student.name or google_student.email }}</strong> · {{ google_student.email }}</span>
     <button type="button" class="secondary" data-google-signout data-endpoint="{{ url_for('google.student_google_signout') }}" data-csrf="{{ csrf_token() }}">Not you? Switch account</button>
   </div>
+  {% if instructor_first %}
+  <div class="google-signin-block" data-google-instructor-signin data-client-id="{{ google_client_id }}"
+       data-scopes="{{ instructor_signin_scopes }}" data-login-hint="{{ google_student.email }}"
+       data-endpoint="{{ url_for('google.instructor_google_signin') }}" data-csrf="{{ csrf_token() }}">
+    <button type="button" class="primary wide" data-google-instructor-button>Continue to my courses</button>
+    <p class="micro">Custos checks your Google Classroom classes each time you sign in as a teacher.</p>
+    <p class="google-error" data-google-error hidden></p>
+  </div>
+  {% endif %}
   {% else %}
   <div class="google-signin-block" data-google-signin data-client-id="{{ google_client_id }}"
        data-endpoint="{{ url_for('google.student_google_signin') }}" data-csrf="{{ csrf_token() }}">
@@ -28,6 +44,7 @@
   <p class="lead">Use your Ateneo de Naga University email address and the <strong>session key announced by your instructor</strong> for your assigned set.</p>
   {% endif %}
   {% if not google_enabled or google_student or not google_student_required %}
+  {% if instructor_first %}<details class="instructor-take-exam"><summary>Take an assessment instead</summary>{% endif %}
   <form method="post" class="form-grid" data-student-identity-form>
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     {% if not google_student %}
@@ -66,6 +83,15 @@
     </label>
     <button class="primary wide" type="submit">Verify Key & Continue</button>
   </form>
+  {% if instructor_first %}</details>{% endif %}
+  {% if classroom_instructors and google_student and not instructor_first %}
+  <div class="teacher-link-block" data-google-instructor-signin data-client-id="{{ google_client_id }}"
+       data-scopes="{{ instructor_signin_scopes }}" data-login-hint="{{ google_student.email }}"
+       data-endpoint="{{ url_for('google.instructor_google_signin') }}" data-csrf="{{ csrf_token() }}">
+    <button type="button" class="link-button" data-google-instructor-button>I'm a teacher: go to my Google Classroom courses</button>
+    <p class="google-error" data-google-error hidden></p>
+  </div>
+  {% endif %}
   {% endif %}
   <p class="micro">The key identifies the exact assessment your instructor has opened for you. Keys may be changed by the instructor at any time.</p>
   <div class="student-alt-path"><span>Programming activities</span><a class="secondary button-link disabled-feature-link" href="{{ url_for('nextgen.ide_coming_soon') }}" title="Coming soon">IDE · Coming Soon</a></div><a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
