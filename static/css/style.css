@@ -4820,13 +4820,6 @@ body.exam-image-viewer-open{overflow:hidden}
 :root[data-theme="dark"] .integrity-notice{border-color:#68aaff!important;border-left-color:#68aaff!important}
 
 /* Exam-wide question code sizing. */
-.exam-app{--exam-code-font-size:15px}
-.code-block{font-size:var(--exam-code-font-size)!important}
-.exam-code-font-control{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--soft)}
-.exam-code-font-control button{min-width:28px;height:28px;padding:2px 6px;border:0;border-radius:5px;background:transparent;color:var(--ink);font-size:10px;font-weight:850;cursor:pointer}
-.exam-code-font-control button:hover{background:var(--panel)}
-.exam-code-font-control button:disabled{opacity:.35;cursor:not-allowed}
-.exam-code-font-readout{min-width:45px!important;font-variant-numeric:tabular-nums}
 
 /* CSDC101 Tools are a modal workbench. It remains open until explicitly closed. */
 .exam-tools-panel{top:50%!important;left:50%!important;right:auto!important;bottom:auto!important;width:min(980px,calc(100vw - 48px))!important;max-height:calc(100vh - 120px);height:auto;transform:translate(-50%,-48%) scale(.985)!important;opacity:0;pointer-events:none;border-radius:16px!important;box-shadow:0 28px 80px rgba(8,18,35,.35)!important}
@@ -4850,7 +4843,6 @@ body.exam-image-viewer-open{overflow:hidden}
   .custos-student-signin-prompt{align-items:stretch;flex-direction:column}
   .custos-student-signin-prompt .button-link{width:100%}
   .brand-course-pair-text{font-size:10px}
-  .exam-code-font-readout{display:none}
 }
 @media(max-width:560px){
   .student-flow-nav{gap:4px;font-size:10px;overflow:auto;white-space:nowrap}
@@ -5248,4 +5240,114 @@ body.course-context[data-subject="CSEC303"]:not(.exam-page){
 body.exam-page .exam-page-watermark,
 .exam-app .exam-page-watermark{
   display:none!important;
+}
+
+/* =========================================================
+   Custos 1.6.0.h · Hercules r30 · assessment-aware Messages
+   ========================================================= */
+.messages-assessment-toolbar{
+  display:flex;
+  align-items:end;
+  justify-content:space-between;
+  gap:14px;
+  margin:0 0 10px;
+  padding:10px 12px;
+  border:1px solid var(--line);
+  border-radius:12px;
+  background:rgba(255,255,255,.92);
+  box-shadow:0 7px 18px rgba(24,40,65,.05);
+  backdrop-filter:blur(8px);
+}
+.messages-assessment-toolbar label{
+  display:grid;
+  gap:5px;
+  min-width:min(520px,58vw);
+  color:var(--ink);
+  font-size:10px;
+  font-weight:850;
+}
+.messages-assessment-toolbar label>span{
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.messages-assessment-toolbar select{
+  width:100%;
+  min-height:38px;
+  padding:7px 32px 7px 11px;
+  font-size:11px;
+  font-weight:750;
+}
+.messages-assessment-context{
+  min-width:0;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  justify-content:flex-end;
+  color:var(--muted);
+  font-size:10px;
+  text-align:right;
+}
+.messages-assessment-context strong{
+  flex:0 0 auto;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#efe9ff;
+  color:#6539cc;
+  font-size:9px;
+  letter-spacing:.04em;
+}
+.messages-assessment-context span{
+  max-width:360px;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  font-weight:750;
+}
+:root[data-theme="dark"] .messages-assessment-toolbar{
+  background:rgba(19,29,41,.94);
+  border-color:#33465f;
+}
+:root[data-theme="dark"] .messages-assessment-context strong{
+  background:#2a2041;
+  color:#c6aeff;
+}
+.messages-body .messages-shell{
+  height:min(620px,calc(100dvh - 285px));
+  min-height:430px;
+}
+@media(max-width:760px){
+  .messages-assessment-toolbar{
+    align-items:stretch;
+    flex-direction:column;
+    gap:7px;
+    padding:8px 9px;
+    margin-bottom:7px;
+  }
+  .messages-assessment-toolbar label{min-width:0;width:100%}
+  .messages-assessment-context{justify-content:flex-start;text-align:left}
+  .messages-assessment-context span{max-width:calc(100vw - 120px)}
+  .messages-body .messages-shell{height:calc(100dvh - 220px);min-height:0}
+}
+@media(max-width:430px){
+  .messages-body .messages-shell{height:calc(100dvh - 210px)}
+}
+
+/* =========================================================
+   Custos r31 · Workbench typography cleanup
+   The question-pane font-size control was removed. The Python Workbench
+   explicitly uses JetBrains Mono for the editor, gutters, hints, and output.
+   ========================================================= */
+.lab-python-cell .CodeMirror,
+.lab-python-cell .CodeMirror pre,
+.lab-python-cell .CodeMirror-code,
+.lab-python-cell .CodeMirror-gutters,
+.lab-python-cell .CodeMirror-linenumber,
+.CodeMirror-hints,
+.CodeMirror-hint,
+.lab-python-editor,
+.lab-python-cell-output pre,
+.lab-notebook-code pre,
+.lab-notebook-code code{
+  font-family:"JetBrains Mono","Cascadia Code",Consolas,monospace!important;
 }

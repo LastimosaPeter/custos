@@ -3,6 +3,9 @@
 {% block body_class %}exam-page{% endblock %}
 {% block head_extra %}
 {% if lab_toolkit_sections %}
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" defer></script>
@@ -84,11 +87,6 @@
         <strong id="currentPartIndicator" class="current-part-indicator">{{ assessment.display_type if is_custom else 'Part I · Code Tracing / Inspection' }}</strong>
         <div class="stage-topline-actions">
           {% if lab_toolkit_sections %}<button type="button" id="questionFocusBtn" class="secondary lab-pane-action" title="Focus on the question pane">Focus Question</button>{% endif %}
-          <div class="exam-code-font-control" role="group" aria-label="Question code font size">
-            <button type="button" class="exam-code-font-button" data-exam-code-font-delta="-1" title="Decrease code font size">A−</button>
-            <button type="button" class="exam-code-font-readout" id="examCodeFontReadout" data-exam-code-font-reset title="Reset code font size">15 px</button>
-            <button type="button" class="exam-code-font-button" data-exam-code-font-delta="1" title="Increase code font size">A+</button>
-          </div>
           <button type="button" id="reviewFlagBtn" class="review-flag-btn" aria-pressed="false" title="Mark this item so you can return to it later">Flag for Review</button>
           <span id="saveStatus" class="save-status">Ready</span>
         </div>
