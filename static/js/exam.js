@@ -69,9 +69,6 @@
   const labFontButtons = [...document.querySelectorAll('[data-lab-font-delta]')];
   const labFontReset = document.querySelector('[data-lab-font-reset]');
   const labFontReadout = document.getElementById('labFontReadout');
-  const examCodeFontButtons = [...document.querySelectorAll('[data-exam-code-font-delta]')];
-  const examCodeFontReset = document.querySelector('[data-exam-code-font-reset]');
-  const examCodeFontReadout = document.getElementById('examCodeFontReadout');
 
   const untimed = app.dataset.untimed === '1';
   const isCustomAssessment = app.dataset.custom === '1';
@@ -285,31 +282,6 @@
     try { savedLayout = localStorage.getItem('custos-csec303-lab-layout') || 'split'; } catch (_) {}
     setLabLayout(savedLayout, false);
   }
-
-  const EXAM_CODE_FONT_DEFAULT = 15;
-  const EXAM_CODE_FONT_MIN = 12;
-  const EXAM_CODE_FONT_MAX = 24;
-  let examCodeFontSize = EXAM_CODE_FONT_DEFAULT;
-
-  function setExamCodeFontSize(value, persist = true) {
-    const next = Math.max(EXAM_CODE_FONT_MIN, Math.min(EXAM_CODE_FONT_MAX, Number(value) || EXAM_CODE_FONT_DEFAULT));
-    examCodeFontSize = next;
-    app.style.setProperty('--exam-code-font-size', `${next}px`);
-    if (examCodeFontReadout) examCodeFontReadout.textContent = `${next} px`;
-    examCodeFontButtons.forEach(btn => {
-      const delta = Number(btn.dataset.examCodeFontDelta || 0);
-      btn.disabled = (delta < 0 && next <= EXAM_CODE_FONT_MIN) || (delta > 0 && next >= EXAM_CODE_FONT_MAX);
-    });
-    if (persist) {
-      try { localStorage.setItem('custos-exam-code-font-size', String(next)); } catch (_) {}
-    }
-  }
-
-  examCodeFontButtons.forEach(btn => btn.addEventListener('click', () => setExamCodeFontSize(examCodeFontSize + Number(btn.dataset.examCodeFontDelta || 0))));
-  examCodeFontReset?.addEventListener('click', () => setExamCodeFontSize(EXAM_CODE_FONT_DEFAULT));
-  let savedExamCodeFont = EXAM_CODE_FONT_DEFAULT;
-  try { savedExamCodeFont = Number(localStorage.getItem('custos-exam-code-font-size') || EXAM_CODE_FONT_DEFAULT); } catch (_) {}
-  setExamCodeFontSize(savedExamCodeFont, false);
 
   const LAB_FONT_DEFAULT = 12;
   const LAB_FONT_MIN = 10;

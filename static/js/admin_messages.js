@@ -11,6 +11,7 @@
   const deleteButton = document.getElementById('messageDeleteButton');
   const form = document.getElementById('messageReplyForm');
   const input = document.getElementById('messageReplyInput');
+  const assessmentFilter = document.getElementById('messageAssessmentFilter');
   const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
   const requestedSid = Number(new URLSearchParams(window.location.search).get('session') || 0);
   let currentSid = requestedSid || Number(list.querySelector('[data-session-id]')?.dataset.sessionId || 0);
@@ -37,7 +38,7 @@
       const data = await res.json();
       if (!data.ok) return;
       nameEl.textContent = displayName(data.student);
-      metaEl.textContent = `${data.student.program || '—'} ${data.student.class_section || ''} · ${data.student.batch_name || ''} · ${String(data.student.status || '').replaceAll('_', ' ')}`;
+      metaEl.textContent = `${data.student.program || '—'} ${data.student.class_section || ''} · ${data.student.assessment_title || data.student.batch_name || ''} · ${String(data.student.status || '').replaceAll('_', ' ')}`;
       if (emailEl) emailEl.textContent = data.student.email || '';
       review.href = `/admin/session/${currentSid}`;
       review.classList.remove('hidden');
@@ -56,13 +57,30 @@
       if (!data.ok) return;
       const threads = data.threads || [];
       if (!threads.length) {
-        list.innerHTML = '<div class="messages-empty">No student conversations yet.</div>';
+        list.innerHTML = '<div class="messages-empty">No active students or message threads for this assessment yet.</div>';
+        currentSid = 0;
+        messageSignature = '';
+        nameEl.textContent = 'Select a student';
+        metaEl.textContent = '';
+        if (emailEl) emailEl.textContent = '';
+        review.classList.add('hidden');
+        deleteButton?.classList.add('hidden');
+        form.hidden = true;
+        body.innerHTML = '<div class="chat-empty">No active students or conversations for this assessment.</div>';
         return;
       }
-      list.innerHTML = threads.map(t => `<button type="button" class="message-thread ${Number(t.id) === currentSid ? 'active' : ''}" data-session-id="${Number(t.id)}"><span class="message-thread-name">${esc(displayName(t))}</span><span class="message-thread-meta">${esc(t.email || '')} · ${esc(t.program || '—')} ${esc(t.class_section || '')}</span><span class="message-thread-preview">${esc(t.last_message || 'No message yet')}</span>${Number(t.unread_messages || 0) ? `<span class="message-thread-unread">${Number(t.unread_messages)}</span>` : ''}</button>`).join('');
+      const ids = new Set(threads.map(t => Number(t.id)));
+      if (currentSid && !ids.has(Number(currentSid))) currentSid = 0;
+      list.innerHTML = threads.map(t => `<button type="button" class="message-thread ${Number(t.id) === currentSid ? 'active' : ''}" data-session-id="${Number(t.id)}"><span class="message-thread-name">${esc(displayName(t))}</span><span class="message-thread-meta">${esc(t.program || '—')} ${esc(t.class_section || '')} · ${esc(String(t.status || '').replaceAll('_', ' '))}</span><span class="message-thread-preview">${esc(t.last_message || 'No messages yet. Click to start a conversation.')}</span>${Number(t.unread_messages || 0) ? `<span class="message-thread-unread">${Number(t.unread_messages)}</span>` : ''}</button>`).join('');
       if (!currentSid) loadThread(threads[0].id);
     } catch (_) {}
   }
+
+  assessmentFilter?.addEventListener('change', () => {
+    const assessmentId = assessmentFilter.value;
+    if (!assessmentId) return;
+    window.location.href = `${page.dataset.threadBase}?assessment_id=${encodeURIComponent(assessmentId)}`;
+  });
 
   list.addEventListener('click', event => {
     const btn = event.target.closest('[data-session-id]');

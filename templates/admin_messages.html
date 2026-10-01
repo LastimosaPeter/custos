@@ -6,10 +6,34 @@
 {{ admin_nav(assessment|default("posttest")) }}
 {% endblock %}
 {% block content %}
-<div class="messages-page" data-threads-url="{{ url_for('admin_message_threads') }}" data-thread-base="{{ url_for('admin_messages') }}">
+<div class="messages-page"
+     data-threads-url="{{ url_for('admin_message_threads', assessment_id=selected_assessment.id) if selected_assessment else url_for('admin_message_threads') }}"
+     data-thread-base="{{ url_for('admin_messages') }}"
+     data-assessment-id="{{ selected_assessment.id if selected_assessment else '' }}">
   <div class="dashboard-heading messages-heading">
-    <div><div class="eyebrow">INSTRUCTOR VIEW · COMMUNICATIONS</div><h1>Student Messages</h1><p class="subtle">Read and reply to exam messages without leaving the monitoring workspace or refreshing the page.</p></div>
-    <a class="secondary button-link" href="{{ url_for('admin_monitor') }}">Open Live Monitor</a>
+    <div>
+      <div class="eyebrow">INSTRUCTOR VIEW · COMMUNICATIONS</div>
+      <h1>Student Messages</h1>
+      <p class="subtle">Messages follow the assessment selected in Live Monitor. Active students are available even before they send their first message.</p>
+    </div>
+    <a class="secondary button-link" href="{{ url_for('admin_monitor', assessment_id=selected_assessment.id) if selected_assessment else url_for('admin_monitor') }}">Open Live Monitor</a>
+  </div>
+
+  <div class="messages-assessment-toolbar">
+    <label>
+      <span>Assessment</span>
+      <select id="messageAssessmentFilter">
+        {% for a in assessment_options %}
+        <option value="{{ a.id }}" {% if selected_assessment and a.id == selected_assessment.id %}selected{% endif %}>{{ a.subject_code }} · {{ a.title }}</option>
+        {% endfor %}
+      </select>
+    </label>
+    {% if selected_assessment %}
+    <div class="messages-assessment-context">
+      <strong>{{ selected_assessment.subject_code }}</strong>
+      <span>{{ selected_assessment.title }}</span>
+    </div>
+    {% endif %}
   </div>
 
   <div class="messages-shell">
@@ -17,23 +41,23 @@
       {% for t in threads %}
       <button type="button" class="message-thread {% if loop.first %}active{% endif %}" data-session-id="{{ t.id }}">
         <span class="message-thread-name">{% if t.last_name or t.first_name %}{{ t.last_name or '' }}{% if t.last_name and t.first_name %}, {% endif %}{{ t.first_name or '' }}{% else %}{{ t.student_name or t.email }}{% endif %}</span>
-        <span class="message-thread-meta">{{ t.email }} · {{ t.program or '—' }} {{ t.class_section or '' }}</span>
-        <span class="message-thread-preview">{{ t.last_message or 'No message yet' }}</span>
+        <span class="message-thread-meta">{{ t.program or '—' }} {{ t.class_section or '' }} · {{ t.status|replace('_',' ')|title }}</span>
+        <span class="message-thread-preview">{{ t.last_message or 'No messages yet. Click to start a conversation.' }}</span>
         {% if t.unread_messages %}<span class="message-thread-unread">{{ t.unread_messages }}</span>{% endif %}
       </button>
-      {% else %}<div class="messages-empty">No student conversations yet.</div>{% endfor %}
+      {% else %}<div class="messages-empty">No active students or message threads for this assessment yet.</div>{% endfor %}
     </aside>
 
     <section class="message-conversation" aria-live="polite">
       <header class="message-conversation-head">
         <div class="message-student-summary">
           <strong id="messageStudentName">{% if threads %}{% if threads[0].last_name or threads[0].first_name %}{{ threads[0].last_name or '' }}{% if threads[0].last_name and threads[0].first_name %}, {% endif %}{{ threads[0].first_name or '' }}{% else %}{{ threads[0].student_name or threads[0].email }}{% endif %}{% else %}Select a student{% endif %}</strong>
-          <span id="messageStudentMeta">{% if threads %}{{ threads[0].program or '—' }} {{ threads[0].class_section or '' }} · {{ threads[0].batch_name }} · {{ threads[0].status|replace('_',' ')|title }}{% endif %}</span>
+          <span id="messageStudentMeta">{% if threads %}{{ threads[0].program or '—' }} {{ threads[0].class_section or '' }} · {{ threads[0].assessment_title or threads[0].batch_name }} · {{ threads[0].status|replace('_',' ')|title }}{% endif %}</span>
           <span id="messageStudentEmail" class="message-student-email">{% if threads %}{{ threads[0].email }}{% endif %}</span>
         </div>
         <div class="message-head-actions"><button id="messageDeleteButton" type="button" class="danger delete-action {% if not threads %}hidden{% endif %}">Delete Messages</button><a id="messageReviewLink" class="secondary button-link {% if not threads %}hidden{% endif %}" href="{% if threads %}{{ url_for('admin_session_detail', sid=threads[0].id) }}{% else %}#{% endif %}">Open Session Review</a></div>
       </header>
-      <div id="messageConversationBody" class="message-conversation-body"><div class="chat-empty">{% if threads %}Loading conversation…{% else %}Messages from students will appear here.{% endif %}</div></div>
+      <div id="messageConversationBody" class="message-conversation-body"><div class="chat-empty">{% if threads %}Loading conversation…{% else %}Choose an active assessment in Live Monitor, then open Messages to contact its students.{% endif %}</div></div>
       <form id="messageReplyForm" class="message-reply-form" {% if not threads %}hidden{% endif %}>
         <textarea id="messageReplyInput" rows="2" maxlength="1000" placeholder="Reply to the student…" required></textarea>
         <button type="submit" class="primary">Send Reply</button>

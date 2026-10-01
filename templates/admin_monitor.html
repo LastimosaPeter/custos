@@ -23,7 +23,7 @@
       <label>Show<select id="monitorFilter"><option value="all">All active students</option><option value="attention">Needs attention</option><option value="locked">Locked only</option><option value="clear">Clear only</option></select></label>
       <label>Assessment<select id="monitorAssessmentFilter"><option value="all">All assessments</option>{% for a in assessment_options %}<option value="{{ a.id }}" {% if request.args.get('assessment_id')|string == a.id|string %}selected{% endif %}>{{ a.subject_code }} · {{ a.title }}</option>{% endfor %}</select></label>
     </div>
-    <div class="monitor-toolbar-actions"><a class="secondary button-link" href="{{ url_for('admin_messages') }}">Messages</a><button type="button" class="secondary" id="monitorRefresh">Refresh now</button></div>
+    <div class="monitor-toolbar-actions"><a class="secondary button-link" href="{{ url_for('admin_messages', assessment_id=selected_assessment.id) if selected_assessment else url_for('admin_messages') }}">Messages</a><button type="button" class="secondary" id="monitorRefresh">Refresh now</button></div>
   </div>
 
   <div class="monitor-student-list" id="monitorStudentList">
@@ -34,7 +34,7 @@
       <div class="monitor-last-event"><span>Latest event</span><strong>{{ (s.last_event or 'No event yet')|replace('_',' ') }}</strong>{% if s.last_event_detail %}<small>{{ s.last_event_detail }}</small>{% endif %}</div>
       <div class="monitor-card-actions">
         {% if s.security_locked or s.pending_blackout %}<button type="button" class="secondary monitor-action-btn" data-monitor-action="clear_security">Grant Another Chance</button>{% endif %}
-        <a class="secondary button-link" href="{{ url_for('admin_messages') }}?session={{ s.id }}">Message</a>
+        <a class="secondary button-link" href="{{ url_for('admin_messages', assessment_id=s.assessment_id, session=s.id) }}">Message</a>
         <button type="button" class="secondary monitor-action-btn" data-monitor-action="mark_done">Mark Done</button>
         <a class="primary button-link" href="{{ url_for('admin_session_detail', sid=s.id) }}">Review Student</a>
       </div>

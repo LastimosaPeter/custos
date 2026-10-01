@@ -56,7 +56,7 @@ APP_VERSION = "1.6.0.h"
 APP_RELEASE_SPECIES = "Hercules"
 APP_RELEASE_SCIENTIFIC_NAME = "Dynastes hercules"
 APP_RELEASE_COMMON_NAME = "Hercules beetle release"
-APP_ASSET_REVISION = "1.6.0-h-hercules-performance-security-r29-fonts"
+APP_ASSET_REVISION = "1.6.0-h-hercules-workbench-font-r31"
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -2954,17 +2954,85 @@ def admin_chat_messages(sid):
     return jsonify({"ok": True, "messages": payload})
 
 
-def _message_threads(conn):
+def _message_assessment_context(conn):
+    """Resolve the assessment context used by Messages.
+
+    Messages follows the same assessment selected in Live Monitor. A direct
+    session link takes precedence so clicking Message on a monitor card always
+    opens that student's assessment, including CSEC303.
+    """
+    options = instructor_scope.filter_rows(conn, _admin_assessment_options(conn))
+    if not options:
+        return options, None
+
+    selected = None
+    raw_id = str(request.args.get("assessment_id") or "").strip()
+    if raw_id.isdigit():
+        selected = next((row for row in options if int(row["id"]) == int(raw_id)), None)
+
+    if selected is None:
+        raw_sid = str(request.args.get("session") or "").strip()
+        if raw_sid.isdigit():
+            row = conn.execute("""SELECT COALESCE(e.assessment_id,b.assessment_id) AS assessment_id FROM exam_sessions e JOIN batches b ON b.id=e.batch_id WHERE e.id=?""", (int(raw_sid),)).fetchone()
+            if row and row["assessment_id"]:
+                selected = next((item for item in options if int(item["id"]) == int(row["assessment_id"])), None)
+
+    if selected is None:
+        remembered = session.get("admin_assessment_id")
+        if remembered:
+            selected = next((row for row in options if int(row["id"]) == int(remembered)), None)
+
+    if selected is None:
+        # Prefer an assessment with a currently active attempt, then the normal
+        # assessment ordering used elsewhere in Instructor View.
+        active = conn.execute(
+            """SELECT e.assessment_id, MAX(e.id) AS latest_session
+               FROM exam_sessions e
+               WHERE e.status='in_progress' AND COALESCE(e.is_test,0)=0
+                 AND COALESCE(e.monitor_done,0)=0 AND e.assessment_id IS NOT NULL
+               GROUP BY e.assessment_id ORDER BY latest_session DESC"""
+        ).fetchall()
+        active_ids = [int(row["assessment_id"]) for row in active]
+        selected = next((item for aid in active_ids for item in options if int(item["id"]) == aid), None)
+
+    if selected is None:
+        selected = options[0]
+
+    session["admin_assessment_id"] = int(selected["id"])
+    if selected["assessment_type"] in {"midterm", "posttest"}:
+        session["admin_assessment"] = selected["assessment_type"]
+    return options, selected
+
+
+def _message_threads(conn, assessment_id=None):
+    params = []
+    assessment_clause = ""
+    if assessment_id:
+        assessment_clause = " AND COALESCE(e.assessment_id,b.assessment_id)=?"
+        params.append(int(assessment_id))
+
     rows = conn.execute(
-        """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,
-                  e.assessment_id, b.name AS batch_name,b.assessment_type,
+        f"""SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,
+                  COALESCE(e.assessment_id,b.assessment_id) AS assessment_id,
+                  a.title AS assessment_title,s.code AS subject_code,
+                  b.name AS batch_name,b.assessment_type,
                   (SELECT COUNT(*) FROM exam_messages m WHERE m.session_id=e.id AND m.sender='student' AND m.read_at IS NULL) AS unread_messages,
                   (SELECT m.message FROM exam_messages m WHERE m.session_id=e.id ORDER BY m.id DESC LIMIT 1) AS last_message,
                   (SELECT m.created_at FROM exam_messages m WHERE m.session_id=e.id ORDER BY m.id DESC LIMIT 1) AS last_message_at
-           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
-           WHERE COALESCE(e.is_test,0)=0 AND EXISTS(SELECT 1 FROM exam_messages mx WHERE mx.session_id=e.id)
-           ORDER BY CASE WHEN (SELECT COUNT(*) FROM exam_messages mu WHERE mu.session_id=e.id AND mu.sender='student' AND mu.read_at IS NULL) > 0 THEN 0 ELSE 1 END,
-                    last_message_at DESC, e.id DESC"""
+           FROM exam_sessions e
+           JOIN batches b ON b.id=e.batch_id
+           LEFT JOIN assessments a ON a.id=COALESCE(e.assessment_id,b.assessment_id)
+           LEFT JOIN subjects s ON s.id=a.subject_id
+           WHERE COALESCE(e.is_test,0)=0
+             {assessment_clause}
+             AND (
+                  (e.status='in_progress' AND COALESCE(e.monitor_done,0)=0)
+                  OR EXISTS(SELECT 1 FROM exam_messages mx WHERE mx.session_id=e.id)
+             )
+           ORDER BY CASE WHEN e.status='in_progress' AND COALESCE(e.monitor_done,0)=0 THEN 0 ELSE 1 END,
+                    CASE WHEN (SELECT COUNT(*) FROM exam_messages mu WHERE mu.session_id=e.id AND mu.sender='student' AND mu.read_at IS NULL) > 0 THEN 0 ELSE 1 END,
+                    COALESCE((SELECT m2.created_at FROM exam_messages m2 WHERE m2.session_id=e.id ORDER BY m2.id DESC LIMIT 1),e.started_at) DESC, e.id DESC""",
+        tuple(params),
     ).fetchall()
     return [dict(r) for r in instructor_scope.filter_rows(conn, rows, key="assessment_id")]
 
@@ -2972,15 +3040,36 @@ def _message_threads(conn):
 @app.get("/admin/messages")
 @admin_required
 def admin_messages():
-    conn = connect(); threads = _message_threads(conn); conn.close()
-    return render_template("admin_messages.html", threads=threads, assessment=session.get("admin_assessment", "posttest"))
+    conn = connect()
+    assessment_options, selected_assessment = _message_assessment_context(conn)
+    selected_id = int(selected_assessment["id"]) if selected_assessment else None
+    threads = _message_threads(conn, selected_id)
+    conn.close()
+    return render_template(
+        "admin_messages.html",
+        threads=threads,
+        assessment=(selected_assessment["assessment_type"] if selected_assessment else session.get("admin_assessment", "posttest")),
+        assessment_options=assessment_options,
+        selected_assessment=selected_assessment,
+        page_subject_code=(selected_assessment["subject_code"] if selected_assessment else None),
+    )
 
 
 @app.get("/admin/messages/threads")
 @admin_required
 def admin_message_threads():
-    conn = connect(); threads = _message_threads(conn); conn.close()
-    return jsonify({"ok": True, "threads": threads})
+    conn = connect()
+    assessment_options, selected_assessment = _message_assessment_context(conn)
+    selected_id = int(selected_assessment["id"]) if selected_assessment else None
+    threads = _message_threads(conn, selected_id)
+    conn.close()
+    return jsonify({
+        "ok": True,
+        "threads": threads,
+        "assessment_id": selected_id,
+        "assessment_title": selected_assessment["title"] if selected_assessment else None,
+        "subject_code": selected_assessment["subject_code"] if selected_assessment else None,
+    })
 
 
 @app.get("/admin/messages/<int:sid>")
@@ -2988,8 +3077,13 @@ def admin_message_threads():
 def admin_message_thread(sid):
     conn = connect()
     ex = conn.execute(
-        """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,b.name AS batch_name
-           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id WHERE e.id=?""",
+        """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,
+                  COALESCE(e.assessment_id,b.assessment_id) AS assessment_id,
+                  a.title AS assessment_title,s.code AS subject_code,b.name AS batch_name
+           FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
+           LEFT JOIN assessments a ON a.id=COALESCE(e.assessment_id,b.assessment_id)
+           LEFT JOIN subjects s ON s.id=a.subject_id
+           WHERE e.id=?""",
         (sid,),
     ).fetchone()
     if not ex:

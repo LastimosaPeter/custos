@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v160h-hercules-performance-security-r29-fonts';
+const CACHE_NAME = 'custos-static-v160h-hercules-workbench-font-r31';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -104,4 +104,4 @@ self.addEventListener('fetch', event => {
 
 // UI + assessment engine refresh: free-form custom assessments 2026-09-27
 
-// Custos 1.6.0.h · Hercules performance and security cache refresh.
+// Custos 1.6.0.h · Hercules exam watermark cache refresh.
