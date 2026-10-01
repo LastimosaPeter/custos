@@ -5238,3 +5238,14 @@ body.course-context[data-subject="CSEC303"]:not(.exam-page){
     font:700 18px/1.45 Arial,sans-serif;
   }
 }
+
+
+/* =========================================================
+   Hercules r29 · Exam focus cleanup
+   Course identity remains in the exam header/background; decorative
+   watermarks are intentionally hidden during active exams/previews.
+   ========================================================= */
+body.exam-page .exam-page-watermark,
+.exam-app .exam-page-watermark{
+  display:none!important;
+}

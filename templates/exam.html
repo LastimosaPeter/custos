@@ -254,9 +254,6 @@
   </div>
   {% endif %}
 
-  <img class="exam-page-watermark theme-image theme-image-light" src="{{ url_for('static', filename=('img/csec303-watermark.png' if subject_code == 'CSEC303' else 'img/csdc101-watermark.png'), v=app_asset_revision) }}" alt="" aria-hidden="true">
-  <img class="exam-page-watermark theme-image theme-image-dark" src="{{ url_for('static', filename=('img/csec303-watermark-dark.png' if subject_code == 'CSEC303' else 'img/csdc101-watermark-dark.png'), v=app_asset_revision) }}" alt="" aria-hidden="true">
-
   <div id="secureOverlay" class="overlay {% if security_mode == 'strict' %}active{% endif %}" role="dialog" aria-modal="true">
     <div class="overlay-card">
       <div class="lock-icon">▣</div>

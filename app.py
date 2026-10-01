@@ -56,7 +56,7 @@ APP_VERSION = "1.6.0.h"
 APP_RELEASE_SPECIES = "Hercules"
 APP_RELEASE_SCIENTIFIC_NAME = "Dynastes hercules"
 APP_RELEASE_COMMON_NAME = "Hercules beetle release"
-APP_ASSET_REVISION = "1.6.0-h-hercules-performance-security-r28"
+APP_ASSET_REVISION = "1.6.0-h-hercules-exam-watermark-r29"
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
