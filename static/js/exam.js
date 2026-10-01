@@ -204,6 +204,7 @@
     });
     const scroll = labToolkitPanel.querySelector('.lab-toolkit-scroll');
     if (scroll) scroll.scrollTop = 0;
+    window.dispatchEvent(new CustomEvent('custos:workbench-layoutchange', {detail: {section: activeKey}}));
   }
 
   function syncLabToolkitToQuestion() {
@@ -262,6 +263,7 @@
     if (persist) {
       try { localStorage.setItem('custos-csec303-lab-layout', next); } catch (_) {}
     }
+    window.dispatchEvent(new CustomEvent('custos:workbench-layoutchange', {detail: {layout: next}}));
   }
 
   labToolkitToggle?.addEventListener('click', () => setLabToolkitOpen(!labToolkitPanel?.classList.contains('drawer-open')));

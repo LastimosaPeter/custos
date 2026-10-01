@@ -5351,3 +5351,28 @@ body.exam-page .exam-page-watermark,
 .lab-notebook-code code{
   font-family:"JetBrains Mono","Cascadia Code",Consolas,monospace!important;
 }
+
+
+/* =========================================================
+   Custos r32 · Workbench CodeMirror gutter alignment
+   Hidden notebook tabs can initialize at zero width. Reserve a stable
+   line-number gutter and let JS refresh geometry whenever a tab is shown.
+   ========================================================= */
+.lab-python-cell .CodeMirror-gutters{
+  min-width:44px!important;
+  box-sizing:border-box!important;
+  overflow:hidden!important;
+}
+.lab-python-cell .CodeMirror-linenumbers{
+  min-width:43px!important;
+}
+.lab-python-cell .CodeMirror-linenumber{
+  min-width:43px!important;
+  box-sizing:border-box!important;
+  padding:0 9px 0 5px!important;
+  text-align:right!important;
+  white-space:nowrap!important;
+}
+.lab-python-cell .CodeMirror-lines{
+  padding-left:4px!important;
+}
