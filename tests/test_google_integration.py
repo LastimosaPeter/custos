@@ -188,10 +188,12 @@ def test_student_signin_accepts_both_school_domains(client, google_token, email,
     r = _student_signin(client, google_token, email, hd)
     canonical = email.replace("@gbox.adnu.edu.ph", "@adnu.edu.ph")  # one identity across aliased domains
     assert r.status_code == 200 and r.get_json()["email"] == canonical
-    html = client.get("/login").get_data(as_text=True)
+    assert r.get_json()["redirect"] == "/student"
+    assert client.get("/login").headers["Location"].endswith("/student")
+    html = client.get("/student").get_data(as_text=True)
     assert canonical in html and 'name="session_key"' in html
-    # identity comes from Google: no name/email/section fields to fill in
-    for field in ('name="email"', 'name="first_name"', 'name="last_name"', 'name="program"'):
+    # identity comes from Google: no name/email fields to fill in
+    for field in ('name="email"', 'name="first_name"', 'name="last_name"'):
         assert field not in html
 
 
@@ -219,7 +221,10 @@ def test_student_signin_rejects_unverified_email_and_bad_token(client, google_to
 def test_exam_login_requires_google_when_required(client, assessment_id):
     _csrf(client)
     r = _exam_login(client, {"email": "typed@adnu.edu.ph"})
-    assert r.status_code == 200 and "Sign in with your school Google account first" in r.get_data(as_text=True)
+    assert r.status_code == 302 and "/login" in r.headers["Location"]
+    assert "Sign in with your school Google account first" in client.get(r.headers["Location"]).get_data(as_text=True)
+    with client.session_transaction() as s:
+        assert "pending_batch_id" not in s
 
 
 def test_typed_identity_is_ignored_and_google_profile_used(client, google_token, assessment_id):
@@ -237,23 +242,26 @@ def test_no_roster_asks_for_section_only_after_key(client, google_token, assessm
     with client.session_transaction() as s:
         csrf = s["csrf_token"]
     r = client.post("/login", data={"csrf_token": csrf, "session_key": ACCESS_KEY})
-    html = r.get_data(as_text=True)
-    assert r.status_code == 200 and "linked to Google Classroom yet" in html
-    assert 'name="program"' in html and f'value="{ACCESS_KEY}"' in html
+    assert r.status_code == 302 and r.headers["Location"].endswith("/student")
+    html = client.get("/student").get_data(as_text=True)
+    assert "not linked to a Classroom roster" in html and 'name="program"' in html
+    with client.session_transaction() as s:
+        assert "pending_batch_id" not in s
     r = client.post("/login", data={"csrf_token": csrf, "session_key": ACCESS_KEY, "program": "ZS", "class_section": "11"})
-    assert r.status_code == 302
+    assert r.status_code == 302 and r.headers["Location"].endswith("/instructions")
     with client.session_transaction() as s:
         assert (s["pending_program"], s["pending_class_section"]) == ("ZS", "11")
 
 
-def test_instructor_email_on_student_page_goes_to_workspace(client, google_token):
+def test_instructor_email_on_student_page_stays_student(client, google_token):
     google_token["t2"] = _claims("teacher@adnu.edu.ph", hd="adnu.edu.ph")
     csrf = _csrf(client)
     r = client.post("/auth/google/student", json={"credential": "t2"}, headers={"X-CSRFToken": csrf})
     body = r.get_json()
-    assert r.status_code == 200 and body["role"] == "instructor" and body["redirect"].endswith("/admin/workspace")
+    # Hercules: Student View signs everyone in as a student; teachers use Instructor View.
+    assert r.status_code == 200 and body["role"] == "student" and body["redirect"] == "/student"
     with client.session_transaction() as s:
-        assert s["admin_id"] and "google_student" not in s
+        assert "admin_id" not in s and s["google_student"]["email"] == "teacher@adnu.edu.ph"
 
 
 def test_start_records_google_auth_method(client, google_token, assessment_id):
@@ -307,9 +315,9 @@ def test_admin_google_signin_unknown_email_refused(client, google_token):
 
 
 def test_admin_login_page_has_google_button(client):
-    # Classroom-instructor mode (see conftest.py): one sign-in page for everyone
+    # Classroom-instructor mode (see conftest.py): Instructor View has its own Google sign-in
     r = client.get("/admin/login")
-    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+    assert r.status_code == 200 and "/auth/google/instructor" in r.get_data(as_text=True)
     assert "/auth/google/student" in client.get("/login").get_data(as_text=True)
 
 
@@ -376,7 +384,10 @@ def test_classroom_import_and_roster_enforcement(client, google_api, google_toke
     client.get("/logout")
     _student_signin(client, google_token, "notlisted@adnu.edu.ph", "adnu.edu.ph")
     r = _exam_login(client)
-    assert r.status_code == 200 and "isn&#39;t on the class list" in r.get_data(as_text=True)
+    assert r.status_code == 302 and r.headers["Location"].endswith("/student")
+    assert "is not on the class list" in client.get("/student").get_data(as_text=True)
+    with client.session_transaction() as s:
+        assert "pending_batch_id" not in s
 
     # Removing the roster lifts the restriction
     client.get("/logout")
@@ -387,7 +398,7 @@ def test_classroom_import_and_roster_enforcement(client, google_api, google_toke
     assert client.post(f"{base}/{rid}/delete", headers={"X-CSRFToken": csrf}).get_json()["ok"]
     client.get("/admin/logout")
     _student_signin(client, google_token, "notlisted@adnu.edu.ph", "adnu.edu.ph")
-    assert _exam_login(client).status_code == 302
+    assert _exam_login(client).headers["Location"].endswith("/instructions")
 
 
 # --------------------------------------------------------------------------- feature off
@@ -398,7 +409,7 @@ def test_feature_off_keeps_classic_form():
     env = dict(os.environ, GOOGLE_CLIENT_ID="", EXAM_DB_PATH=os.path.join(_tmp, "off.db"))
     code = (
         "import app; c=app.app.test_client(); r=c.get('/login'); h=r.get_data(as_text=True);"
-        "assert 'accounts.google.com' not in h and 'name=\"email\"' in h and 'name=\"session_key\"' in h, h[:300];"
+        "assert 'accounts.google.com' not in h and 'name=\"email\"' in h and 'name=\"first_name\"' in h, h[:300];"
         "assert 'accounts.google.com' not in r.headers['Content-Security-Policy'];"
         "assert 'frame-src' not in r.headers['Content-Security-Policy'];"
         "assert c.post('/auth/google/student', json={}).status_code in (400, 401);"
@@ -572,5 +583,7 @@ def test_invite_instructor_by_google_email(client, google_token):
     google_token["inv"] = _claims("prof.invite@gbox.adnu.edu.ph", hd="gbox.adnu.edu.ph")
     csrf = _csrf(client)
     r = client.post("/auth/google/student", json={"credential": "inv"}, headers={"X-CSRFToken": csrf})
-    # Classroom mode: known instructors are offered "Continue to my courses" (Classroom re-check)
-    assert r.get_json()["role"] == "instructor_check"
+    # Hercules: Student View signs them in as a student; Instructor View runs the Classroom check
+    assert r.get_json()["role"] == "student"
+    with client.session_transaction() as s:
+        assert "admin_id" not in s

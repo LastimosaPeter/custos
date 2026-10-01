@@ -2689,11 +2689,24 @@ def admin_export_scores_csv(assessment_id):
     )
 
 
+def _admin_batch_row(conn, batch_id):
+    # The template needs subject_code on both GET and POST.
+    return conn.execute(
+        """SELECT b.*, COALESCE(s.code, sa.code, 'CSDC101') AS subject_code
+           FROM batches b
+           LEFT JOIN subjects s ON s.id=b.subject_id
+           LEFT JOIN assessments a ON a.id=b.assessment_id
+           LEFT JOIN subjects sa ON sa.id=a.subject_id
+           WHERE b.id=?""",
+        (batch_id,),
+    ).fetchone()
+
+
 @app.route("/admin/batch/<int:batch_id>", methods=["GET", "POST"])
 @admin_required
 def admin_batch(batch_id):
     conn = connect()
-    batch = conn.execute("SELECT * FROM batches WHERE id=?", (batch_id,)).fetchone()
+    batch = _admin_batch_row(conn, batch_id)
     if not batch:
         conn.close()
         abort(404)
@@ -2717,15 +2730,7 @@ def admin_batch(batch_id):
         except Exception as exc:
             conn.rollback()
             flash(f"Could not update batch: {exc}", "error")
-        batch = conn.execute(
-            """SELECT b.*, COALESCE(s.code, sa.code, 'CSDC101') AS subject_code
-               FROM batches b
-               LEFT JOIN subjects s ON s.id=b.subject_id
-               LEFT JOIN assessments a ON a.id=b.assessment_id
-               LEFT JOIN subjects sa ON sa.id=a.subject_id
-               WHERE b.id=?""",
-            (batch_id,),
-        ).fetchone()
+        batch = _admin_batch_row(conn, batch_id)
     conn.close()
     return render_template("admin_batch.html", batch=batch, subject_code=batch["subject_code"])
 

@@ -98,15 +98,17 @@ def subject_for(course_id):
 
 # ------------------------------------------------------------------ sign-in
 
-def test_single_sign_in_everywhere(client):
+def test_separate_student_and_instructor_sign_in(client):
+    # Hercules: Student View and Instructor View are separate entry points.
     r = client.get("/admin/login")
-    assert r.status_code == 302 and r.headers["Location"].endswith("/login")
+    page = r.get_data(as_text=True)
+    assert r.status_code == 200 and "data-google-instructor-signin" in page and "/auth/google/instructor" in page
+    assert 'name="password"' not in page
     assert 'name="password"' in client.get("/admin/login?password=1").get_data(as_text=True)  # owner emergency
     login = client.get("/login").get_data(as_text=True)
     assert "Sign in to Custos" in login and "data-google-signin" in login and 'name="session_key"' not in login
-    home = client.get("/").get_data(as_text=True)
-    assert "Sign in with Google" in home and "Go to Instructor View" not in home
-    assert ">Instructor View<" not in home and ">Sign in<" in home
+    assert "Go to Instructor View" in login
+    assert "/admin/login" in client.get("/").get_data(as_text=True)
 
 
 def test_non_adnu_teacher_refused(client, google):
@@ -190,7 +192,7 @@ def test_password_login_is_owner_only(client, google):
     owner_login(client)
 
 
-def test_student_page_sends_known_instructor_to_recheck(client, google, monkeypatch):
+def test_student_view_signs_known_instructor_in_as_student(client, google, monkeypatch):
     sign_in(client, "tok-teacher-a")
     client.get("/admin/logout")
     from google.oauth2 import id_token
@@ -199,24 +201,25 @@ def test_student_page_sends_known_instructor_to_recheck(client, google, monkeypa
         "hd": "adnu.edu.ph", "sub": "s-a"})
     t = csrf(client)
     r = client.post("/auth/google/student", json={"credential": "x"}, headers={"X-CSRFToken": t})
-    assert r.get_json()["role"] == "instructor_check" and "redirect" not in r.get_json()
+    # Student View never grants instructor access; teachers use Instructor View.
+    assert r.get_json()["role"] == "student" and r.get_json()["redirect"] == "/student"
     with client.session_transaction() as s:
-        assert "admin_id" not in s  # not signed in until the Classroom re-check
-        assert s["google_student"]["known_instructor"] is True
-    page = client.get("/login").get_data(as_text=True)
-    assert "Continue to my courses" in page and "Take an assessment instead" in page
+        assert "admin_id" not in s
+        assert s["google_student"]["known_instructor"] is False
+    assert client.get("/login").headers["Location"].endswith("/student")
 
 
-def test_student_sees_im_a_teacher_link(client, google, monkeypatch):
+def test_student_lands_on_my_assessments(client, google, monkeypatch):
     from google.oauth2 import id_token
     monkeypatch.setattr(id_token, "verify_oauth2_token", lambda *a, **k: {
         "iss": "accounts.google.com", "aud": CLIENT_ID, "email": "pupil.z@gbox.adnu.edu.ph", "email_verified": True,
         "hd": "gbox.adnu.edu.ph", "sub": "s-z", "name": "Pupil Z"})
     t = csrf(client)
     assert client.post("/auth/google/student", json={"credential": "x"}, headers={"X-CSRFToken": t}).get_json()["role"] == "student"
-    page = client.get("/login").get_data(as_text=True)
-    assert "I&#39;m a teacher" in page or "I'm a teacher" in page
-    assert 'name="session_key"' in page and "Continue to my courses" not in page
+    assert client.get("/login").headers["Location"].endswith("/student")
+    dashboard = client.get("/student").get_data(as_text=True)
+    assert "My Assessments" in dashboard and 'name="session_key"' in dashboard
+    assert "Go to Instructor View" in client.get("/login?force=1").get_data(as_text=True)
 
 
 # ------------------------------------------------------------------ scoping

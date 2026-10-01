@@ -24,3 +24,15 @@ private_banks/
 *.db
 *.sqlite
 *.sqlite3
+
+# Environment variants (keep the template)
+.env.*
+!.env.example
+venv/
+
+# CSEC303 answer material kept outside private_banks/
+*csec303*midterm*answer*.csv
+*csec303*midterm*answer*.json
+*csec303*midterm*question_bank*.json
+*CSEC303*Midterm*Answer*.csv
+*CSEC303*Midterm*Answer*.json
