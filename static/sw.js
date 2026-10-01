@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v160h-hercules-performance-security-r28';
+const CACHE_NAME = 'custos-static-v160h-hercules-performance-security-r29-fonts';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
