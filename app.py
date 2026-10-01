@@ -7,6 +7,8 @@ import os
 import random
 import re
 import secrets
+import threading
+import time
 from datetime import datetime, timedelta
 from functools import wraps
 
@@ -39,10 +41,11 @@ if not _secret_key or _secret_key.startswith("replace-"):
 if not _admin_password or _admin_password.startswith("replace-"):
     raise RuntimeError("Set a strong ADMIN_PASSWORD environment variable before starting Custos.")
 app.secret_key = _secret_key
+_hosted_https_default = "1" if (os.getenv("VERCEL") or os.getenv("RENDER") or os.getenv("RENDER_EXTERNAL_URL")) else "0"
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE="Strict",
-    SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", "0") == "1",
+    SESSION_COOKIE_SECURE=os.getenv("SESSION_COOKIE_SECURE", _hosted_https_default) == "1",
     PERMANENT_SESSION_LIFETIME=timedelta(days=7),
     MAX_CONTENT_LENGTH=32 * 1024 * 1024,
 )
@@ -53,7 +56,7 @@ APP_VERSION = "1.6.0.h"
 APP_RELEASE_SPECIES = "Hercules"
 APP_RELEASE_SCIENTIFIC_NAME = "Dynastes hercules"
 APP_RELEASE_COMMON_NAME = "Hercules beetle release"
-APP_ASSET_REVISION = "1.6.0-h-hercules-watermark-fix-r26"
+APP_ASSET_REVISION = "1.6.0-h-hercules-performance-security-r28"
 
 ALLOWED_EMAIL_DOMAIN = os.getenv("ALLOWED_EMAIL_DOMAIN", "adnu.edu.ph").lower()
 SUSPICIOUS_EVENTS = {
@@ -63,6 +66,49 @@ SUSPICIOUS_EVENTS = {
 TEMP_LOCK_SECONDS = 15
 MAX_SECURITY_VIOLATIONS = 3
 SECURITY_DEDUPE_SECONDS = 3
+ADMIN_LOGIN_MAX_FAILURES = 5
+ADMIN_LOGIN_WINDOW_SECONDS = 300
+ADMIN_LOGIN_BLOCK_SECONDS = 300
+_admin_login_guard = {}
+_admin_login_guard_lock = threading.Lock()
+
+
+def _admin_login_guard_key():
+    return str(request.remote_addr or "unknown")[:120]
+
+
+def _admin_login_retry_after(key):
+    now = time.monotonic()
+    with _admin_login_guard_lock:
+        state = _admin_login_guard.get(key)
+        if not state:
+            return 0
+        blocked_until = float(state.get("blocked_until") or 0)
+        if blocked_until > now:
+            return max(1, int(blocked_until - now))
+        attempts = [ts for ts in state.get("attempts", []) if now - ts <= ADMIN_LOGIN_WINDOW_SECONDS]
+        if attempts:
+            state["attempts"] = attempts
+            state["blocked_until"] = 0
+        else:
+            _admin_login_guard.pop(key, None)
+        return 0
+
+
+def _record_admin_login_failure(key):
+    now = time.monotonic()
+    with _admin_login_guard_lock:
+        state = _admin_login_guard.setdefault(key, {"attempts": [], "blocked_until": 0})
+        state["attempts"] = [ts for ts in state.get("attempts", []) if now - ts <= ADMIN_LOGIN_WINDOW_SECONDS]
+        state["attempts"].append(now)
+        if len(state["attempts"]) >= ADMIN_LOGIN_MAX_FAILURES:
+            state["blocked_until"] = now + ADMIN_LOGIN_BLOCK_SECONDS
+            state["attempts"].clear()
+
+
+def _clear_admin_login_failures(key):
+    with _admin_login_guard_lock:
+        _admin_login_guard.pop(key, None)
 
 STUDENT_SECTIONS = {
     "ZT": {"11", "12", "13"},
@@ -757,7 +803,12 @@ def add_security_headers(resp):
     resp.headers["X-Frame-Options"] = "DENY"
     resp.headers["X-Content-Type-Options"] = "nosniff"
     resp.headers["Referrer-Policy"] = "no-referrer"
-    resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+    resp.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), serial=(), bluetooth=()"
+    resp.headers["Cross-Origin-Opener-Policy"] = "same-origin-allow-popups"
+    resp.headers["X-Permitted-Cross-Domain-Policies"] = "none"
+    resp.headers["Origin-Agent-Cluster"] = "?1"
+    if request.is_secure or request.headers.get("X-Forwarded-Proto", "").lower() == "https":
+        resp.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
     g_csp = csp_additions()
     pyodide_csp = request.path == "/exam"
     pyodide_script = "https://cdn.jsdelivr.net https://cdnjs.cloudflare.com 'wasm-unsafe-eval'" if pyodide_csp else ""
@@ -1570,9 +1621,69 @@ def save_bonus_answer():
     return jsonify({"ok": True})
 
 
+@app.route("/api/proctor-events", methods=["POST"])
+@student_session_required
+def proctor_events():
+    """Store low-volume proctor telemetry in batches.
+
+    The browser buffers ordinary behavior events so a classroom does not open a
+    database connection for every harmless click/shortcut. Security violations
+    still use their dedicated immediate endpoint.
+    """
+    require_csrf()
+    sid = session["student_session_id"]
+    data = request.get_json(silent=True) or {}
+    raw_events = data.get("events") or []
+    if not isinstance(raw_events, list):
+        return jsonify({"ok": False, "error": "events must be a list"}), 400
+    raw_events = raw_events[:25]
+
+    events = []
+    flagged_delta = 0
+    now = iso_now()
+    for raw in raw_events:
+        if not isinstance(raw, dict):
+            continue
+        event_type = str(raw.get("type", "unknown"))[:80]
+        detail = str(raw.get("detail", ""))[:500]
+        if not event_type:
+            continue
+        events.append((sid, event_type, detail, now))
+        if event_type in SUSPICIOUS_EVENTS:
+            flagged_delta += 1
+
+    if not events:
+        return jsonify({"ok": True, "stored": 0})
+
+    conn = connect()
+    ex = conn.execute("SELECT * FROM exam_sessions WHERE id=?", (sid,)).fetchone()
+    if ex and ex["status"] == "in_progress":
+        if session_security_mode(conn, ex) != "strict":
+            clear_non_strict_security(conn, sid)
+            conn.commit()
+            conn.close()
+            return jsonify({"ok": True, "ignored": True, "stored": 0})
+        conn.executemany(
+            "INSERT INTO proctor_events(session_id,event_type,detail,created_at) VALUES (?,?,?,?)",
+            events,
+        )
+        if flagged_delta:
+            conn.execute(
+                "UPDATE exam_sessions SET flagged_count=flagged_count+? WHERE id=?",
+                (flagged_delta, sid),
+            )
+        conn.commit()
+        stored = len(events)
+    else:
+        stored = 0
+    conn.close()
+    return jsonify({"ok": True, "stored": stored})
+
+
 @app.route("/api/proctor-event", methods=["POST"])
 @student_session_required
 def proctor_event():
+    """Compatibility endpoint for older clients; new clients use batching."""
     require_csrf()
     sid = session["student_session_id"]
     data = request.get_json(silent=True) or {}
@@ -2133,6 +2244,14 @@ def admin_login():
     # ?password=1 path remains the owner emergency sign-in.
     if request.method == "POST":
         require_csrf()
+        guard_key = _admin_login_guard_key()
+        retry_after = _admin_login_retry_after(guard_key)
+        if retry_after:
+            flash(f"Too many failed sign-in attempts. Try again in about {max(1, retry_after // 60)} minute(s).", "error")
+            response = app.make_response(render_template("admin_login.html"))
+            response.status_code = 429
+            response.headers["Retry-After"] = str(retry_after)
+            return response
         username = request.form.get("username", "")
         password = request.form.get("password", "")
         conn = connect()
@@ -2149,7 +2268,9 @@ def admin_login():
             session["admin_authenticated"] = True
             session["admin_authenticated_at"] = iso_now()
             csrf_token()
+            _clear_admin_login_failures(guard_key)
             return redirect(url_for("nextgen.workspace"))
+        _record_admin_login_failure(guard_key)
         flash("Invalid administrator credentials.", "error")
     return render_template("admin_login.html")
 
@@ -3072,14 +3193,34 @@ def _live_monitor_payload(conn):
         """SELECT e.id,e.email,e.first_name,e.last_name,e.student_name,e.program,e.class_section,e.status,e.started_at,
                   e.flagged_count,e.violation_count,e.security_locked,e.temp_locked_until,e.pending_blackout,e.security_resume_required,e.monitor_done,
                   e.assessment_id, a.title AS assessment_title, b.name AS batch_name,b.assessment_type,
-                  (SELECT COUNT(*) FROM exam_messages m WHERE m.session_id=e.id AND m.sender='student' AND m.read_at IS NULL) AS unread_messages,
-                  (SELECT pe.event_type FROM proctor_events pe WHERE pe.session_id=e.id ORDER BY pe.id DESC LIMIT 1) AS last_event,
-                  (SELECT pe.detail FROM proctor_events pe WHERE pe.session_id=e.id ORDER BY pe.id DESC LIMIT 1) AS last_event_detail,
-                  (SELECT pe.created_at FROM proctor_events pe WHERE pe.session_id=e.id ORDER BY pe.id DESC LIMIT 1) AS last_event_at,
-                  (SELECT COUNT(*) FROM session_questions sq WHERE sq.session_id=e.id AND sq.selected_option IS NOT NULL) AS answered_mcq,
-                  (SELECT COUNT(*) FROM session_questions sq WHERE sq.session_id=e.id) AS total_mcq
+                  COALESCE(msg.unread_messages,0) AS unread_messages,
+                  pe.event_type AS last_event,pe.detail AS last_event_detail,pe.created_at AS last_event_at,
+                  COALESCE(ans.answered_mcq,0) AS answered_mcq,COALESCE(ans.total_mcq,0) AS total_mcq
            FROM exam_sessions e JOIN batches b ON b.id=e.batch_id
            LEFT JOIN assessments a ON a.id=e.assessment_id
+           LEFT JOIN (
+               SELECT session_id,COUNT(*) AS unread_messages
+               FROM exam_messages
+               WHERE sender='student' AND read_at IS NULL
+               GROUP BY session_id
+           ) msg ON msg.session_id=e.id
+           LEFT JOIN (
+               SELECT p.session_id,p.event_type,p.detail,p.created_at
+               FROM proctor_events p
+               JOIN (
+                   SELECT session_id,MAX(id) AS max_id
+                   FROM proctor_events
+                   WHERE event_type<>'behavior_snapshot'
+                   GROUP BY session_id
+               ) latest ON latest.max_id=p.id
+           ) pe ON pe.session_id=e.id
+           LEFT JOIN (
+               SELECT session_id,
+                      SUM(CASE WHEN selected_option IS NOT NULL THEN 1 ELSE 0 END) AS answered_mcq,
+                      COUNT(*) AS total_mcq
+               FROM session_questions
+               GROUP BY session_id
+           ) ans ON ans.session_id=e.id
            WHERE e.status='in_progress' AND COALESCE(e.is_test,0)=0 AND COALESCE(e.monitor_done,0)=0
            ORDER BY e.id DESC"""
     ).fetchall()

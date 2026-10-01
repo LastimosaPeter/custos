@@ -41,11 +41,11 @@
   let monitorTimer=null;
   async function pollMonitor(){
     if(!document.hidden) await refresh();
-    monitorTimer=setTimeout(pollMonitor,document.hidden?30000:10000);
+    monitorTimer=setTimeout(pollMonitor,document.hidden?45000:15000);
   }
   document.addEventListener('visibilitychange',()=>{
     if(monitorTimer) clearTimeout(monitorTimer);
-    monitorTimer=setTimeout(pollMonitor,document.hidden?30000:500);
+    monitorTimer=setTimeout(pollMonitor,document.hidden?45000:700);
   });
-  monitorTimer=setTimeout(pollMonitor,10000);
+  monitorTimer=setTimeout(pollMonitor,15000);
 })();

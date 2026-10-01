@@ -5119,8 +5119,8 @@ body.course-context[data-subject="CSDC101"] .page-watermark{
   max-height:26px!important;
 }
 body.course-context[data-subject="CSEC303"] .page-watermark{
-  height:34px!important;
-  max-height:34px!important;
+  height:33px!important;
+  max-height:33px!important;
   max-width:300px!important;
 }
 
@@ -5141,8 +5141,8 @@ body.exam-page .exam-page-watermark{
 }
 body.exam-page[data-subject="CSEC303"] .exam-page-watermark,
 .exam-app[data-subject="CSEC303"] .exam-page-watermark{
-  height:34px!important;
-  max-height:34px!important;
+  height:33px!important;
+  max-height:33px!important;
   max-width:300px!important;
 }
 
@@ -5196,5 +5196,45 @@ body.course-context[data-subject="CSEC303"]:not(.exam-page){
     height:28px!important;
     max-height:28px!important;
     max-width:220px!important;
+  }
+}
+
+/* =========================================================
+   Custos 1.6.0.h · Hercules r28 · low-overhead exam security
+   ========================================================= */
+/* In strict assessments, question content cannot be highlighted or dragged.
+   Inputs, scratch tools and the Python editor remain interactive where needed. */
+.exam-app[data-security-mode="strict"] .question-panel,
+.exam-app[data-security-mode="strict"] .question-nav,
+.exam-app[data-security-mode="strict"] .stage-topline,
+.exam-app[data-security-mode="strict"] .exam-header{
+  -webkit-user-select:none;
+  user-select:none;
+  -webkit-touch-callout:none;
+}
+.exam-app[data-security-mode="strict"] input,
+.exam-app[data-security-mode="strict"] textarea,
+.exam-app[data-security-mode="strict"] select,
+.exam-app[data-security-mode="strict"] .CodeMirror,
+.exam-app[data-security-mode="strict"] [contenteditable="true"],
+.exam-app[data-security-mode="strict"] .exam-tools-panel{
+  -webkit-user-select:text;
+  user-select:text;
+  -webkit-touch-callout:default;
+}
+.exam-app[data-security-mode="strict"] img{
+  -webkit-user-drag:none;
+  user-drag:none;
+}
+
+/* Printing an active assessment produces no question content even if the
+   browser invokes printing outside the keyboard shortcut handler. */
+@media print{
+  body.exam-page > *{display:none!important}
+  body.exam-page::before{
+    content:"Custos assessment content is not available for printing.";
+    display:block!important;
+    padding:32px;
+    font:700 18px/1.45 Arial,sans-serif;
   }
 }

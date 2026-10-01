@@ -28,7 +28,7 @@
 
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      const revision = encodeURIComponent(document.querySelector('meta[name="custos-asset-revision"]')?.content || '1.6.0-h-hercules-watermark-fix-r26');
+      const revision = encodeURIComponent(document.querySelector('meta[name="custos-asset-revision"]')?.content || '1.6.0-h-hercules-performance-security-r28');
       navigator.serviceWorker.register(`/sw.js?v=${revision}`, {scope: '/', updateViaCache: 'none'}).catch(() => {});
     });
   }

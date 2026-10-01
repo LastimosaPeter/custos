@@ -206,3 +206,9 @@ For Vercel/serverless deployment, use a real PostgreSQL `DATABASE_URL`; do not r
 ## Hercules browser Python workbench
 
 CSEC303 PHANTOM-303 can run its editable notebook cells directly inside the exam toolkit using Pyodide. The runtime is lazy-loaded from the official jsDelivr Pyodide distribution on first use, so the first Python run is intentionally heavier than ordinary Custos pages.
+
+## Hercules r28 · Performance and security tuning
+
+This revision keeps the v1.6.0.h database schema unchanged while reducing routine server traffic. Ordinary proctor events are buffered in the browser and written in batches, question-position saves are debounced, Workbench autosaves skip unchanged content and wait for a brief pause, and student/instructor polling intervals back off when panels are closed or tabs are hidden. The Live Monitor query also uses grouped joins instead of repeated correlated subqueries.
+
+Strict-mode assessments additionally block text highlighting/dragging of protected question content, blank printed assessment content, record low-volume behavior summaries, and block more browser shortcut attempts. Password-based instructor sign-in has a lightweight per-process failed-attempt throttle. Existing fullscreen/focus violations remain immediate and are not delayed by telemetry batching.

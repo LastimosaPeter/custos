@@ -126,11 +126,11 @@
       await refreshThreads();
       if (currentSid) await loadThread(currentSid);
     }
-    pollTimer = setTimeout(pollMessages, document.hidden ? 20000 : 7000);
+    pollTimer = setTimeout(pollMessages, document.hidden ? 30000 : 10000);
   }
   document.addEventListener('visibilitychange', () => {
     if (pollTimer) clearTimeout(pollTimer);
-    pollTimer = setTimeout(pollMessages, document.hidden ? 20000 : 500);
+    pollTimer = setTimeout(pollMessages, document.hidden ? 30000 : 700);
   });
-  pollTimer = setTimeout(pollMessages, 7000);
+  pollTimer = setTimeout(pollMessages, 10000);
 })();

@@ -50,13 +50,13 @@
         <div class="security-rule-card"><strong>Communication</strong><span>Use the instructor chat for clarifications about the case files, instructions, or technical problems.</span></div>
       </div>
     {% else %}
-      <p>This assessment is conducted in a monitored environment. <strong>Custos records exam activity</strong>, including your answers and answer changes, timestamps, autosave activity, timer state, fullscreen/focus events, blocked shortcuts, right-click attempts, inactivity events, security violations, and messages sent through the instructor chat.</p>
+      <p>This assessment is conducted in a monitored environment. <strong>Custos records exam activity</strong>, including your answers, answer-change counts, question navigation, timestamps, autosave activity, timer state, fullscreen/focus events, blocked shortcuts, right-click attempts, blocked text-selection or drag attempts, inactivity events, security violations, and messages sent through the instructor chat. Low-volume behavior summaries are buffered and saved periodically rather than recording every mouse movement.</p>
       <p>During the examination, your laboratory workstation may also be monitored by the instructor through <strong>Veyon</strong>. Custos itself does not request access to your camera or microphone.</p>
       <div class="security-rules-grid">
         <div class="security-rule-card"><strong>Leaving the Exam</strong><span>Alt+Tab, changing tabs/windows, or leaving fullscreen is treated as a major security violation when detected.</span></div>
         <div class="security-rule-card"><strong>Violations 1–2</strong><span>The exam interface is blacked out and locked for <strong>15 seconds</strong>. The exam timer continues.</span></div>
         <div class="security-rule-card danger-rule"><strong>Violation 3</strong><span>Your attempt is <strong>permanently locked</strong>. You cannot continue answering until the instructor manually unlocks it.</span></div>
-        <div class="security-rule-card"><strong>Other Security Events</strong><span>Blocked shortcuts, right-click attempts, navigation/reload attempts, and prolonged inactivity are logged and may be reviewed by the instructor.</span></div>
+        <div class="security-rule-card"><strong>Other Security Events</strong><span>Blocked shortcuts, right-click, print, text-selection, drag, navigation/reload attempts, and prolonged inactivity are logged and may be reviewed by the instructor.</span></div>
       </div>
       <p class="micro integrity-accuracy-note">Browser-based monitoring cannot detect or prevent every operating-system action. Custos uses the security signals browsers expose and preserves them as an audit trail; Veyon can provide additional workstation supervision.</p>
     {% endif %}

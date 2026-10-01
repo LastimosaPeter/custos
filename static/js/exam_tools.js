@@ -158,7 +158,7 @@
   }
   function scheduleSave() {
     clearTimeout(saveTimer);
-    saveTimer = setTimeout(() => saveTools(), 900);
+    saveTimer = setTimeout(() => saveTools(), 1500);
   }
   note?.addEventListener('input', scheduleSave);
   saveBtn?.addEventListener('click', () => saveTools('Notes saved'));

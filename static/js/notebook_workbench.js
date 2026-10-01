@@ -23,6 +23,7 @@
   let workbenchSaveTimer = null;
   let workbenchLoaded = false;
   let workbenchLoadPromise = null;
+  let lastWorkbenchSignature = '';
   const cmByCell = new Map();
 
   const PYTHON_WORDS = [
@@ -117,18 +118,22 @@
 
   async function saveWorkbenchState({keepalive = false} = {}) {
     if (!workbenchLoaded) return;
+    const cellsState = collectCellState();
+    const signature = JSON.stringify(cellsState);
+    if (signature === lastWorkbenchSignature) return;
     try {
-      await fetch('/api/lab-workbench', {
+      const response = await fetch('/api/lab-workbench', {
         method: 'POST', credentials: 'same-origin', keepalive,
         headers: {'Content-Type': 'application/json', 'X-CSRFToken': csrf},
-        body: JSON.stringify({cells: collectCellState()}),
+        body: JSON.stringify({cells: cellsState}),
       });
+      if (response.ok) lastWorkbenchSignature = signature;
     } catch (_) { /* Saved again on the next edit. */ }
   }
 
   function scheduleWorkbenchSave() {
     clearTimeout(workbenchSaveTimer);
-    workbenchSaveTimer = setTimeout(() => saveWorkbenchState(), 700);
+    workbenchSaveTimer = setTimeout(() => saveWorkbenchState(), 2000);
   }
 
   async function loadWorkbenchState() {
@@ -143,6 +148,7 @@
       }
     } catch (_) { /* Editing still works if state retrieval fails. */ }
     workbenchLoaded = true;
+    lastWorkbenchSignature = JSON.stringify(collectCellState());
   }
 
   const setState = (state, text) => {

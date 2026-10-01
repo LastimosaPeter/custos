@@ -109,6 +109,15 @@
     resumeRequired: app.dataset.securityResumeRequired === '1',
     tempRemaining: Number(app.dataset.tempLockRemaining || 0)
   };
+  const behaviorCounters = {
+    questionChanges: 0,
+    answerChanges: 0,
+    selectionAttempts: 0,
+    dragAttempts: 0,
+    printAttempts: 0,
+    activeQuestionSeconds: 0
+  };
+  let questionEnteredAt = Date.now();
 
   async function postJSON(url, payload) {
     return fetch(url, {
@@ -120,13 +129,57 @@
     });
   }
 
-  function logEvent(type, detail = '') {
-    if (!strictSecurity) return;
-    postJSON('/api/proctor-event', {type, detail}).catch(() => {});
+  // Ordinary telemetry is buffered so 30–100 simultaneous examinees do not
+  // create a database write for every harmless interaction. Security violations
+  // still use the dedicated immediate endpoint below.
+  const proctorEventQueue = [];
+  let proctorFlushTimer = null;
+  let proctorFlushInFlight = false;
+  const PROCTOR_BATCH_SIZE = 25;
+  const PROCTOR_QUEUE_LIMIT = 50;
+
+  async function flushProctorEvents() {
+    if (!strictSecurity || proctorFlushInFlight || !proctorEventQueue.length) return;
+    if (proctorFlushTimer) clearTimeout(proctorFlushTimer);
+    proctorFlushTimer = null;
+    const batch = proctorEventQueue.splice(0, PROCTOR_BATCH_SIZE);
+    proctorFlushInFlight = true;
+    try {
+      const response = await postJSON('/api/proctor-events', {events: batch});
+      if (!response.ok) throw new Error('telemetry save failed');
+    } catch (_) {
+      proctorEventQueue.unshift(...batch);
+      if (proctorEventQueue.length > PROCTOR_QUEUE_LIMIT) proctorEventQueue.splice(0, proctorEventQueue.length - PROCTOR_QUEUE_LIMIT);
+    } finally {
+      proctorFlushInFlight = false;
+      if (proctorEventQueue.length) proctorFlushTimer = setTimeout(flushProctorEvents, 15000);
+    }
   }
 
-  function persistQuestionPosition(index) {
-    postJSON('/api/question-position', {index}).catch(() => {});
+  function logEvent(type, detail = '') {
+    if (!strictSecurity) return;
+    proctorEventQueue.push({type, detail: String(detail || '').slice(0, 500)});
+    if (proctorEventQueue.length > PROCTOR_QUEUE_LIMIT) proctorEventQueue.shift();
+    if (proctorEventQueue.length >= 8) {
+      flushProctorEvents();
+    } else if (!proctorFlushTimer) {
+      proctorFlushTimer = setTimeout(flushProctorEvents, 15000);
+    }
+  }
+
+  let questionPositionTimer = null;
+  let pendingQuestionPosition = null;
+  function persistQuestionPosition(index, immediate = false) {
+    pendingQuestionPosition = index;
+    clearTimeout(questionPositionTimer);
+    const save = () => {
+      if (pendingQuestionPosition === null) return;
+      const next = pendingQuestionPosition;
+      pendingQuestionPosition = null;
+      postJSON('/api/question-position', {index: next}).catch(() => {});
+    };
+    if (immediate) save();
+    else questionPositionTimer = setTimeout(save, 800);
   }
 
   function flaggedCount() {
@@ -353,7 +406,13 @@
   }
 
   function showQuestion(index, persist = true) {
-    current = Math.max(0, Math.min(index, panels.length - 1));
+    const nextIndex = Math.max(0, Math.min(index, panels.length - 1));
+    if (nextIndex !== current) {
+      behaviorCounters.questionChanges += 1;
+      behaviorCounters.activeQuestionSeconds += Math.max(0, Math.round((Date.now() - questionEnteredAt) / 1000));
+      questionEnteredAt = Date.now();
+    }
+    current = nextIndex;
     panels.forEach((p, i) => p.classList.toggle('hidden', i !== current));
     navButtons.forEach((b, i) => b.classList.toggle('current', i === current));
     position.textContent = `Question ${current + 1} of ${panels.length}`;
@@ -442,6 +501,7 @@
 
   document.querySelectorAll('.answer-choice input').forEach(input => {
     input.addEventListener('change', async () => {
+      behaviorCounters.answerChanges += 1;
       const panel = input.closest('.question-panel');
       const qid = panel.dataset.questionId;
       const idx = Number(panel.dataset.index);
@@ -503,7 +563,7 @@
       navButtons[idx].classList.toggle('answered', Boolean(input.value.trim()));
       updateFooterStatus();
       clearTimeout(bonusTimers.get(input));
-      bonusTimers.set(input, setTimeout(() => saveBonusInput(input), 500));
+      bonusTimers.set(input, setTimeout(() => saveBonusInput(input), 900));
     });
     input.addEventListener('blur', () => {
       clearTimeout(bonusTimers.get(input));
@@ -712,6 +772,9 @@
   document.addEventListener('visibilitychange', async () => {
     if (!strictSecurity) return;
     if (document.hidden) {
+      persistQuestionPosition(current, true);
+      logBehaviorSnapshot('page_hidden');
+      flushProctorEvents();
       if (secureModeEntered && !intentionalNavigation) triggerViolation('tab_hidden');
     } else {
       logEvent('tab_visible', 'Exam page became visible');
@@ -739,13 +802,35 @@
     logEvent('contextmenu', 'Right-click/context menu attempt blocked');
   });
 
+  const selectionAllowedTarget = target => Boolean(target?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], .exam-tools-panel'));
+  document.addEventListener('selectstart', e => {
+    if (!strictSecurity || selectionAllowedTarget(e.target)) return;
+    e.preventDefault();
+    behaviorCounters.selectionAttempts += 1;
+    logEvent('selection_attempt', 'Text selection/highlight attempt blocked');
+  }, true);
+  document.addEventListener('dragstart', e => {
+    if (!strictSecurity || selectionAllowedTarget(e.target)) return;
+    e.preventDefault();
+    behaviorCounters.dragAttempts += 1;
+    logEvent('drag_attempt', 'Drag attempt from protected assessment content blocked');
+  }, true);
+  window.addEventListener('beforeprint', () => {
+    if (!strictSecurity) return;
+    behaviorCounters.printAttempts += 1;
+    logEvent('print_attempt', 'Browser print attempt detected; assessment content is hidden from print output');
+    flushProctorEvents();
+  });
+
   document.addEventListener('keydown', e => {
     const key = e.key.toLowerCase();
+    const commandKey = e.ctrlKey || e.metaKey;
     const blocked =
-      e.key === 'F12' ||
-      (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
-      (e.ctrlKey && ['u', 's', 'p'].includes(key)) ||
-      (e.metaKey && e.altKey && ['i', 'j', 'c'].includes(key));
+      e.key === 'F12' || e.key === 'F5' ||
+      (e.ctrlKey && e.shiftKey && ['i', 'j', 'c', 'r'].includes(key)) ||
+      (commandKey && ['a', 'u', 's', 'p', 'r', 'l', 'n', 't', 'w'].includes(key)) ||
+      (e.metaKey && e.altKey && ['i', 'j', 'c'].includes(key)) ||
+      (e.altKey && ['arrowleft', 'arrowright'].includes(key));
     if (strictSecurity && blocked) {
       e.preventDefault();
       logEvent('blocked_shortcut', `Blocked browser shortcut: ${e.key}`);
@@ -788,6 +873,32 @@
     }
   }, 1000);
 
+  function logBehaviorSnapshot(reason = 'periodic') {
+    if (!strictSecurity || !secureModeEntered || (document.hidden && reason === 'periodic')) return;
+    const activeSeconds = behaviorCounters.activeQuestionSeconds + Math.max(0, Math.round((Date.now() - questionEnteredAt) / 1000));
+    const snapshot = {
+      reason,
+      question: current + 1,
+      answered: answeredCount(),
+      flagged: flaggedCount(),
+      question_changes: behaviorCounters.questionChanges,
+      answer_changes: behaviorCounters.answerChanges,
+      selection_attempts: behaviorCounters.selectionAttempts,
+      drag_attempts: behaviorCounters.dragAttempts,
+      print_attempts: behaviorCounters.printAttempts,
+      active_question_seconds: activeSeconds
+    };
+    logEvent('behavior_snapshot', JSON.stringify(snapshot));
+    behaviorCounters.questionChanges = 0;
+    behaviorCounters.answerChanges = 0;
+    behaviorCounters.selectionAttempts = 0;
+    behaviorCounters.dragAttempts = 0;
+    behaviorCounters.printAttempts = 0;
+    behaviorCounters.activeQuestionSeconds = 0;
+    questionEnteredAt = Date.now();
+  }
+  setInterval(() => logBehaviorSnapshot('periodic'), 120000);
+
   function renderTimer() {
     if (untimed) {
       if (timerEl) timerEl.textContent = 'Untimed';
@@ -811,7 +922,12 @@
   if (!untimed) setInterval(renderTimer, 1000);
 
   window.addEventListener('beforeunload', () => {
-    if (strictSecurity && !intentionalNavigation && (untimed || remaining > 0)) logEvent('beforeunload', 'Page navigation/reload initiated');
+    persistQuestionPosition(current, true);
+    if (strictSecurity && !intentionalNavigation && (untimed || remaining > 0)) {
+      logBehaviorSnapshot('page_exit');
+      logEvent('beforeunload', 'Page navigation/reload initiated');
+      flushProctorEvents();
+    }
   });
 
   ['copy', 'cut', 'paste'].forEach(evt => document.addEventListener(evt, e => {
@@ -910,15 +1026,15 @@
   setInterval(() => {
     if (!strictSecurity) return;
     if (securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0) refreshSecurityStatus();
-  }, 3000);
-  // Chat is useful during an exam, but polling every 3 seconds from every
+  }, 5000);
+  // Chat is useful during an exam, but frequent polling from every
   // student creates unnecessary database traffic. Poll quickly only while the
   // chat is open, back off while it is closed, and pause network polling when
   // the page is hidden.
   let chatPollTimer = null;
   function scheduleChatPoll(delay) {
     if (chatPollTimer) clearTimeout(chatPollTimer);
-    const nextDelay = delay ?? (chatOpen ? 5000 : 12000);
+    const nextDelay = delay ?? (chatOpen ? 8000 : 30000);
     chatPollTimer = setTimeout(async () => {
       if (!document.hidden) await fetchChatMessages();
       scheduleChatPoll();
@@ -926,7 +1042,7 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) fetchChatMessages();
-    scheduleChatPoll(document.hidden ? 20000 : 1000);
+    scheduleChatPoll(document.hidden ? 60000 : 1200);
   });
   scheduleChatPoll();
 
