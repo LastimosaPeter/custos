@@ -63,11 +63,11 @@ def is_owner_email(email):
 def scoped():
     """Access control: True when the signed-in admin is a Classroom instructor (not an owner).
     Instructors are refused anything outside their own courses."""
-    return CLASSROOM_INSTRUCTORS and session.get("admin_id") and session.get("admin_role") != "owner"
+    return CLASSROOM_INSTRUCTORS and session.get("admin_id") and session.get("admin_authenticated") is True and session.get("admin_role") != "owner"
 
 
 def is_owner():
-    return bool(session.get("admin_id")) and session.get("admin_role", "owner") == "owner"
+    return bool(session.get("admin_id")) and session.get("admin_authenticated") is True and session.get("admin_role", "owner") == "owner"
 
 
 def owner_view_all():
@@ -78,7 +78,7 @@ def list_scoped():
     """What lists show: everyone sees only their own courses' subjects, assessments
     and attempts - owners too - unless an owner switched on "Show all". Owners
     still aren't *refused* other pages (that's scoped(), instructors only)."""
-    return CLASSROOM_INSTRUCTORS and bool(session.get("admin_id")) and not owner_view_all()
+    return CLASSROOM_INSTRUCTORS and bool(session.get("admin_id")) and session.get("admin_authenticated") is True and not owner_view_all()
 
 
 def _instructor_id(conn):

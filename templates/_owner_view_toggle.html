@@ -1,5 +1,5 @@
 {# Owners in Classroom mode: lists show only their own courses unless they choose "Show all". #}
-{% if classroom_instructors and session.get('admin_id') and session.get('admin_role') == 'owner' and request.path.startswith('/admin') %}
+{% if classroom_instructors and session.get('admin_id') and session.get('admin_authenticated') is sameas true and session.get('admin_role') == 'owner' and request.path.startswith('/admin') %}
 <div class="owner-view-toggle{% if owner_view_all() %} is-all{% endif %}">
   {% if owner_view_all() %}
   <form method="post" action="{{ url_for('google.owner_view_all_toggle') }}">

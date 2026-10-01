@@ -1,0 +1,9 @@
+CSEC 303 Midterm Laboratory Case Kit
+=====================================
+
+Medical retina image: skimage.data.retina(), sourced from Wikimedia and released under CC0.
+Shepp-Logan phantom: skimage.data.shepp_logan_phantom(), a standard mathematical imaging phantom.
+Synthetic fingerprint/ridge evidence: generated specifically for this laboratory; it is not a real biometric.
+All degraded/noisy/compressed variants were generated locally from those sources for teaching purposes.
+
+This activity evaluates image-processing technique selection and parameter tuning. It is not a medical diagnosis exercise.

@@ -72,5 +72,14 @@
   }
 
   refresh(true);
-  setInterval(() => refresh(false), 3000);
+  let pollTimer = null;
+  function schedulePoll(delay) {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(async () => {
+      if (!document.hidden) await refresh(false);
+      schedulePoll(document.hidden ? 30000 : 8000);
+    }, delay ?? (document.hidden ? 30000 : 8000));
+  }
+  document.addEventListener('visibilitychange', () => schedulePoll(document.hidden ? 30000 : 700));
+  schedulePoll();
 })();

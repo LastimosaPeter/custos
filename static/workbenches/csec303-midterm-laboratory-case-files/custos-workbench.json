@@ -1,0 +1,14 @@
+{
+  "notebook": "CSEC303_Midterm_PHANTOM303.ipynb",
+  "package": "CSEC303_Midterm_Case_Kit.zip",
+  "title": "PHANTOM-303 Case Workbench",
+  "subtitle": "Scientific Python Workbench",
+  "setup_cells": [2],
+  "previews": {
+    "CASE00": "case00_preview.jpg",
+    "CASE01": "case01_preview.jpg",
+    "CASE02": "case02_preview.jpg",
+    "CASE03": "case03_preview.jpg",
+    "CASE04": "case04_preview.jpg"
+  }
+}

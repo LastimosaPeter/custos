@@ -48,8 +48,35 @@
   const chatStatus = document.getElementById('chatStatus');
   const chatUnreadBadge = document.getElementById('chatUnreadBadge');
 
+  const labToolkitPanel = document.getElementById('labToolkitPanel');
+  const labToolkitToggle = document.getElementById('labToolkitToggle');
+  const labToolkitClose = document.getElementById('labToolkitClose');
+  const labToolkitBackdrop = document.getElementById('labToolkitBackdrop');
+  const labToolkitTabs = [...document.querySelectorAll('[data-toolkit-case]')];
+  const labToolkitSections = [...document.querySelectorAll('[data-toolkit-section]')];
+  const labLayoutButtons = [...document.querySelectorAll('[data-lab-layout-mode]')];
+  const labQuestionPeek = document.getElementById('labQuestionPeek');
+  const labQuestionBackdrop = document.getElementById('labQuestionBackdrop');
+  const questionFocusBtn = document.getElementById('questionFocusBtn');
+  const imageViewer = document.getElementById('examImageViewer');
+  const imageViewerImage = document.getElementById('examImageViewerImage');
+  const imageViewerTitle = document.getElementById('examImageViewerTitle');
+  const imageViewerStage = document.getElementById('examImageViewerStage');
+  const imageViewerClose = document.getElementById('examImageViewerClose');
+  const imageZoomIn = document.getElementById('examImageZoomIn');
+  const imageZoomOut = document.getElementById('examImageZoomOut');
+  const imageZoomReset = document.getElementById('examImageZoomReset');
+  const labFontButtons = [...document.querySelectorAll('[data-lab-font-delta]')];
+  const labFontReset = document.querySelector('[data-lab-font-reset]');
+  const labFontReadout = document.getElementById('labFontReadout');
+  const examCodeFontButtons = [...document.querySelectorAll('[data-exam-code-font-delta]')];
+  const examCodeFontReset = document.querySelector('[data-exam-code-font-reset]');
+  const examCodeFontReadout = document.getElementById('examCodeFontReadout');
+
   const untimed = app.dataset.untimed === '1';
   const isCustomAssessment = app.dataset.custom === '1';
+  const securityMode = app.dataset.securityMode || 'strict';
+  const strictSecurity = securityMode === 'strict';
   // Installed-app (PWA) mode is accepted as secure display only where the page
   // cannot use real element fullscreen: iPhone/iPad, or any browser without the
   // Fullscreen API. Elsewhere '(display-mode: fullscreen)' also matches when a
@@ -69,7 +96,7 @@
   let lastActivity = Date.now();
   let inactivityPrompted = false;
   let noResponseLogged = false;
-  let secureModeEntered = false;
+  let secureModeEntered = !strictSecurity;
   let intentionalNavigation = false;
   let violationRequestInFlight = false;
   let temporaryLockEndsAt = 0;
@@ -82,6 +109,15 @@
     resumeRequired: app.dataset.securityResumeRequired === '1',
     tempRemaining: Number(app.dataset.tempLockRemaining || 0)
   };
+  const behaviorCounters = {
+    questionChanges: 0,
+    answerChanges: 0,
+    selectionAttempts: 0,
+    dragAttempts: 0,
+    printAttempts: 0,
+    activeQuestionSeconds: 0
+  };
+  let questionEnteredAt = Date.now();
 
   async function postJSON(url, payload) {
     return fetch(url, {
@@ -93,12 +129,57 @@
     });
   }
 
-  function logEvent(type, detail = '') {
-    postJSON('/api/proctor-event', {type, detail}).catch(() => {});
+  // Ordinary telemetry is buffered so 30–100 simultaneous examinees do not
+  // create a database write for every harmless interaction. Security violations
+  // still use the dedicated immediate endpoint below.
+  const proctorEventQueue = [];
+  let proctorFlushTimer = null;
+  let proctorFlushInFlight = false;
+  const PROCTOR_BATCH_SIZE = 25;
+  const PROCTOR_QUEUE_LIMIT = 50;
+
+  async function flushProctorEvents() {
+    if (!strictSecurity || proctorFlushInFlight || !proctorEventQueue.length) return;
+    if (proctorFlushTimer) clearTimeout(proctorFlushTimer);
+    proctorFlushTimer = null;
+    const batch = proctorEventQueue.splice(0, PROCTOR_BATCH_SIZE);
+    proctorFlushInFlight = true;
+    try {
+      const response = await postJSON('/api/proctor-events', {events: batch});
+      if (!response.ok) throw new Error('telemetry save failed');
+    } catch (_) {
+      proctorEventQueue.unshift(...batch);
+      if (proctorEventQueue.length > PROCTOR_QUEUE_LIMIT) proctorEventQueue.splice(0, proctorEventQueue.length - PROCTOR_QUEUE_LIMIT);
+    } finally {
+      proctorFlushInFlight = false;
+      if (proctorEventQueue.length) proctorFlushTimer = setTimeout(flushProctorEvents, 15000);
+    }
   }
 
-  function persistQuestionPosition(index) {
-    postJSON('/api/question-position', {index}).catch(() => {});
+  function logEvent(type, detail = '') {
+    if (!strictSecurity) return;
+    proctorEventQueue.push({type, detail: String(detail || '').slice(0, 500)});
+    if (proctorEventQueue.length > PROCTOR_QUEUE_LIMIT) proctorEventQueue.shift();
+    if (proctorEventQueue.length >= 8) {
+      flushProctorEvents();
+    } else if (!proctorFlushTimer) {
+      proctorFlushTimer = setTimeout(flushProctorEvents, 15000);
+    }
+  }
+
+  let questionPositionTimer = null;
+  let pendingQuestionPosition = null;
+  function persistQuestionPosition(index, immediate = false) {
+    pendingQuestionPosition = index;
+    clearTimeout(questionPositionTimer);
+    const save = () => {
+      if (pendingQuestionPosition === null) return;
+      const next = pendingQuestionPosition;
+      pendingQuestionPosition = null;
+      postJSON('/api/question-position', {index: next}).catch(() => {});
+    };
+    if (immediate) save();
+    else questionPositionTimer = setTimeout(save, 800);
   }
 
   function flaggedCount() {
@@ -113,8 +194,225 @@
     reviewFlagBtn.textContent = flagged ? 'Flagged for Review' : 'Flag for Review';
   }
 
+  function setLabToolkitSection(caseKey) {
+    if (!labToolkitPanel || !labToolkitSections.length) return;
+    const requested = caseKey || 'GUIDE';
+    const exists = labToolkitSections.some(section => section.dataset.toolkitSection === requested);
+    const activeKey = exists ? requested : 'GUIDE';
+    labToolkitSections.forEach(section => section.classList.toggle('hidden', section.dataset.toolkitSection !== activeKey));
+    labToolkitTabs.forEach(tab => {
+      const active = tab.dataset.toolkitCase === activeKey;
+      tab.classList.toggle('active', active);
+      tab.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+    const scroll = labToolkitPanel.querySelector('.lab-toolkit-scroll');
+    if (scroll) scroll.scrollTop = 0;
+  }
+
+  function syncLabToolkitToQuestion() {
+    if (!labToolkitPanel || !panels[current]) return;
+    setLabToolkitSection(panels[current].dataset.caseKey || 'GUIDE');
+  }
+
+  function currentLabLayout() {
+    return app.dataset.labLayout || 'split';
+  }
+
+  function labToolkitUsesDrawer() {
+    return window.matchMedia('(max-width: 900px)').matches || currentLabLayout() === 'question';
+  }
+
+  function setLabToolkitOpen(open) {
+    if (!labToolkitPanel) return;
+    if (!labToolkitUsesDrawer()) {
+      labToolkitPanel.classList.remove('drawer-open');
+      labToolkitPanel.setAttribute('aria-hidden', 'false');
+      labToolkitBackdrop?.classList.remove('active');
+      labToolkitToggle?.setAttribute('aria-expanded', 'false');
+      return;
+    }
+    labToolkitPanel.classList.toggle('drawer-open', open);
+    labToolkitPanel.setAttribute('aria-hidden', open ? 'false' : 'true');
+    labToolkitBackdrop?.classList.toggle('active', open);
+    labToolkitToggle?.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+
+  function setLabQuestionDrawer(open) {
+    if (!labQuestionPeek) return;
+    const canDrawer = currentLabLayout() === 'workbench' && !window.matchMedia('(max-width: 900px)').matches;
+    app.classList.toggle('lab-question-drawer-open', Boolean(open && canDrawer));
+    labQuestionBackdrop?.classList.toggle('active', Boolean(open && canDrawer));
+    labQuestionPeek.setAttribute('aria-expanded', open && canDrawer ? 'true' : 'false');
+  }
+
+  function setLabLayout(mode, persist = true) {
+    if (!labToolkitPanel) return;
+    const allowed = ['question', 'split', 'workbench'];
+    const next = allowed.includes(mode) ? mode : 'split';
+    app.dataset.labLayout = next;
+    app.classList.toggle('lab-layout-question', next === 'question');
+    app.classList.toggle('lab-layout-split', next === 'split');
+    app.classList.toggle('lab-layout-workbench', next === 'workbench');
+    labLayoutButtons.forEach(btn => {
+      const active = btn.dataset.labLayoutMode === next;
+      btn.classList.toggle('active', active);
+      btn.setAttribute('aria-pressed', active ? 'true' : 'false');
+    });
+    questionFocusBtn?.classList.toggle('active', next === 'question');
+    labQuestionPeek?.classList.toggle('visible', next === 'workbench');
+    setLabQuestionDrawer(false);
+    setLabToolkitOpen(false);
+    if (persist) {
+      try { localStorage.setItem('custos-csec303-lab-layout', next); } catch (_) {}
+    }
+  }
+
+  labToolkitToggle?.addEventListener('click', () => setLabToolkitOpen(!labToolkitPanel?.classList.contains('drawer-open')));
+  labToolkitClose?.addEventListener('click', () => setLabToolkitOpen(false));
+  labToolkitBackdrop?.addEventListener('click', () => setLabToolkitOpen(false));
+  labToolkitTabs.forEach(tab => tab.addEventListener('click', () => setLabToolkitSection(tab.dataset.toolkitCase)));
+  labLayoutButtons.forEach(btn => btn.addEventListener('click', () => setLabLayout(btn.dataset.labLayoutMode)));
+  questionFocusBtn?.addEventListener('click', () => setLabLayout(currentLabLayout() === 'question' ? 'split' : 'question'));
+  labQuestionPeek?.addEventListener('click', () => setLabQuestionDrawer(!app.classList.contains('lab-question-drawer-open')));
+  labQuestionBackdrop?.addEventListener('click', () => setLabQuestionDrawer(false));
+  window.addEventListener('resize', () => {
+    setLabToolkitOpen(false);
+    setLabQuestionDrawer(false);
+  });
+
+  if (labToolkitPanel) {
+    let savedLayout = 'split';
+    try { savedLayout = localStorage.getItem('custos-csec303-lab-layout') || 'split'; } catch (_) {}
+    setLabLayout(savedLayout, false);
+  }
+
+  const EXAM_CODE_FONT_DEFAULT = 15;
+  const EXAM_CODE_FONT_MIN = 12;
+  const EXAM_CODE_FONT_MAX = 24;
+  let examCodeFontSize = EXAM_CODE_FONT_DEFAULT;
+
+  function setExamCodeFontSize(value, persist = true) {
+    const next = Math.max(EXAM_CODE_FONT_MIN, Math.min(EXAM_CODE_FONT_MAX, Number(value) || EXAM_CODE_FONT_DEFAULT));
+    examCodeFontSize = next;
+    app.style.setProperty('--exam-code-font-size', `${next}px`);
+    if (examCodeFontReadout) examCodeFontReadout.textContent = `${next} px`;
+    examCodeFontButtons.forEach(btn => {
+      const delta = Number(btn.dataset.examCodeFontDelta || 0);
+      btn.disabled = (delta < 0 && next <= EXAM_CODE_FONT_MIN) || (delta > 0 && next >= EXAM_CODE_FONT_MAX);
+    });
+    if (persist) {
+      try { localStorage.setItem('custos-exam-code-font-size', String(next)); } catch (_) {}
+    }
+  }
+
+  examCodeFontButtons.forEach(btn => btn.addEventListener('click', () => setExamCodeFontSize(examCodeFontSize + Number(btn.dataset.examCodeFontDelta || 0))));
+  examCodeFontReset?.addEventListener('click', () => setExamCodeFontSize(EXAM_CODE_FONT_DEFAULT));
+  let savedExamCodeFont = EXAM_CODE_FONT_DEFAULT;
+  try { savedExamCodeFont = Number(localStorage.getItem('custos-exam-code-font-size') || EXAM_CODE_FONT_DEFAULT); } catch (_) {}
+  setExamCodeFontSize(savedExamCodeFont, false);
+
+  const LAB_FONT_DEFAULT = 12;
+  const LAB_FONT_MIN = 10;
+  const LAB_FONT_MAX = 20;
+  let labFontSize = LAB_FONT_DEFAULT;
+
+  function setLabFontSize(value, persist = true) {
+    if (!labToolkitPanel) return;
+    const next = Math.max(LAB_FONT_MIN, Math.min(LAB_FONT_MAX, Number(value) || LAB_FONT_DEFAULT));
+    labFontSize = next;
+    app.style.setProperty('--lab-code-font-size', `${next}px`);
+    if (labFontReadout) labFontReadout.textContent = `${next} px`;
+    labFontButtons.forEach(btn => {
+      const delta = Number(btn.dataset.labFontDelta || 0);
+      btn.disabled = (delta < 0 && next <= LAB_FONT_MIN) || (delta > 0 && next >= LAB_FONT_MAX);
+    });
+    if (persist) {
+      try { localStorage.setItem('custos-csec303-code-font-size', String(next)); } catch (_) {}
+    }
+  }
+
+  labFontButtons.forEach(btn => btn.addEventListener('click', () => setLabFontSize(labFontSize + Number(btn.dataset.labFontDelta || 0))));
+  labFontReset?.addEventListener('click', () => setLabFontSize(LAB_FONT_DEFAULT));
+  if (labToolkitPanel) {
+    let savedFont = LAB_FONT_DEFAULT;
+    try { savedFont = Number(localStorage.getItem('custos-csec303-code-font-size') || LAB_FONT_DEFAULT); } catch (_) {}
+    setLabFontSize(savedFont, false);
+  }
+
+  let imageViewerScale = 1;
+
+  function applyImageViewerScale() {
+    if (!imageViewerImage) return;
+    imageViewerImage.style.transform = `scale(${imageViewerScale})`;
+  }
+
+  function openImageViewer(img) {
+    if (!imageViewer || !imageViewerImage || !img) return;
+    imageViewerScale = 1;
+    imageViewerImage.src = img.currentSrc || img.src;
+    imageViewerImage.alt = img.alt || 'Expanded evidence image';
+    if (imageViewerTitle) imageViewerTitle.textContent = img.alt || 'Image Preview';
+    applyImageViewerScale();
+    imageViewer.classList.add('active');
+    imageViewer.setAttribute('aria-hidden', 'false');
+    document.body.classList.add('exam-image-viewer-open');
+  }
+
+  function closeImageViewer() {
+    if (!imageViewer) return;
+    imageViewer.classList.remove('active');
+    imageViewer.setAttribute('aria-hidden', 'true');
+    document.body.classList.remove('exam-image-viewer-open');
+    if (imageViewerImage) imageViewerImage.removeAttribute('src');
+  }
+
+  function adjustImageZoom(delta) {
+    imageViewerScale = Math.max(0.5, Math.min(5, Number((imageViewerScale + delta).toFixed(2))));
+    applyImageViewerScale();
+  }
+
+  if (imageViewer) {
+    const zoomableSelector = '.lab-case-media img, .lab-notebook-section-heading img, .lab-python-plots img, .lab-notebook-markdown img';
+    document.querySelectorAll(zoomableSelector).forEach(img => {
+      img.classList.add('exam-zoomable-image');
+      img.setAttribute('tabindex', '0');
+      img.setAttribute('role', 'button');
+      img.setAttribute('title', 'Open image viewer');
+    });
+    document.addEventListener('click', event => {
+      const img = event.target.closest?.(zoomableSelector);
+      if (img) openImageViewer(img);
+    });
+    document.addEventListener('keydown', event => {
+      const target = event.target;
+      if ((event.key === 'Enter' || event.key === ' ') && target?.matches?.(zoomableSelector)) {
+        event.preventDefault();
+        openImageViewer(target);
+        return;
+      }
+      if (event.key === 'Escape' && imageViewer.classList.contains('active')) closeImageViewer();
+    });
+    imageViewerClose?.addEventListener('click', closeImageViewer);
+    imageZoomIn?.addEventListener('click', () => adjustImageZoom(0.25));
+    imageZoomOut?.addEventListener('click', () => adjustImageZoom(-0.25));
+    imageZoomReset?.addEventListener('click', () => { imageViewerScale = 1; applyImageViewerScale(); });
+    imageViewerStage?.addEventListener('wheel', event => {
+      event.preventDefault();
+      adjustImageZoom(event.deltaY < 0 ? 0.2 : -0.2);
+    }, {passive:false});
+    imageViewerStage?.addEventListener('click', event => {
+      if (event.target === imageViewerStage) closeImageViewer();
+    });
+  }
+
   function showQuestion(index, persist = true) {
-    current = Math.max(0, Math.min(index, panels.length - 1));
+    const nextIndex = Math.max(0, Math.min(index, panels.length - 1));
+    if (nextIndex !== current) {
+      behaviorCounters.questionChanges += 1;
+      behaviorCounters.activeQuestionSeconds += Math.max(0, Math.round((Date.now() - questionEnteredAt) / 1000));
+      questionEnteredAt = Date.now();
+    }
+    current = nextIndex;
     panels.forEach((p, i) => p.classList.toggle('hidden', i !== current));
     navButtons.forEach((b, i) => b.classList.toggle('current', i === current));
     position.textContent = `Question ${current + 1} of ${panels.length}`;
@@ -131,6 +429,7 @@
     prevBtn.disabled = current === 0;
     nextBtn.textContent = current === panels.length - 1 ? 'Review' : 'Next';
     panels[current].scrollTop = 0;
+    syncLabToolkitToQuestion();
     updateReviewFlagUI();
     if (persist) persistQuestionPosition(current);
     if (isInstalledAppMode() && window.matchMedia('(max-width: 1024px)').matches) setQuestionNavOpen(false);
@@ -202,6 +501,7 @@
 
   document.querySelectorAll('.answer-choice input').forEach(input => {
     input.addEventListener('change', async () => {
+      behaviorCounters.answerChanges += 1;
       const panel = input.closest('.question-panel');
       const qid = panel.dataset.questionId;
       const idx = Number(panel.dataset.index);
@@ -263,7 +563,7 @@
       navButtons[idx].classList.toggle('answered', Boolean(input.value.trim()));
       updateFooterStatus();
       clearTimeout(bonusTimers.get(input));
-      bonusTimers.set(input, setTimeout(() => saveBonusInput(input), 500));
+      bonusTimers.set(input, setTimeout(() => saveBonusInput(input), 900));
     });
     input.addEventListener('blur', () => {
       clearTimeout(bonusTimers.get(input));
@@ -301,6 +601,10 @@
   }
 
   async function requestSecureMode() {
+    if (!strictSecurity) {
+      secureOverlay?.classList.remove('active');
+      return;
+    }
     fullscreenError.classList.add('hidden');
     if (securityState.permanent || securityState.pending || securityState.tempRemaining > 0) return;
 
@@ -349,6 +653,11 @@
   resumeSecureBtn.addEventListener('click', requestSecureMode);
 
   function renderSecurityOverlay() {
+    if (!strictSecurity) {
+      secureOverlay?.classList.remove('active');
+      securityOverlay?.classList.remove('active');
+      return;
+    }
     if (violationCountEl) violationCountEl.textContent = String(securityState.violationCount);
     if (securityState.permanent) {
       securityOverlay.classList.add('active', 'permanent');
@@ -407,6 +716,7 @@
   }
 
   async function triggerViolation(source) {
+    if (!strictSecurity) return;
     if (!secureModeEntered || intentionalNavigation || securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0 || violationRequestInFlight) return;
     violationRequestInFlight = true;
     securityOverlay.classList.add('active');
@@ -450,6 +760,7 @@
   }
 
   document.addEventListener('fullscreenchange', () => {
+    if (!strictSecurity) return;
     if (!secureModeEntered || intentionalNavigation || isInstalledAppMode()) return;
     if (!document.fullscreenElement) triggerViolation('fullscreen_exit');
     else if (!securityState.permanent && !securityState.resumeRequired && securityState.tempRemaining <= 0) {
@@ -459,7 +770,11 @@
   });
 
   document.addEventListener('visibilitychange', async () => {
+    if (!strictSecurity) return;
     if (document.hidden) {
+      persistQuestionPosition(current, true);
+      logBehaviorSnapshot('page_hidden');
+      flushProctorEvents();
       if (secureModeEntered && !intentionalNavigation) triggerViolation('tab_hidden');
     } else {
       logEvent('tab_visible', 'Exam page became visible');
@@ -469,9 +784,11 @@
   });
 
   window.addEventListener('blur', () => {
+    if (!strictSecurity) return;
     if (secureModeEntered && !intentionalNavigation) triggerViolation('window_blur');
   });
   window.addEventListener('focus', async () => {
+    if (!strictSecurity) return;
     if (secureModeEntered) {
       logEvent('window_focus', 'Exam window regained focus');
       await refreshSecurityStatus();
@@ -480,18 +797,41 @@
   });
 
   document.addEventListener('contextmenu', e => {
+    if (!strictSecurity) return;
     e.preventDefault();
     logEvent('contextmenu', 'Right-click/context menu attempt blocked');
   });
 
+  const selectionAllowedTarget = target => Boolean(target?.closest?.('input, textarea, select, .CodeMirror, [contenteditable="true"], .exam-tools-panel'));
+  document.addEventListener('selectstart', e => {
+    if (!strictSecurity || selectionAllowedTarget(e.target)) return;
+    e.preventDefault();
+    behaviorCounters.selectionAttempts += 1;
+    logEvent('selection_attempt', 'Text selection/highlight attempt blocked');
+  }, true);
+  document.addEventListener('dragstart', e => {
+    if (!strictSecurity || selectionAllowedTarget(e.target)) return;
+    e.preventDefault();
+    behaviorCounters.dragAttempts += 1;
+    logEvent('drag_attempt', 'Drag attempt from protected assessment content blocked');
+  }, true);
+  window.addEventListener('beforeprint', () => {
+    if (!strictSecurity) return;
+    behaviorCounters.printAttempts += 1;
+    logEvent('print_attempt', 'Browser print attempt detected; assessment content is hidden from print output');
+    flushProctorEvents();
+  });
+
   document.addEventListener('keydown', e => {
     const key = e.key.toLowerCase();
+    const commandKey = e.ctrlKey || e.metaKey;
     const blocked =
-      e.key === 'F12' ||
-      (e.ctrlKey && e.shiftKey && ['i', 'j', 'c'].includes(key)) ||
-      (e.ctrlKey && ['u', 's', 'p'].includes(key)) ||
-      (e.metaKey && e.altKey && ['i', 'j', 'c'].includes(key));
-    if (blocked) {
+      e.key === 'F12' || e.key === 'F5' ||
+      (e.ctrlKey && e.shiftKey && ['i', 'j', 'c', 'r'].includes(key)) ||
+      (commandKey && ['a', 'u', 's', 'p', 'r', 'l', 'n', 't', 'w'].includes(key)) ||
+      (e.metaKey && e.altKey && ['i', 'j', 'c'].includes(key)) ||
+      (e.altKey && ['arrowleft', 'arrowright'].includes(key));
+    if (strictSecurity && blocked) {
       e.preventDefault();
       logEvent('blocked_shortcut', `Blocked browser shortcut: ${e.key}`);
     }
@@ -519,6 +859,7 @@
   });
 
   setInterval(() => {
+    if (!strictSecurity) return;
     if (!secureModeEntered || securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0) return;
     const idle = Date.now() - lastActivity;
     if (idle >= 60000 && !inactivityPrompted) {
@@ -531,6 +872,32 @@
       logEvent('inactivity_no_response', 'No response 30 seconds after inactivity prompt');
     }
   }, 1000);
+
+  function logBehaviorSnapshot(reason = 'periodic') {
+    if (!strictSecurity || !secureModeEntered || (document.hidden && reason === 'periodic')) return;
+    const activeSeconds = behaviorCounters.activeQuestionSeconds + Math.max(0, Math.round((Date.now() - questionEnteredAt) / 1000));
+    const snapshot = {
+      reason,
+      question: current + 1,
+      answered: answeredCount(),
+      flagged: flaggedCount(),
+      question_changes: behaviorCounters.questionChanges,
+      answer_changes: behaviorCounters.answerChanges,
+      selection_attempts: behaviorCounters.selectionAttempts,
+      drag_attempts: behaviorCounters.dragAttempts,
+      print_attempts: behaviorCounters.printAttempts,
+      active_question_seconds: activeSeconds
+    };
+    logEvent('behavior_snapshot', JSON.stringify(snapshot));
+    behaviorCounters.questionChanges = 0;
+    behaviorCounters.answerChanges = 0;
+    behaviorCounters.selectionAttempts = 0;
+    behaviorCounters.dragAttempts = 0;
+    behaviorCounters.printAttempts = 0;
+    behaviorCounters.activeQuestionSeconds = 0;
+    questionEnteredAt = Date.now();
+  }
+  setInterval(() => logBehaviorSnapshot('periodic'), 120000);
 
   function renderTimer() {
     if (untimed) {
@@ -555,10 +922,16 @@
   if (!untimed) setInterval(renderTimer, 1000);
 
   window.addEventListener('beforeunload', () => {
-    if (!intentionalNavigation && (untimed || remaining > 0)) logEvent('beforeunload', 'Page navigation/reload initiated');
+    persistQuestionPosition(current, true);
+    if (strictSecurity && !intentionalNavigation && (untimed || remaining > 0)) {
+      logBehaviorSnapshot('page_exit');
+      logEvent('beforeunload', 'Page navigation/reload initiated');
+      flushProctorEvents();
+    }
   });
 
   ['copy', 'cut', 'paste'].forEach(evt => document.addEventListener(evt, e => {
+    if (!strictSecurity) return;
     e.preventDefault();
     logEvent('blocked_shortcut', `${evt} attempt blocked`);
   }));
@@ -641,6 +1014,7 @@
 
   // Update the temporary blackout countdown without pausing the exam timer.
   setInterval(() => {
+    if (!strictSecurity) return;
     if (securityState.permanent) return;
     if (securityState.tempRemaining > 0) {
       const seconds = Math.max(0, Math.ceil((temporaryLockEndsAt - Date.now()) / 1000));
@@ -650,16 +1024,17 @@
   }, 250);
 
   setInterval(() => {
+    if (!strictSecurity) return;
     if (securityState.permanent || securityState.pending || securityState.resumeRequired || securityState.tempRemaining > 0) refreshSecurityStatus();
-  }, 3000);
-  // Chat is useful during an exam, but polling every 3 seconds from every
+  }, 5000);
+  // Chat is useful during an exam, but frequent polling from every
   // student creates unnecessary database traffic. Poll quickly only while the
   // chat is open, back off while it is closed, and pause network polling when
   // the page is hidden.
   let chatPollTimer = null;
   function scheduleChatPoll(delay) {
     if (chatPollTimer) clearTimeout(chatPollTimer);
-    const nextDelay = delay ?? (chatOpen ? 5000 : 12000);
+    const nextDelay = delay ?? (chatOpen ? 8000 : 30000);
     chatPollTimer = setTimeout(async () => {
       if (!document.hidden) await fetchChatMessages();
       scheduleChatPoll();
@@ -667,16 +1042,23 @@
   }
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) fetchChatMessages();
-    scheduleChatPoll(document.hidden ? 20000 : 1000);
+    scheduleChatPoll(document.hidden ? 60000 : 1200);
   });
   scheduleChatPoll();
 
-  if (isInstalledAppMode()) {
+  if (strictSecurity && isInstalledAppMode()) {
     document.documentElement.classList.add('pwa-standalone');
     if (enterFullscreen) enterFullscreen.textContent = 'Begin Exam in App Mode';
     if (secureModeDescription) secureModeDescription.textContent = 'Custos detected installed app mode. Keep Custos in the foreground throughout the exam. Switching to another app, opening another browser, or leaving the exam can trigger a security violation.';
   }
 
+  if (!strictSecurity) {
+    secureOverlay?.classList.remove('active');
+    securityOverlay?.classList.remove('active');
+    inactiveOverlay?.classList.remove('active');
+  }
+
+  setLabToolkitOpen(false);
   updateFooterStatus();
   showQuestion(current, false);
   renderSecurityOverlay();

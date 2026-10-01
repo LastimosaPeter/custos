@@ -31,6 +31,33 @@
   const resumeSecure = document.getElementById('ideResumeSecure');
   const inactiveOverlay = document.getElementById('ideInactiveOverlay');
   const stillHere = document.getElementById('ideStillHere');
+  const ideFontButtons = [...document.querySelectorAll('[data-ide-font-delta]')];
+  const ideFontResets = [...document.querySelectorAll('[data-ide-font-reset]')];
+
+  const IDE_FONT_DEFAULT = 13;
+  const IDE_FONT_MIN = 11;
+  const IDE_FONT_MAX = 22;
+  let ideFontSize = IDE_FONT_DEFAULT;
+
+  function setIdeFontSize(value, persist = true) {
+    const next = Math.max(IDE_FONT_MIN, Math.min(IDE_FONT_MAX, Number(value) || IDE_FONT_DEFAULT));
+    ideFontSize = next;
+    app.style.setProperty('--ide-code-font-size', `${next}px`);
+    ideFontResets.forEach(btn => { btn.textContent = `${next} px`; });
+    ideFontButtons.forEach(btn => {
+      const delta = Number(btn.dataset.ideFontDelta || 0);
+      btn.disabled = (delta < 0 && next <= IDE_FONT_MIN) || (delta > 0 && next >= IDE_FONT_MAX);
+    });
+    if (persist) {
+      try { localStorage.setItem('custos-caudex-code-font-size', String(next)); } catch (_) {}
+    }
+  }
+
+  ideFontButtons.forEach(btn => btn.addEventListener('click', () => setIdeFontSize(ideFontSize + Number(btn.dataset.ideFontDelta || 0))));
+  ideFontResets.forEach(btn => btn.addEventListener('click', () => setIdeFontSize(IDE_FONT_DEFAULT)));
+  let savedIdeFont = IDE_FONT_DEFAULT;
+  try { savedIdeFont = Number(localStorage.getItem('custos-caudex-code-font-size') || IDE_FONT_DEFAULT); } catch (_) {}
+  setIdeFontSize(savedIdeFont, false);
 
   let current = 0;
   let secureEntered = false;
@@ -92,7 +119,7 @@
   });
   document.querySelectorAll('.ide-stdin').forEach(x=>x.addEventListener('input',scheduleSave));
 
-  function scheduleSave(){ saveState.textContent='Unsaved'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>saveCurrent(),700); }
+  function scheduleSave(){ saveState.textContent='Unsaved'; clearTimeout(saveTimer); saveTimer=setTimeout(()=>saveCurrent(),1500); }
   async function saveCurrent(show=true){
     if (!panels[current]) return;
     if(show) saveState.textContent='Saving…';
@@ -179,7 +206,7 @@
 
   if(remaining!==null){setInterval(()=>{remaining=Math.max(0,remaining-1);const h=String(Math.floor(remaining/3600)).padStart(2,'0'),m=String(Math.floor((remaining%3600)/60)).padStart(2,'0'),s=String(remaining%60).padStart(2,'0');timer.textContent=`${h}:${m}:${s}`;if(remaining===0){intentionalNavigation=true;finishForm.submit();}},1000);}
   setInterval(()=>{if(state.tempRemaining>0&&tempLockEnds){state.tempRemaining=Math.max(0,Math.ceil((tempLockEnds-Date.now())/1000));lockCountdown.textContent=String(state.tempRemaining);if(state.tempRemaining===0)refreshSecurity();}},250);
-  setInterval(()=>{if(!document.hidden)refreshSecurity();},5000);
+  setInterval(()=>{if(!document.hidden&&(state.permanent||state.pending||state.resumeRequired||state.tempRemaining>0))refreshSecurity();},5000);
   window.addEventListener('beforeunload',()=>{if(!intentionalNavigation) log('beforeunload','Programming Lab page unloading');});
   panels.forEach(p=>updateLineNumbers(p)); renderSecurity();
 })();

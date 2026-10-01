@@ -1,2 +1,2 @@
-item_number,topic,prompt,code,option_a,option_b,option_c,option_d,correct_option,explanation,points
-1,General,Replace this with your question,,Choice A,Choice B,Choice C,Choice D,A,Optional instructor explanation,1
+item_number,topic,prompt,code,option_a,option_b,option_c,option_d,correct_option,explanation,points,workbench_section
+1,General,Replace this with your question,,Choice A,Choice B,Choice C,Choice D,A,Optional instructor explanation,1,GUIDE

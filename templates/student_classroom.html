@@ -1,0 +1,108 @@
+{% extends "base.html" %}
+{% block title %}Custos - My Assessments{% endblock %}
+{% block breadcrumbs %}{% endblock %}
+{% block body_class %}student-classroom-page{% endblock %}
+{% block content %}
+<nav class="student-flow-nav" aria-label="Student assessment flow">
+  <a href="{{ url_for('index') }}">Home</a><span aria-hidden="true">›</span>
+  <a href="{{ url_for('student_login') }}">Sign In</a><span aria-hidden="true">›</span>
+  <strong>My Assessments</strong>
+</nav>
+<div class="student-classroom-shell">
+  <header class="student-classroom-hero">
+    <div>
+      <div class="eyebrow">STUDENT VIEW · MY CLASSROOM</div>
+      <h1>My Assessments</h1>
+      <p>Welcome back, <strong>{{ identity.name or identity.email }}</strong>. Your progress is saved to your account, so you can leave and continue later from any signed-in device.</p>
+    </div>
+    <div class="student-classroom-hero-actions">
+      <a class="secondary button-link" href="#session-key-entry">Enter Session Key</a>
+      <a class="secondary button-link" href="{{ url_for('student_logout') }}">Sign Out</a>
+    </div>
+  </header>
+
+
+  <section class="student-key-entry-card" id="session-key-entry" aria-labelledby="session-key-title">
+    <div class="student-key-entry-copy">
+      <div class="eyebrow">INSTRUCTOR-ISSUED ACCESS</div>
+      <h2 id="session-key-title">Enter a Session Key</h2>
+      <p>Use this when an assessment is not already listed from Google Classroom or when your instructor assigns a specific delivery set.</p>
+    </div>
+    <form method="post" action="{{ url_for('student_login') }}" class="student-key-entry-form">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label>Subject
+        <select name="subject_code" required data-session-subject>
+          <option value="CSDC101">CSDC101 · Fundamentals of Programming</option>
+          <option value="CSEC303">CSEC303 · Digital Image Processing</option>
+        </select>
+      </label>
+      <label class="student-key-field">Session key
+        <input type="text" name="session_key" placeholder="Enter session key" required autocomplete="off" autocapitalize="characters" spellcheck="false">
+      </label>
+      <details class="student-key-class-details">
+        <summary>Class details <small>only needed when the assessment is not linked to Google Classroom</small></summary>
+        <div class="student-key-class-grid">
+          <label>Program / Class<input type="text" name="program" placeholder="ZT or ZS" maxlength="20" data-session-program></label>
+          <label>Section<input type="text" name="class_section" placeholder="11, 12, 13…" maxlength="20" data-session-section></label>
+        </div>
+      </details>
+      <button class="primary" type="submit">Open Assessment</button>
+    </form>
+  </section>
+
+  <div class="student-account-strip">
+    <div class="student-account-avatar">{{ (identity.name or identity.email)[0]|upper }}</div>
+    <div><strong>{{ identity.name or 'Student' }}</strong><span>{{ identity.email }}</span></div>
+    {% if identity.verified %}<span class="student-verified-pill">Google verified</span>{% endif %}
+  </div>
+
+  {% set inprogress = assessment_groups.in_progress %}
+  {% if inprogress %}
+  <section class="student-assessment-section">
+    <div class="section-heading compact"><div><div class="eyebrow">CONTINUE</div><h2>In Progress</h2><p class="subtle">Custos resumes from your saved question and keeps your existing answers.</p></div></div>
+    <div class="student-assessment-grid">
+      {% for a in inprogress %}{% include "_student_assessment_card.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% set available = assessment_groups.available %}
+  {% set upcoming = assessment_groups.upcoming %}
+  {% if available or upcoming %}
+  <section class="student-assessment-section">
+    <div class="section-heading compact"><div><div class="eyebrow">CLASSROOM</div><h2>Assigned Assessments</h2><p class="subtle">Assessments connected to your Google Classroom account appear here automatically.</p></div></div>
+    <div class="student-assessment-grid">
+      {% for a in available %}{% include "_student_assessment_card.html" %}{% endfor %}
+      {% for a in upcoming %}{% include "_student_assessment_card.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if assessment_groups.submitted %}
+  <section class="student-assessment-section">
+    <div class="section-heading compact"><div><div class="eyebrow">HISTORY</div><h2>Completed</h2><p class="subtle">Open a submission to view its score and, when enabled by your instructor, your answer review.</p></div></div>
+    <div class="student-assessment-grid">
+      {% for a in assessment_groups.submitted %}{% include "_student_assessment_card.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if assessment_groups.closed %}
+  <section class="student-assessment-section student-assessment-section-muted">
+    <div class="section-heading compact"><div><h2>Unavailable</h2><p class="subtle">These classroom assessments are currently closed or disabled.</p></div></div>
+    <div class="student-assessment-grid">
+      {% for a in assessment_groups.closed %}{% include "_student_assessment_card.html" %}{% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  {% if not inprogress and not available and not upcoming and not assessment_groups.submitted and not assessment_groups.closed %}
+  <div class="student-classroom-empty">
+    <div class="student-classroom-empty-mark">⌂</div>
+    <h2>No classroom assessments yet</h2>
+    <p>When an instructor assigns an assessment through Google Classroom, it will appear here. You can also enter an instructor-issued session key.</p>
+    <a class="primary button-link" href="#session-key-entry">Enter a Session Key</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

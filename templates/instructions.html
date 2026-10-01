@@ -22,8 +22,12 @@
     </section>
     <section>
       <h2>Time & Security</h2>
-      <p>You have <strong>{{ batch.duration_minutes }} minutes</strong> once the exam starts. The server timer continues during refreshes and security locks.</p>
+      <p>You have <strong>{{ duration_label }}</strong> once the assessment starts. Your progress and deadline are stored on the server, so refreshes, sign-outs, or returning later do not reset the attempt.</p>
+      {% if assessment and assessment.security_mode != 'strict' %}
+      <p><strong>Open-tool / Standard mode:</strong> fullscreen is not required. You may switch between Custos and authorized tools such as Jupyter for this laboratory activity.</p>
+      {% else %}
       <p>The exam must remain in fullscreen. Custos records security-relevant browser activity for instructor review.</p>
+      {% endif %}
     </section>
   </div>
 
@@ -32,41 +36,37 @@
       <div class="integrity-icon" aria-hidden="true">◆</div>
       <div>
         <div class="eyebrow">ASSESSMENT INTEGRITY NOTICE</div>
-        <h2 id="integrity-title">Monitoring, Recording & Security Terms</h2>
+        <h2 id="integrity-title">Monitoring, Recording & Assessment Terms</h2>
       </div>
     </div>
 
-    <p>This assessment is conducted in a monitored environment. <strong>Custos records exam activity</strong>, including your answers and answer changes, timestamps, autosave activity, timer state, fullscreen/focus events, blocked shortcuts, right-click attempts, inactivity events, security violations, and messages sent through the instructor chat.</p>
-
-    <p>During the examination, your laboratory workstation will also be monitored by the instructor through <strong>Veyon</strong> from the teacher's computer. Custos itself does not request access to your camera or microphone.</p>
-
-    <div class="security-rules-grid">
-      <div class="security-rule-card">
-        <strong>Leaving the Exam</strong>
-        <span>Alt+Tab, changing tabs/windows, or leaving fullscreen is treated as a major security violation when detected.</span>
+    {% if assessment and assessment.security_mode != 'strict' %}
+      <p>This assessment uses <strong>Standard / open-tool mode</strong>. Custos records your answers, saves, timestamps, timer state, and messages, but it does <strong>not</strong> apply fullscreen-exit penalties or permanent security locks.</p>
+      {% if assessment.subject_code == 'CSEC303' %}<p>You may use the supplied Jupyter Case Kit and switch between Jupyter and Custos. Keep your working notebook as your laboratory working paper and submit your graded responses through Custos.</p>{% endif %}
+      <div class="security-rules-grid">
+        <div class="security-rule-card"><strong>Authorized Tools</strong><span>Use the tools explicitly permitted by the assessment instructions. CSEC303 laboratory work may require Jupyter and the supplied evidence files.</span></div>
+        <div class="security-rule-card"><strong>Saved Progress</strong><span>Custos stores answer progress and your current position so you can recover from a refresh or reconnect.</span></div>
+        <div class="security-rule-card"><strong>Academic Integrity</strong><span>Your submitted answers must reflect your own investigation and reasoning even when external tools are permitted.</span></div>
+        <div class="security-rule-card"><strong>Communication</strong><span>Use the instructor chat for clarifications about the case files, instructions, or technical problems.</span></div>
       </div>
-      <div class="security-rule-card">
-        <strong>Violations 1–2</strong>
-        <span>The exam interface is blacked out and locked for <strong>15 seconds</strong>. The exam timer continues.</span>
+    {% else %}
+      <p>This assessment is conducted in a monitored environment. <strong>Custos records exam activity</strong>, including your answers, answer-change counts, question navigation, timestamps, autosave activity, timer state, fullscreen/focus events, blocked shortcuts, right-click attempts, blocked text-selection or drag attempts, inactivity events, security violations, and messages sent through the instructor chat. Low-volume behavior summaries are buffered and saved periodically rather than recording every mouse movement.</p>
+      <p>During the examination, your laboratory workstation may also be monitored by the instructor through <strong>Veyon</strong>. Custos itself does not request access to your camera or microphone.</p>
+      <div class="security-rules-grid">
+        <div class="security-rule-card"><strong>Leaving the Exam</strong><span>Alt+Tab, changing tabs/windows, or leaving fullscreen is treated as a major security violation when detected.</span></div>
+        <div class="security-rule-card"><strong>Violations 1–2</strong><span>The exam interface is blacked out and locked for <strong>15 seconds</strong>. The exam timer continues.</span></div>
+        <div class="security-rule-card danger-rule"><strong>Violation 3</strong><span>Your attempt is <strong>permanently locked</strong>. You cannot continue answering until the instructor manually unlocks it.</span></div>
+        <div class="security-rule-card"><strong>Other Security Events</strong><span>Blocked shortcuts, right-click, print, text-selection, drag, navigation/reload attempts, and prolonged inactivity are logged and may be reviewed by the instructor.</span></div>
       </div>
-      <div class="security-rule-card danger-rule">
-        <strong>Violation 3</strong>
-        <span>Your attempt is <strong>permanently locked</strong>. You cannot continue answering until the instructor manually unlocks it.</span>
-      </div>
-      <div class="security-rule-card">
-        <strong>Other Security Events</strong>
-        <span>Blocked shortcuts, right-click attempts, navigation/reload attempts, and prolonged inactivity are logged and may be reviewed by the instructor.</span>
-      </div>
-    </div>
-
-    <p class="micro integrity-accuracy-note">Browser-based monitoring cannot detect or prevent every operating-system action. Custos uses the security signals browsers expose and preserves them as an audit trail; Veyon provides the instructor with additional workstation supervision.</p>
+      <p class="micro integrity-accuracy-note">Browser-based monitoring cannot detect or prevent every operating-system action. Custos uses the security signals browsers expose and preserves them as an audit trail; Veyon can provide additional workstation supervision.</p>
+    {% endif %}
   </section>
 
   <form method="post" action="{{ url_for('start_exam') }}" class="terms-form">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label class="check-row terms-accept-row">
       <input type="checkbox" name="terms_accept" value="yes" required>
-      <span>I have read and understand the assessment integrity notice. I agree to remain in the authorized exam environment and acknowledge the monitoring, activity recording, temporary lock, and instructor-lock rules described above.</span>
+      <span>{% if assessment and assessment.security_mode != 'strict' %}I have read the assessment instructions and understand the authorized-tool and academic-integrity requirements described above.{% else %}I have read and understand the assessment integrity notice. I agree to remain in the authorized exam environment and acknowledge the monitoring, activity recording, temporary lock, and instructor-lock rules described above.{% endif %}</span>
     </label>
     <button class="primary" type="submit">Accept Terms & Start Exam</button>
   </form>

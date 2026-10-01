@@ -30,3 +30,35 @@
     refreshSections();
   });
 })();
+
+
+(() => {
+  document.querySelectorAll('.student-key-entry-form').forEach((form) => {
+    const subject = form.querySelector('[data-session-subject]');
+    const program = form.querySelector('[data-session-program]');
+    const section = form.querySelector('[data-session-section]');
+    if (!subject || !program || !section) return;
+
+    const applyCourseDefaults = () => {
+      const csec = subject.value === 'CSEC303';
+      if (csec) {
+        program.value = 'ZC';
+        section.value = '32';
+        program.readOnly = true;
+        section.readOnly = true;
+        program.setAttribute('aria-description', 'CSEC303 uses section ZC32');
+        section.setAttribute('aria-description', 'CSEC303 uses section ZC32');
+      } else {
+        if (program.value === 'ZC') program.value = '';
+        if (section.value === '32') section.value = '';
+        program.readOnly = false;
+        section.readOnly = false;
+        program.placeholder = 'ZT or ZS';
+        section.placeholder = '11, 12, 13…';
+      }
+    };
+
+    subject.addEventListener('change', applyCourseDefaults);
+    applyCourseDefaults();
+  });
+})();

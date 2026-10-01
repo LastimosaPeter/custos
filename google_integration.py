@@ -163,43 +163,38 @@ def _require_csrf_header():
 
 @bp.post("/auth/google/student")
 def student_google_signin():
-    """Single Google entry point on the student page: an instructor's email
-    goes straight to the Workspace; everyone else continues as a student."""
+    """Student-only Google entry point.
+
+    Instructor accounts are no longer silently redirected from Student View.
+    This keeps the navigation roles explicit: Student View signs into My
+    Assessments, while Instructor View performs the Classroom teacher check.
+    """
     _require_csrf_header()
     payload = request.get_json(silent=True) or {}
     try:
         claims = verify_id_token(payload.get("credential"))
-    except GoogleAuthError as exc:
-        return jsonify({"ok": False, "error": str(exc)}), 401
-    import instructor_scope as scope
-
-    conn = connect()
-    try:
-        admin = find_admin_for_email(conn, claims["email"])
-        if scope.active() and scope.is_owner_email(claims["email"]):
-            admin, _ = scope.ensure_admin(conn, claims["email"], claims.get("name") or claims["email"], "owner")
-            conn.commit()
-    finally:
-        conn.close()
-    known_instructor = bool(admin and scope.active() and admin["role"] != "owner")
-    if admin and not known_instructor:
-        return jsonify({"ok": True, "role": "instructor", "redirect": _sign_in_admin(admin)})
-    try:
         verify_student_claims(claims)
     except GoogleAuthError as exc:
         return jsonify({"ok": False, "error": str(exc)}), 401
+    # Student and instructor identities are mutually exclusive in one browser
+    # session. Entering Student View clears any previous instructor authority.
+    for key in ("admin_id", "admin_role", "admin_display_name", "admin_auth_method", "admin_authenticated", "admin_authenticated_at", "owner_view_all"):
+        session.pop(key, None)
+    session.permanent = True
     session["google_student"] = {
         "email": canonical_email(claims["email"]),
         "sub": str(claims.get("sub", "")),
         "given_name": str(claims.get("given_name", ""))[:60],
         "family_name": str(claims.get("family_name", ""))[:60],
         "name": str(claims.get("name", ""))[:120],
-        # Classroom mode: a known instructor is offered "Continue to my courses",
-        # which re-runs the Classroom teacher check before opening the Workspace.
-        "known_instructor": known_instructor,
+        "known_instructor": False,
     }
-    return jsonify({"ok": True, "role": "instructor_check" if known_instructor else "student",
-                    "email": canonical_email(claims["email"])})
+    first, last = google_profile_names(session["google_student"])
+    session["student_identity"] = {
+        "email": canonical_email(claims["email"]), "first_name": first, "last_name": last,
+        "name": f"{first} {last}".strip(), "verified": True,
+    }
+    return jsonify({"ok": True, "role": "student", "email": canonical_email(claims["email"]), "redirect": "/student"})
 
 
 @bp.post("/auth/google/student/signout")
@@ -207,7 +202,7 @@ def student_google_signout():
     _require_csrf_header()
     for key in ("google_student", "pending_email", "pending_first_name", "pending_last_name",
                 "pending_student_name", "pending_program", "pending_class_section",
-                "pending_batch_id", "pending_session_key", "pending_google_sub"):
+                "pending_batch_id", "pending_session_key", "pending_google_sub", "student_identity"):
         session.pop(key, None)
     return jsonify({"ok": True})
 
@@ -333,6 +328,8 @@ def _sign_in_admin(admin):
     session["admin_role"] = admin["role"] if "role" in admin.keys() else "owner"
     session["admin_display_name"] = (admin["display_name"] if "display_name" in admin.keys() else None) or admin["username"]
     session["admin_auth_method"] = "google"
+    session["admin_authenticated"] = True
+    session["admin_authenticated_at"] = iso_now()
     csrf_token()
     return url_for("nextgen.workspace")
 
@@ -342,7 +339,7 @@ def _sign_in_admin(admin):
 # --------------------------------------------------------------------------
 
 def _require_admin():
-    if not session.get("admin_id"):
+    if not session.get("admin_id") or session.get("admin_authenticated") is not True:
         abort(401)
 
 
@@ -421,9 +418,12 @@ def _student_sections_json():
 
 
 def _section_choices():
-    from app import STUDENT_SECTIONS
+    from app import CSEC303_SECTIONS, STUDENT_SECTIONS
 
-    return STUDENT_SECTIONS
+    merged = {k: set(v) for k, v in STUDENT_SECTIONS.items()}
+    for program, sections in CSEC303_SECTIONS.items():
+        merged.setdefault(program, set()).update(sections)
+    return merged
 
 
 @bp.post("/admin/assessment/<int:assessment_id>/classroom/courses")
@@ -472,9 +472,24 @@ def classroom_import(assessment_id):
         return jsonify({"ok": False, "error": str(exc)}), 400
     from instructor_scope import parse_course_name
 
+    # Resolve the Custos subject before mapping the Classroom roster. CSEC303
+    # currently has one recognized section only: ZC32. Classroom remains the
+    # authority for membership, but the stored Custos section is normalized.
+    conn = connect()
+    try:
+        assessment_subject = conn.execute(
+            """SELECT s.code FROM assessments a JOIN subjects s ON s.id=a.subject_id WHERE a.id=?""",
+            (assessment_id,),
+        ).fetchone()
+    finally:
+        conn.close()
+    subject_code = str(assessment_subject["code"] if assessment_subject else "").upper()
+
     c = courses[course_id]
     parsed = parse_course_name(c.get("name"), f"{c.get('name', '')} {c.get('section', '')}".strip(), c.get("section"))
-    if parsed:
+    if subject_code == "CSEC303":
+        program, class_section = "ZC", "32"
+    elif parsed:
         # "2026-1 CSDC100.ZC11Am" -> section ZC11, straight from the course name
         program, class_section = parsed["program"], parsed["class_section"]
     elif program not in sections or class_section not in sections[program]:

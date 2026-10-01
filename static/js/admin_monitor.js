@@ -36,16 +36,16 @@
     }catch(e){window.alert('Could not update session.');}
   }
   list.addEventListener('click',e=>{const b=e.target.closest('[data-monitor-action]');if(b){e.preventDefault();doAction(b.closest('[data-session-id]'),b.dataset.monitorAction);}});
-  filter.addEventListener('change',refresh); assessmentFilter?.addEventListener('change',refresh); document.getElementById('monitorRefresh').addEventListener('click',refresh);
+  filter.addEventListener('change',refresh); assessmentFilter?.addEventListener('change',()=>{ const value=assessmentFilter.value; window.location.href=value==='all'?'/admin/monitor':`/admin/monitor?assessment_id=${encodeURIComponent(value)}`; }); document.getElementById('monitorRefresh').addEventListener('click',refresh);
   refresh();
   let monitorTimer=null;
   async function pollMonitor(){
     if(!document.hidden) await refresh();
-    monitorTimer=setTimeout(pollMonitor,document.hidden?30000:10000);
+    monitorTimer=setTimeout(pollMonitor,document.hidden?45000:15000);
   }
   document.addEventListener('visibilitychange',()=>{
     if(monitorTimer) clearTimeout(monitorTimer);
-    monitorTimer=setTimeout(pollMonitor,document.hidden?30000:500);
+    monitorTimer=setTimeout(pollMonitor,document.hidden?45000:700);
   });
-  monitorTimer=setTimeout(pollMonitor,10000);
+  monitorTimer=setTimeout(pollMonitor,15000);
 })();

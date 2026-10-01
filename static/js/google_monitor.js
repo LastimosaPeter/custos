@@ -35,5 +35,5 @@
     } catch (e) { /* keep last list */ }
   };
   if (filter) filter.addEventListener("change", render);
-  refresh(); setInterval(refresh, 20000);
+  refresh(); setInterval(() => { if (!document.hidden) refresh(); }, 30000);
 })();

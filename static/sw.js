@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v112-goliathus-portable-r16-owner-mine';
+const CACHE_NAME = 'custos-static-v160h-hercules-performance-security-r28';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -9,16 +9,24 @@ const STATIC_ASSETS = [
   '/static/js/student_form.js',
   '/static/js/ui_controls.js',
   '/static/js/exam.js',
+  '/static/js/exam_tools.js',
+  '/static/js/notebook_workbench.js',
   '/static/js/ide.js',
   '/static/img/favicon.png',
   '/static/img/apple-touch-icon.png',
   '/static/img/pwa-icon-192.png',
   '/static/img/pwa-icon-512.png',
   '/static/img/csdc101-logo.webp',
+  '/static/img/csec303-logo.webp',
+  '/static/img/custos-background.webp',
+  '/static/img/hercules-beetle.svg',
   '/static/img/caudex-logo.png',
   '/static/img/caudex-wordmark-light.png',
   '/static/img/caudex-wordmark-dark.png',
-  '/static/img/csdc101-background.webp'
+  '/static/img/csdc101-background.webp',
+  '/static/img/csec303-background.webp',
+  '/static/img/csec303-watermark.png',
+  '/static/img/csec303-watermark-dark.png'
 ];
 
 self.addEventListener('install', event => {
@@ -96,4 +104,4 @@ self.addEventListener('fetch', event => {
 
 // UI + assessment engine refresh: free-form custom assessments 2026-09-27
 
-// Custos 1.0 · Goliathus portable/performance cache refresh.
+// Custos 1.6.0.h · Hercules performance and security cache refresh.

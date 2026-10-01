@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r8-class-archive"
+DB_SCHEMA_VERSION = "1.6.0-h-hercules-r24-workbench-template"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS batches (
     close_at TEXT,
     duration_minutes INTEGER NOT NULL DEFAULT 90,
     reveal_score INTEGER NOT NULL DEFAULT 1,
+    reveal_answers INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
     assessment_type TEXT NOT NULL DEFAULT 'midterm'
 );
@@ -106,6 +107,7 @@ CREATE TABLE IF NOT EXISTS questions (
     explanation TEXT NOT NULL DEFAULT '',
     points INTEGER NOT NULL DEFAULT 1,
     position INTEGER,
+    workbench_section TEXT,
     active INTEGER NOT NULL DEFAULT 1,
     created_by TEXT NOT NULL DEFAULT 'builtin'
 );
@@ -148,6 +150,9 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     security_resume_required INTEGER NOT NULL DEFAULT 0,
     monitor_done INTEGER NOT NULL DEFAULT 0,
     last_question_index INTEGER NOT NULL DEFAULT 0,
+    scratch_note TEXT,
+    scratch_board_json TEXT,
+    lab_workbench_json TEXT,
     FOREIGN KEY(batch_id) REFERENCES batches(id)
 );
 
@@ -263,6 +268,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     max_attempts INTEGER NOT NULL DEFAULT 1,
     security_mode TEXT NOT NULL DEFAULT 'standard',
     reveal_score INTEGER NOT NULL DEFAULT 1,
+    reveal_answers INTEGER NOT NULL DEFAULT 0,
     shuffle_questions INTEGER NOT NULL DEFAULT 1,
     shuffle_options INTEGER NOT NULL DEFAULT 1,
     allowed_sections TEXT NOT NULL DEFAULT '',
@@ -274,6 +280,28 @@ CREATE TABLE IF NOT EXISTS assessments (
     FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
     FOREIGN KEY(created_by_instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS assessment_notebooks (
+    assessment_id INTEGER PRIMARY KEY,
+    filename TEXT NOT NULL,
+    notebook_json TEXT NOT NULL,
+    package_name TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS assessment_notebook_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL,
+    asset_path TEXT NOT NULL,
+    mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+    content_b64 TEXT NOT NULL,
+    UNIQUE(assessment_id, asset_path),
+    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_assessment_notebook_assets_assessment
+ON assessment_notebook_assets(assessment_id);
 
 CREATE TABLE IF NOT EXISTS programming_labs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -618,6 +646,9 @@ def migrate_schema(conn):
         "assessment_id": "INTEGER",
         "auth_method": "TEXT",
         "google_sub": "TEXT",
+        "scratch_note": "TEXT",
+        "scratch_board_json": "TEXT",
+        "lab_workbench_json": "TEXT",
     }
     for name, definition in session_additions.items():
         if name not in session_cols:
@@ -688,11 +719,14 @@ def migrate_schema(conn):
         conn.execute("ALTER TABLE questions ADD COLUMN points INTEGER NOT NULL DEFAULT 1")
     if "position" not in question_cols:
         conn.execute("ALTER TABLE questions ADD COLUMN position INTEGER")
+    if "workbench_section" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN workbench_section TEXT")
 
     assessment_cols = _table_columns(conn, "assessments") if "assessments" in _table_names(conn) else set()
     for name, definition in {
         "display_type": "TEXT NOT NULL DEFAULT 'Assessment'",
         "reveal_score": "INTEGER NOT NULL DEFAULT 1",
+        "reveal_answers": "INTEGER NOT NULL DEFAULT 0",
         "shuffle_questions": "INTEGER NOT NULL DEFAULT 1",
         "shuffle_options": "INTEGER NOT NULL DEFAULT 1",
         "allowed_sections": "TEXT NOT NULL DEFAULT ''",
@@ -703,6 +737,8 @@ def migrate_schema(conn):
             conn.execute(f"ALTER TABLE assessments ADD COLUMN {name} {definition}")
 
     batch_cols = _table_columns(conn, "batches")
+    if "reveal_answers" not in batch_cols:
+        conn.execute("ALTER TABLE batches ADD COLUMN reveal_answers INTEGER NOT NULL DEFAULT 0")
     if "assessment_type" not in batch_cols:
         conn.execute("ALTER TABLE batches ADD COLUMN assessment_type TEXT NOT NULL DEFAULT 'midterm'")
     if "subject_id" not in batch_cols:
@@ -848,6 +884,11 @@ def _ensure_future_seed(conn, admin_username):
                ON CONFLICT(lab_id,position) DO NOTHING""",
             (lab["id"], task_starter, tests),
         )
+
+    # CSEC303 · Digital Image Processing. This seed is idempotent and does not
+    # replace question banks after real student attempts already exist.
+    from csec303_midterm_seed import ensure_csec303_midterm_seed
+    ensure_csec303_midterm_seed(conn)
 
 def init_db(admin_username="admin", admin_password="ChangeMe123!"):
     conn = connect()

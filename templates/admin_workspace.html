@@ -198,7 +198,7 @@
       <form id="workspace-assessment-edit-{{ a.id }}" method="post" action="{{ url_for('nextgen.assessment_edit', assessment_id=a.id) }}" class="assessment-create-grid workspace-edit-form">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Title<input name="title" value="{{ a.title }}" required></label>
-        <label>Duration (min)<input type="number" name="duration_minutes" min="1" max="480" value="{{ a.duration_minutes }}"></label>
+        <label>Duration (min)<input type="number" name="duration_minutes" min="1" max="10080" value="{{ a.duration_minutes }}"></label>
         <label>Security<select name="security_mode"><option value="standard" {% if a.security_mode=='standard' %}selected{% endif %}>Standard</option><option value="strict" {% if a.security_mode=='strict' %}selected{% endif %}>Strict</option><option value="practice" {% if a.security_mode=='practice' %}selected{% endif %}>Practice</option></select></label>
         {% if a.assessment_type in ['midterm','posttest'] %}
         <label>Access key<input value="Managed per delivery set" disabled><small>Use Open Assessment to view or regenerate each set key.</small></label>

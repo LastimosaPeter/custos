@@ -39,7 +39,7 @@
           <div class="ide-task-status"><span>Status</span><strong class="js-task-status">{{ t.last_status|replace('_',' ')|title }}</strong><span>Runs</span><strong class="js-run-count">{{ t.run_count }}</strong></div>
         </div>
         <div class="ide-editor-pane">
-          <div class="ide-editor-toolbar"><span>C++17 · <strong>main.cpp</strong></span><span>JetBrains Mono</span></div>
+          <div class="ide-editor-toolbar"><span>C++17 · <strong>main.cpp</strong></span><div class="ide-editor-toolbar-right"><span>JetBrains Mono</span><div class="ide-font-control" role="group" aria-label="Editor font size"><button type="button" data-ide-font-delta="-1" title="Decrease editor font size">A−</button><button type="button" data-ide-font-reset class="ide-font-readout" title="Reset editor font size">13 px</button><button type="button" data-ide-font-delta="1" title="Increase editor font size">A+</button></div></div></div>
           <div class="ide-editor-wrap"><pre class="ide-line-numbers" aria-hidden="true"></pre><textarea class="ide-code-editor" spellcheck="false" autocomplete="off" autocapitalize="off">{{ t.source_code }}</textarea></div>
         </div>
         <div class="ide-console-pane">

@@ -29,3 +29,29 @@
     }
   }, true);
 })();
+
+
+// Course-aware section choices when an instructor creates a new assessment.
+(() => {
+  document.querySelectorAll('[data-assessment-subject-select]').forEach((select) => {
+    const form = select.closest('form');
+    if (!form) return;
+    const rows = [...form.querySelectorAll('[data-section-subject]')];
+    if (!rows.length) return;
+    const refresh = () => {
+      const option = select.options[select.selectedIndex];
+      const code = (option?.dataset.subjectCode || '').toUpperCase();
+      rows.forEach((row) => {
+        const matches = row.dataset.sectionSubject === code;
+        row.hidden = !matches;
+        const input = row.querySelector('input[type="checkbox"]');
+        if (input) {
+          input.disabled = !matches;
+          if (matches && code === 'CSEC303') input.checked = true;
+        }
+      });
+    };
+    select.addEventListener('change', refresh);
+    refresh();
+  });
+})();

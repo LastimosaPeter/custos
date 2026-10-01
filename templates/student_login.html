@@ -1,38 +1,20 @@
 {% extends "base.html" %}
-{% block title %}Custos - Student Login{% endblock %}
+{% block title %}Custos - Student Sign In{% endblock %}
 {% block breadcrumbs %}{% endblock %}
 {% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
-<div class="center-card auth-card branded-auth-card">
-  <div class="security-orb small custos-portal-mark" aria-hidden="true">
-    <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
-  </div>
-  {% set instructor_first = classroom_instructors and google_student and google_student.known_instructor %}
-  {% if classroom_instructors and not google_student %}
-  <div class="eyebrow">CUSTOS · SIGN IN</div>
+<nav class="student-flow-nav" aria-label="Student assessment flow">
+  <a href="{{ url_for('index') }}">Home</a><span aria-hidden="true">›</span>
+  <strong>Sign In</strong><span aria-hidden="true">›</span>
+  <span class="disabled" aria-disabled="true">My Assessments</span>
+</nav>
+<div class="center-card auth-card branded-auth-card student-signin-only-card">
+  <div class="security-orb small custos-portal-mark" aria-hidden="true"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></div>
+  <div class="eyebrow">STUDENT VIEW</div>
   <h1>Sign in to Custos</h1>
-  <p class="lead">Use your ADNU Google account. Teachers go to their courses; students continue to their assessment.</p>
-  {% else %}
-  <div class="eyebrow">{% if instructor_first %}INSTRUCTOR{% else %}STUDENT VIEW · CSDC101 ASSESSMENT{% endif %}</div>
-  <h1>{% if instructor_first %}Welcome back{% else %}Enter Exam Session{% endif %}</h1>
-  {% endif %}
+  <p class="lead">Sign in first to open your classroom and continue saved assessments. Session keys are entered from <strong>My Assessments</strong>, not on this page.</p>
+
   {% if google_enabled %}
-  {% if not classroom_instructors %}<p class="lead">Sign in with your school Google account, then enter the <strong>session key announced by your instructor</strong>.</p>{% endif %}
-  {% if google_student %}
-  <div class="google-identity" data-google-identity>
-    <span>Signed in as <strong>{{ google_student.name or google_student.email }}</strong> · {{ google_student.email }}</span>
-    <button type="button" class="secondary" data-google-signout data-endpoint="{{ url_for('google.student_google_signout') }}" data-csrf="{{ csrf_token() }}">Not you? Switch account</button>
-  </div>
-  {% if instructor_first %}
-  <div class="google-signin-block" data-google-instructor-signin data-client-id="{{ google_client_id }}"
-       data-scopes="{{ instructor_signin_scopes }}" data-login-hint="{{ google_student.email }}"
-       data-endpoint="{{ url_for('google.instructor_google_signin') }}" data-csrf="{{ csrf_token() }}">
-    <button type="button" class="primary wide" data-google-instructor-button>Continue to my courses</button>
-    <p class="micro">Custos checks your Google Classroom classes each time you sign in as a teacher.</p>
-    <p class="google-error" data-google-error hidden></p>
-  </div>
-  {% endif %}
-  {% else %}
   <div class="google-signin-block" data-google-signin data-client-id="{{ google_client_id }}"
        data-endpoint="{{ url_for('google.student_google_signin') }}" data-csrf="{{ csrf_token() }}">
     <div data-google-button></div>
@@ -40,60 +22,25 @@
     <p class="google-error" data-google-error hidden></p>
   </div>
   {% endif %}
-  {% else %}
-  <p class="lead">Use your Ateneo de Naga University email address and the <strong>session key announced by your instructor</strong> for your assigned set.</p>
+
+  {% if not google_enabled or not google_student_required %}
+  <details class="manual-student-signin" {% if not google_enabled %}open{% endif %}>
+    <summary>{{ 'Local / manual sign in' if google_enabled else 'Student details' }}</summary>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="student-name-grid">
+        <label>First Name<input type="text" name="first_name" required maxlength="60" autocomplete="given-name"></label>
+        <label>Last Name<input type="text" name="last_name" required maxlength="60" autocomplete="family-name"></label>
+      </div>
+      <label>ADNU email<input type="email" name="email" placeholder="student@{{ domain }}" required autocomplete="username"></label>
+      <button class="primary wide" type="submit">Open My Assessments</button>
+    </form>
+  </details>
   {% endif %}
-  {% if not google_enabled or google_student or not google_student_required %}
-  {% if instructor_first %}<details class="instructor-take-exam"><summary>Take an assessment instead</summary>{% endif %}
-  <form method="post" class="form-grid" data-student-identity-form>
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    {% if not google_student %}
-    <div class="student-name-grid">
-      <label>First Name
-        <input type="text" name="first_name" placeholder="e.g., Juan" value="{{ request.form.get('first_name', google_student.given_name if google_student else '') }}" required maxlength="60" autocomplete="given-name">
-      </label>
-      <label>Last Name
-        <input type="text" name="last_name" placeholder="e.g., Dela Cruz" value="{{ request.form.get('last_name', google_student.family_name if google_student else '') }}" required maxlength="60" autocomplete="family-name">
-      </label>
-    </div>
-    {% endif %}
-    {% if need_section %}
-    <p class="flash">This assessment isn't linked to Google Classroom yet. Choose your program and section to continue.</p>
-    {% endif %}
-    {% if not google_student or need_section %}
-    <div class="student-class-grid">
-      <label>Program
-        <select name="program" required data-program-select>
-          <option value="ZT" {% if request.form.get('program', 'ZT') == 'ZT' %}selected{% endif %}>ZT</option>
-          <option value="ZS" {% if request.form.get('program') == 'ZS' %}selected{% endif %}>ZS</option>
-        </select>
-      </label>
-      <label>Section
-        <select name="class_section" required data-section-select data-selected-section="{{ request.form.get('class_section', '11') }}"></select>
-      </label>
-    </div>
-    {% endif %}
-    {% if not google_student %}
-    <label>Email address
-      <input type="email" name="email" placeholder="student@{{ domain }}" value="{{ request.form.get('email', '') }}" required autocomplete="username">
-    </label>
-    {% endif %}
-    <label>Session key
-      <input type="password" name="session_key" placeholder="Enter instructor-issued session key" value="{{ session_key_value or '' }}" required autocomplete="off" autocapitalize="characters" spellcheck="false"{% if google_student and not need_section %} autofocus{% endif %}>
-    </label>
-    <button class="primary wide" type="submit">Verify Key & Continue</button>
-  </form>
-  {% if instructor_first %}</details>{% endif %}
-  {% if classroom_instructors and google_student and not instructor_first %}
-  <div class="teacher-link-block" data-google-instructor-signin data-client-id="{{ google_client_id }}"
-       data-scopes="{{ instructor_signin_scopes }}" data-login-hint="{{ google_student.email }}"
-       data-endpoint="{{ url_for('google.instructor_google_signin') }}" data-csrf="{{ csrf_token() }}">
-    <button type="button" class="link-button" data-google-instructor-button>I'm a teacher: go to my Google Classroom courses</button>
-    <p class="google-error" data-google-error hidden></p>
+
+  <div class="student-login-role-note">
+    <span>Teaching a class?</span><a href="{{ url_for('admin_login') }}">Go to Instructor View</a>
   </div>
-  {% endif %}
-  {% endif %}
-  <p class="micro">The key identifies the exact assessment your instructor has opened for you. Keys may be changed by the instructor at any time.</p>
-  <div class="student-alt-path"><span>Programming activities</span><a class="secondary button-link disabled-feature-link" href="{{ url_for('nextgen.ide_coming_soon') }}" title="Coming soon">IDE · Coming Soon</a></div><a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
+  <a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
 </div>
 {% endblock %}

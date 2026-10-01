@@ -1,0 +1,7 @@
+numpy>=2.0
+pandas>=2.2
+matplotlib>=3.9
+Pillow>=10.4
+scipy>=1.14
+scikit-image>=0.25
+jupyter>=1.1

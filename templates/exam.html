@@ -1,14 +1,23 @@
 {% extends "base.html" %}
 {% block title %}Custos - {{ assessment.title if is_custom else ('Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm')) }}{% endblock %}
 {% block body_class %}exam-page{% endblock %}
+{% block head_extra %}
+{% if lab_toolkit_sections %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/codemirror.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/mode/python/python.min.js" defer></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.16/addon/hint/show-hint.min.js" defer></script>
+{% endif %}
+{% endblock %}
 {% block body %}
-<div id="examApp" class="exam-app" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-security-resume-required="{{ 1 if security.resume_required else 0 }}" data-custom="{{ 1 if is_custom else 0 }}">
+<div id="examApp" class="exam-app" data-subject="{{ subject_code|default('CSDC101') }}" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-security-resume-required="{{ 1 if security.resume_required else 0 }}" data-custom="{{ 1 if is_custom else 0 }}" data-security-mode="{{ security_mode|default('strict') }}" data-lab-toolkit="{{ 1 if lab_toolkit_sections else 0 }}" data-lab-layout="split">
   <header class="exam-header">
     <div class="exam-brand">
-      <div class="exam-brand-lockup" aria-label="Custos CSDC101">
+      <div class="exam-brand-lockup" aria-label="Custos {{ subject_code|default('CSDC101') }}">
         <span class="exam-custos-wordmark"><span class="exam-custos-orb"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></span><span>Custos</span></span>
         <span class="exam-brand-divider" aria-hidden="true"></span>
-        <img class="exam-brand-logo" src="{{ url_for('static', filename='img/csdc101-logo.webp') }}" alt="CSDC101">
+        <img class="exam-brand-logo" src="{{ url_for('static', filename=('img/csec303-logo.webp' if subject_code == 'CSEC303' else 'img/csdc101-logo.webp'), v=app_asset_revision) }}" alt="{{ subject_code|default('CSDC101') }}">
       </div>
       <div class="exam-brand-copy">
         <strong>{% if is_custom %}{{ assessment.display_type or 'Assessment' }}{% else %}{{ 'Post-test' if batch.assessment_type == 'posttest' else ('Dry Run' if batch.assessment_type == 'dryrun' else 'Midterm') }}{% endif %} {% if exam_session.is_test %}<em class="test-chip">TEST MODE</em>{% endif %}</strong>
@@ -17,6 +26,8 @@
     </div>
     <div class="exam-header-meta">
       {% if exam_session.is_test and session.get('admin_id') %}<form method="post" action="{{ url_for('admin_testing_return') }}" class="inline-form test-return-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="test-return" type="submit">Return to Instructor</button></form>{% else %}<span>{{ exam_session.email }}</span>{% endif %}
+      {% if lab_toolkit_sections %}<button type="button" id="labToolkitToggle" class="secondary lab-toolkit-toggle" aria-controls="labToolkitPanel" aria-expanded="false">Toolkit</button>{% endif %}
+      {% if subject_code == 'CSDC101' %}<button type="button" id="examToolsToggle" class="secondary exam-tools-toggle" aria-controls="examToolsPanel" aria-expanded="false">Tools</button>{% endif %}
       <button type="button" id="questionNavToggle" class="secondary exam-items-toggle" aria-controls="questionNavigator" aria-expanded="false">Items</button>
       <button class="theme-toggle exam-theme-toggle" type="button" data-theme-toggle aria-label="Switch theme" title="Switch theme"><span data-theme-icon>🌙</span></button>
     </div>
@@ -67,24 +78,36 @@
     </aside>
     <button type="button" id="questionNavBackdrop" class="question-nav-backdrop" aria-label="Close question navigator" tabindex="-1"></button>
 
-    <main class="question-stage">
+    <main class="question-stage" id="questionStage">
       <div class="stage-topline">
         <span id="questionPosition">Question {{ resume_index + 1 }} of {{ total_count|default(questions|length) }}</span>
         <strong id="currentPartIndicator" class="current-part-indicator">{{ assessment.display_type if is_custom else 'Part I · Code Tracing / Inspection' }}</strong>
         <div class="stage-topline-actions">
+          {% if lab_toolkit_sections %}<button type="button" id="questionFocusBtn" class="secondary lab-pane-action" title="Focus on the question pane">Focus Question</button>{% endif %}
+          <div class="exam-code-font-control" role="group" aria-label="Question code font size">
+            <button type="button" class="exam-code-font-button" data-exam-code-font-delta="-1" title="Decrease code font size">A−</button>
+            <button type="button" class="exam-code-font-readout" id="examCodeFontReadout" data-exam-code-font-reset title="Reset code font size">15 px</button>
+            <button type="button" class="exam-code-font-button" data-exam-code-font-delta="1" title="Increase code font size">A+</button>
+          </div>
           <button type="button" id="reviewFlagBtn" class="review-flag-btn" aria-pressed="false" title="Mark this item so you can return to it later">Flag for Review</button>
           <span id="saveStatus" class="save-status">Ready</span>
         </div>
       </div>
 
       {% for q in questions %}
-      <section class="question-panel {% if loop.index0 != resume_index %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}" data-review-flagged="{{ 1 if q.marked_for_review else 0 }}">
+      <section class="question-panel {% if loop.index0 != resume_index %}hidden{% endif %}" data-index="{{ loop.index0 }}" data-question-id="{{ q.question_id }}" data-part="{{ q.part }}" data-review-flagged="{{ 1 if q.marked_for_review else 0 }}" data-case-key="{{ q.case_key|default('GUIDE') }}">
         <div class="part-label">
           <span>{% if is_custom %}Question {{ q.q_order }}{% if q.points and q.points != 1 %} · {{ q.points }} points{% endif %}{% else %}{{ 'Part I · Code Tracing / Inspection' if q.part == 1 else 'Part II · Programming Logic / Code Selection' }}{% endif %}</span>
         </div>
         <h1>{{ q.prompt }}</h1>
         {% if q.code %}
           <pre class="code-block"><code>{{ q.code }}</code></pre>
+        {% endif %}
+        {% if q.media_url %}
+          <figure class="lab-case-media">
+            <img src="{{ q.media_url }}" alt="{{ q.media_caption or 'Case evidence preview' }}">
+            <figcaption><strong>{{ q.media_caption or 'Case evidence preview' }}</strong><span>Use the Workbench or downloadable notebook for full-resolution evidence and measurements.</span></figcaption>
+          </figure>
         {% endif %}
         <div class="answers">
           {% for display_letter, origin, text in q.display_options %}
@@ -122,9 +145,119 @@
         </div>
       </footer>
     </main>
+
+    {% if lab_toolkit_sections %}
+    <aside id="labToolkitPanel" class="lab-toolkit-panel" aria-label="Jupyter assessment workbench" aria-hidden="false">
+      <div class="lab-toolkit-header">
+        <div>
+          <span class="lab-toolkit-kicker">{{ subject_code }} · WORKBENCH</span>
+          <strong>{{ lab_workbench.title if lab_workbench else 'Jupyter Workbench' }}</strong>
+          <small>{{ lab_workbench.subtitle if lab_workbench else 'Scientific Python Workbench' }}</small>
+        </div>
+        <div class="lab-toolkit-header-actions">
+          <div class="lab-layout-switcher" role="group" aria-label="Workspace layout">
+            <button type="button" class="lab-layout-button" data-lab-layout-mode="question" title="Focus on the question">Question</button>
+            <button type="button" class="lab-layout-button active" data-lab-layout-mode="split" title="Show question and workbench equally">Split</button>
+            <button type="button" class="lab-layout-button" data-lab-layout-mode="workbench" title="Focus on the Jupyter workbench">Workbench</button>
+          </div>
+          <div class="lab-font-control" role="group" aria-label="Code font size">
+            <button type="button" class="lab-font-button" data-lab-font-delta="-1" title="Decrease code font size">A−</button>
+            <button type="button" class="lab-font-readout" id="labFontReadout" data-lab-font-reset title="Reset code font size">12 px</button>
+            <button type="button" class="lab-font-button" data-lab-font-delta="1" title="Increase code font size">A+</button>
+          </div>
+          <button type="button" id="labToolkitClose" class="chat-close lab-toolkit-close" aria-label="Close toolkit">×</button>
+        </div>
+      </div>
+      <div class="lab-python-runtime" id="labPythonRuntime" data-pyodide-version="314.0.7" data-pyodide-index="https://cdn.jsdelivr.net/pyodide/v314.0.7/full/">
+        <script type="application/json" id="labAssetManifest">{{ (lab_workbench.assets if lab_workbench else [])|tojson }}</script>
+        <div class="lab-python-runtime-top">
+          <div>
+            <span class="lab-python-runtime-kicker">BROWSER PYTHON · PYODIDE 314.0.7</span>
+            <strong>Scientific Python Runtime</strong>
+            <small>NumPy · pandas · SciPy · Matplotlib · Pillow · scikit-image</small>
+          </div>
+          <div class="lab-python-runtime-actions">
+            <button type="button" id="labPythonStart" class="primary">Start Python</button>
+            <button type="button" id="labPythonReset" class="secondary" disabled>Reset</button>
+          </div>
+        </div>
+        <div class="lab-python-runtime-status">
+          <span class="lab-runtime-dot" id="labPythonDot" aria-hidden="true"></span>
+          <span id="labPythonStatus">Runtime not loaded. It will load automatically when you run a cell.</span>
+        </div>
+        <div id="labPythonProgress" class="lab-python-progress hidden"><span></span></div>
+        <p class="lab-python-runtime-note">The first Python start may take longer while the browser loads the packages used by this notebook. Variables remain available across cells until you reset or reload the page.</p>
+      </div>
+      <div class="lab-toolkit-tabs" role="tablist" aria-label="Workbench sections">
+        {% for section in lab_toolkit_sections %}
+          {% if section.key != 'FINAL' %}
+          <button type="button" class="lab-toolkit-tab {% if loop.first %}active{% endif %}" data-toolkit-case="{{ section.key }}" role="tab">{{ section.tab or ('Guide' if section.key == 'GUIDE' else section.title) }}</button>
+          {% endif %}
+        {% endfor %}
+      </div>
+      <div class="lab-toolkit-scroll">
+        {% for section in lab_toolkit_sections %}
+        <section class="lab-notebook-section {% if not loop.first %}hidden{% endif %}" data-toolkit-section="{{ section.key }}">
+          <div class="lab-notebook-section-heading">
+            <div><span>Notebook Section</span><h2>{{ section.title }}</h2></div>
+            {% if section.preview %}<img src="{{ section.preview }}" alt="{{ section.title }} preview">{% endif %}
+          </div>
+          {% for cell in section.cells %}
+            {% if cell.type == 'markdown' %}
+            <div class="lab-notebook-markdown">{{ cell.html|safe }}</div>
+            {% elif cell.source %}
+            <section class="lab-python-cell" data-python-cell="{{ cell.id }}" data-setup="{{ 1 if cell.is_setup else 0 }}">
+              <div class="lab-python-cell-toolbar">
+                <div><span>Python Cell {{ cell.id }}</span>{% if cell.is_setup %}<small>Runtime setup · auto-runs once</small>{% else %}<small>Editable working cell</small>{% endif %}</div>
+                <div class="lab-python-cell-actions">
+                  <button type="button" class="primary" data-python-run>Run Cell</button>
+                  <button type="button" class="secondary" data-python-restore>Restore</button>
+                </div>
+              </div>
+              <textarea class="lab-python-editor" spellcheck="false" autocomplete="off" autocapitalize="off" aria-label="Editable Python cell {{ cell.id }}">{{ cell.source }}</textarea>
+              <div class="lab-python-cell-output hidden" data-python-output-wrap aria-live="polite">
+                <div class="lab-python-output-label"><span>Output</span><button type="button" class="lab-python-clear-output" data-python-clear>Clear</button></div>
+                <pre data-python-output></pre>
+                <div class="lab-python-plots" data-python-plots></div>
+              </div>
+            </section>
+            {% endif %}
+          {% endfor %}
+        </section>
+        {% endfor %}
+      </div>
+      <div class="lab-toolkit-actions">
+        {% if lab_workbench and lab_workbench.package_url %}<a class="secondary button-link" href="{{ lab_workbench.package_url }}" download>Download Workbench</a>{% endif %}
+        {% if lab_workbench and lab_workbench.notebook_url %}<a class="secondary button-link" href="{{ lab_workbench.notebook_url }}" download>Notebook Backup</a>{% endif %}
+      </div>
+    </aside>
+    <button type="button" id="labToolkitBackdrop" class="lab-toolkit-backdrop" aria-label="Close Jupyter toolkit" tabindex="-1"></button>
+    <button type="button" id="labQuestionPeek" class="lab-question-peek" aria-controls="questionStage" aria-expanded="false"><span aria-hidden="true">▤</span> Question</button>
+    <button type="button" id="labQuestionBackdrop" class="lab-question-backdrop" aria-label="Close question pane" tabindex="-1"></button>
+    {% endif %}
   </div>
 
-  <div id="secureOverlay" class="overlay active" role="dialog" aria-modal="true">
+  {% if lab_toolkit_sections %}
+  <div id="examImageViewer" class="exam-image-viewer" aria-hidden="true" role="dialog" aria-modal="true" aria-label="Image viewer">
+    <div class="exam-image-viewer-toolbar">
+      <div class="exam-image-viewer-title"><strong id="examImageViewerTitle">Image Preview</strong><small>Scroll or use the controls to zoom</small></div>
+      <div class="exam-image-viewer-controls">
+        <button type="button" class="secondary" id="examImageZoomOut" aria-label="Zoom out">−</button>
+        <button type="button" class="secondary" id="examImageZoomReset">Fit</button>
+        <button type="button" class="secondary" id="examImageZoomIn" aria-label="Zoom in">+</button>
+        <button type="button" class="secondary" id="examImageViewerClose">Close</button>
+      </div>
+    </div>
+    <div class="exam-image-viewer-stage" id="examImageViewerStage">
+      <img id="examImageViewerImage" alt="Expanded evidence image">
+    </div>
+  </div>
+  {% endif %}
+
+  <img class="exam-page-watermark theme-image theme-image-light" src="{{ url_for('static', filename=('img/csec303-watermark.png' if subject_code == 'CSEC303' else 'img/csdc101-watermark.png'), v=app_asset_revision) }}" alt="" aria-hidden="true">
+  <img class="exam-page-watermark theme-image theme-image-dark" src="{{ url_for('static', filename=('img/csec303-watermark-dark.png' if subject_code == 'CSEC303' else 'img/csdc101-watermark-dark.png'), v=app_asset_revision) }}" alt="" aria-hidden="true">
+
+  <div id="secureOverlay" class="overlay {% if security_mode == 'strict' %}active{% endif %}" role="dialog" aria-modal="true">
     <div class="overlay-card">
       <div class="lock-icon">▣</div>
       <h2>Enter Secure Exam Mode</h2>
@@ -134,7 +267,7 @@
     </div>
   </div>
 
-  <div id="securityLockOverlay" class="security-lock-overlay {% if security.permanent or security.pending or security.resume_required or security.temp_remaining > 0 %}active{% endif %}" role="dialog" aria-modal="true" aria-live="assertive">
+  <div id="securityLockOverlay" class="security-lock-overlay {% if security_mode == 'strict' and (security.permanent or security.pending or security.resume_required or security.temp_remaining > 0) %}active{% endif %}" role="dialog" aria-modal="true" aria-live="assertive">
     <div class="security-lock-content">
       <img class="security-lock-mark" src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
       <div class="security-lock-kicker">CUSTOS EXAM SECURITY</div>
@@ -162,6 +295,48 @@
     </form>
   </aside>
 
+  {% if subject_code == 'CSDC101' %}
+  <aside id="examToolsPanel" class="exam-tools-panel" role="dialog" aria-modal="true" aria-label="CSDC101 exam tools" aria-hidden="true">
+    <div class="exam-tools-header">
+      <div><strong>Exam Tools</strong><small>Calculator · Notes · Jam Board</small></div>
+      <button type="button" id="examToolsClose" class="chat-close" aria-label="Close exam tools">×</button>
+    </div>
+    <div class="exam-tools-scroll">
+      <section class="exam-tool-card calculator-tool" aria-labelledby="calculatorTitle">
+        <div class="exam-tool-title"><span>Calculator</span><small>Basic arithmetic only</small></div>
+        <input id="calculatorDisplay" class="calculator-display" type="text" inputmode="decimal" autocomplete="off" aria-label="Calculator display" placeholder="0">
+        <div class="calculator-grid" aria-label="Calculator keypad">
+          <button type="button" data-calc="clear">AC</button><button type="button" data-calc="back">⌫</button><button type="button" data-calc="(">(</button><button type="button" data-calc=")">)</button>
+          <button type="button" data-calc="7">7</button><button type="button" data-calc="8">8</button><button type="button" data-calc="9">9</button><button type="button" data-calc="/">÷</button>
+          <button type="button" data-calc="4">4</button><button type="button" data-calc="5">5</button><button type="button" data-calc="6">6</button><button type="button" data-calc="*">×</button>
+          <button type="button" data-calc="1">1</button><button type="button" data-calc="2">2</button><button type="button" data-calc="3">3</button><button type="button" data-calc="-">−</button>
+          <button type="button" data-calc="0">0</button><button type="button" data-calc=".">.</button><button type="button" data-calc="=">=</button><button type="button" data-calc="+">+</button>
+        </div>
+        <div id="calculatorStatus" class="micro"></div>
+      </section>
+
+      <section class="exam-tool-card scratch-tool" aria-labelledby="scratchTitle">
+        <div class="exam-tool-title"><span id="scratchTitle">Scratch Notes</span><small>Saved to this attempt</small></div>
+        <textarea id="scratchNote" rows="6" maxlength="8000" placeholder="Write formulas, trace values, or reminders here…"></textarea>
+        <div class="scratch-save-row"><span id="scratchStatus" class="micro">Loading…</span><button type="button" id="scratchSave" class="secondary">Save Notes</button></div>
+      </section>
+
+      <section class="exam-tool-card jam-tool" aria-labelledby="jamTitle">
+        <div class="exam-tool-title"><span id="jamTitle">Jam Board</span><small>Draw diagrams or trace logic</small></div>
+        <div class="jam-toolbar">
+          <button type="button" class="secondary active" data-jam-mode="pen">Pen</button>
+          <button type="button" class="secondary" data-jam-mode="eraser">Eraser</button>
+          <button type="button" class="secondary" id="jamUndo">Undo</button>
+          <button type="button" class="danger" id="jamClear">Clear</button>
+        </div>
+        <div class="jam-canvas-wrap"><canvas id="jamCanvas" width="700" height="420" aria-label="Scratch drawing board"></canvas></div>
+        <p class="micro">The board is saved with your current assessment attempt. It is working paper and does not affect your score.</p>
+      </section>
+    </div>
+  </aside>
+  <div id="examToolsBackdrop" class="exam-tools-backdrop" aria-hidden="true"></div>
+  {% endif %}
+
   <div id="inactiveOverlay" class="overlay" role="dialog" aria-modal="true">
     <div class="overlay-card">
       <h2>Are you still there?</h2>
@@ -185,4 +360,6 @@
   </div>
 </div>
 <script src="{{ url_for('static', filename='js/exam.js', v=app_asset_revision) }}" defer></script>
+{% if subject_code == 'CSDC101' %}<script src="{{ url_for('static', filename='js/exam_tools.js', v=app_asset_revision) }}" defer></script>{% endif %}
+{% if lab_toolkit_sections %}<script src="{{ url_for('static', filename='js/notebook_workbench.js', v=app_asset_revision) }}" defer></script>{% endif %}
 {% endblock %}
