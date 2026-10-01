@@ -1,0 +1,214 @@
+// Google sign-in (students + instructors) and Google Classroom roster import.
+// Loaded only on pages that render these blocks and only when GOOGLE_CLIENT_ID
+// is configured. The server verifies every token; nothing here is trusted.
+(() => {
+  const post = async (url, csrf, body) => {
+    const resp = await fetch(url, {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": csrf },
+      body: JSON.stringify(body || {}),
+    });
+    let data = {};
+    try { data = await resp.json(); } catch (e) { /* non-JSON error page */ }
+    if (!resp.ok || data.ok === false) throw new Error(data.error || "Something went wrong. Please try again.");
+    return data;
+  };
+
+  const whenGoogle = (check, cb, tries = 100) => {
+    if (check()) return cb();
+    if (tries <= 0) return;
+    setTimeout(() => whenGoogle(check, cb, tries - 1), 100);
+  };
+  const hasId = () => window.google && google.accounts && google.accounts.id;
+  const hasOAuth = () => window.google && google.accounts && google.accounts.oauth2;
+
+  // ---- Sign in with Google (student exam login, instructor login) ----
+  document.querySelectorAll("[data-google-signin]").forEach((block) => {
+    const errorBox = block.querySelector("[data-google-error]");
+    const showError = (msg) => { if (errorBox) { errorBox.textContent = msg; errorBox.hidden = false; } };
+    whenGoogle(hasId, () => {
+      google.accounts.id.initialize({
+        client_id: block.dataset.clientId,
+        ux_mode: "popup",
+        auto_select: false,
+        callback: async (response) => {
+          try {
+            const data = await post(block.dataset.endpoint, block.dataset.csrf, { credential: response.credential });
+            window.location.assign(data.redirect || window.location.href);
+          } catch (err) {
+            showError(err.message);
+          }
+        },
+      });
+      const target = block.querySelector("[data-google-button]");
+      google.accounts.id.renderButton(target, {
+        theme: document.documentElement.dataset.theme === "dark" ? "filled_black" : "outline",
+        size: "large", text: "signin_with", shape: "pill",
+        width: Math.min(320, Math.max(200, target.clientWidth || 320)),
+      });
+    });
+  });
+
+  // ---- Instructor sign-in in Classroom mode: access token + Classroom teacher check ----
+  document.querySelectorAll("[data-google-instructor-signin]").forEach((block) => {
+    const errorBox = block.querySelector("[data-google-error]");
+    const btn = block.querySelector("[data-google-instructor-button]");
+    let client = null;
+    btn.addEventListener("click", () => {
+      if (errorBox) errorBox.hidden = true;
+      whenGoogle(hasOAuth, () => {
+        if (!client) {
+          client = google.accounts.oauth2.initTokenClient({
+            client_id: block.dataset.clientId,
+            scope: block.dataset.scopes,
+            ...(block.dataset.loginHint ? { login_hint: block.dataset.loginHint } : {}),
+            callback: async (resp) => {
+              if (resp.error) { errorBox.textContent = "Google sign-in was cancelled."; errorBox.hidden = false; return; }
+              btn.disabled = true;
+              try {
+                const data = await post(block.dataset.endpoint, block.dataset.csrf, { access_token: resp.access_token });
+                window.location.assign(data.redirect);
+              } catch (err) { errorBox.textContent = err.message; errorBox.hidden = false; btn.disabled = false; }
+            },
+          });
+        }
+        client.requestAccessToken();
+      });
+    });
+  });
+
+  document.querySelectorAll("[data-google-signout]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      try { await post(btn.dataset.endpoint, btn.dataset.csrf); } finally {
+        if (window.google && google.accounts && google.accounts.id) google.accounts.id.disableAutoSelect();
+        window.location.reload();
+      }
+    });
+  });
+
+  // ---- Google Classroom roster import (assessment page) ----
+  const card = document.querySelector("[data-classroom]");
+  if (!card) return;
+  const csrf = card.dataset.csrf;
+  const status = card.querySelector("[data-classroom-status]");
+  const panel = card.querySelector("[data-classroom-import]");
+  const courseSel = card.querySelector("[data-course-select]");
+  const programSel = card.querySelector("[data-program-select]");
+  const sectionSel = card.querySelector("[data-section-select]");
+  const sections = JSON.parse(card.dataset.sections || "{}");
+  let accessToken = null;
+  const say = (msg) => { status.textContent = msg; };
+  const option = (sel, value, label) => { const o = document.createElement("option"); o.value = value; o.textContent = label; sel.appendChild(o); };
+
+  Object.keys(sections).forEach((p) => option(programSel, p, p));
+  const fillSections = () => {
+    sectionSel.replaceChildren();
+    (sections[programSel.value] || []).forEach((s) => option(sectionSel, s, s));
+  };
+  programSel.addEventListener("change", fillSections);
+  fillSections();
+
+  // "2026-1 CSDC100.ZC11Am": the server reads the section from the course name,
+  // so the pickers are hidden; otherwise pre-select from e.g. "ZT11" / "ZT-12".
+  let courseInfo = {};
+  const pickers = [programSel.closest("label"), sectionSel.closest("label")];
+  const sectionNote = document.createElement("span");
+  sectionNote.className = "micro";
+  programSel.closest("label").before(sectionNote);
+  const guessSection = () => {
+    const info = courseInfo[courseSel.value];
+    const fromName = info && info.custos_section;
+    pickers.forEach((l) => { l.hidden = Boolean(fromName); });
+    sectionNote.textContent = fromName ? `Section ${fromName} (from the course name)` : "";
+    if (fromName) return;
+    const label = courseSel.selectedOptions[0] ? courseSel.selectedOptions[0].textContent : "";
+    const m = label.match(/\b([A-Za-z]{2})\s*-?\s*(\d{2})\b/g) || [];
+    for (const hit of m) {
+      const [, prog, sec] = hit.match(/([A-Za-z]{2})\s*-?\s*(\d{2})/);
+      const P = prog.toUpperCase();
+      if ((sections[P] || []).includes(sec)) {
+        programSel.value = P; fillSections(); sectionSel.value = sec; return;
+      }
+    }
+  };
+  courseSel.addEventListener("change", guessSection);
+
+  const loadCourses = async () => {
+    say("Loading your Google Classroom courses…");
+    try {
+      const data = await post(card.dataset.coursesUrl, csrf, { access_token: accessToken });
+      courseSel.replaceChildren();
+      if (!data.courses.length) { say("No active courses where you are a teacher were found."); return; }
+      courseInfo = {};
+      data.courses.forEach((c) => { courseInfo[c.id] = c; option(courseSel, c.id, c.section ? `${c.name} · ${c.section}` : c.name); });
+      guessSection();
+      panel.hidden = false;
+      say("Choose the course and the Custos section its students belong to.");
+    } catch (err) { say(err.message); }
+  };
+
+  // One token client for the whole card; `then` is what to do once Google
+  // hands back a short-lived access token (it is never stored).
+  let tokenClient = null;
+  let then = null;
+  const withToken = (next) => {
+    then = next;
+    whenGoogle(hasOAuth, () => {
+      if (!tokenClient) {
+        tokenClient = google.accounts.oauth2.initTokenClient({
+          client_id: card.dataset.clientId,
+          scope: card.dataset.scopes,
+          callback: (resp) => {
+            if (resp.error) { say("Google Classroom access was not granted."); return; }
+            accessToken = resp.access_token;
+            if (then) then();
+          },
+        });
+      }
+      tokenClient.requestAccessToken({ prompt: accessToken ? "" : "consent" });
+    });
+  };
+  card.querySelector("[data-classroom-connect]").addEventListener("click", () => withToken(loadCourses));
+
+  card.querySelectorAll("[data-grade-sync]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const row = btn.closest("tr");
+      const maxInput = row && row.querySelector("[data-max-points]");
+      withToken(async () => {
+        btn.disabled = true;
+        say("Sending scores to Google Classroom…");
+        try {
+          const d = await post(btn.dataset.gradeSync, csrf, {
+            access_token: accessToken, max_points: maxInput ? maxInput.value : undefined,
+          });
+          const parts = [`${d.sent} sent`, `${d.unchanged} unchanged`, `${d.not_submitted} not submitted yet`];
+          if (d.not_in_classroom) parts.push(`${d.not_in_classroom} not in the Classroom assignment`);
+          if (d.failed) parts.push(`${d.failed} failed`);
+          say(`${d.created_assignment ? "Created the Classroom assignment. " : ""}Scores: ${parts.join(", ")}.`);
+          setTimeout(() => window.location.reload(), 2500);
+        } catch (err) { say(err.message); btn.disabled = false; }
+      });
+    });
+  });
+
+  card.querySelector("[data-classroom-do-import]").addEventListener("click", async (ev) => {
+    ev.target.disabled = true;
+    say("Importing students…");
+    try {
+      const data = await post(card.dataset.importUrl, csrf, {
+        access_token: accessToken, course_id: courseSel.value,
+        program: programSel.value, class_section: sectionSel.value,
+      });
+      say(`Imported ${data.imported} students into ${data.section}${data.skipped ? ` (${data.skipped} skipped: not a school Google account)` : ""}.`);
+      setTimeout(() => window.location.reload(), 1200);
+    } catch (err) { say(err.message); ev.target.disabled = false; }
+  });
+
+  card.querySelectorAll("[data-roster-delete]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!window.confirm("Remove this Google Classroom roster? Students not on another linked roster will no longer be restricted.")) return;
+      try { await post(btn.dataset.rosterDelete, csrf); window.location.reload(); } catch (err) { say(err.message); }
+    });
+  });
+})();

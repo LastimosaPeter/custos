@@ -4,6 +4,7 @@
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav('') }}
 {% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
 <div class="dashboard-heading custom-builder-heading">
   <div>
@@ -21,6 +22,7 @@
         <a href="{{ url_for('admin_monitor', assessment_id=assessment.id) }}">Live Monitor</a>
         <a href="{{ url_for('admin_testing', assessment_id=assessment.id) }}">Testing</a>
         <a href="{{ url_for('admin_export_scores', assessment_id=assessment.id) }}">Export Scores (.xlsx)</a>
+        <a href="{{ url_for('admin_export_scores_csv', assessment_id=assessment.id) }}">Export Scores (.csv)</a>
       </div>
     </details>
     <form method="post" action="{{ url_for('nextgen.assessment_delete', assessment_id=assessment.id) }}" class="assessment-delete-inline" data-confirm="Delete this assessment from active Custos? Existing student attempts and analytics history will be preserved."><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action" type="submit">Delete</button></form>
@@ -33,6 +35,8 @@
   <div class="stat-card"><span>Submissions</span><strong>{{ summary.submitted or 0 }}</strong><small>of {{ summary.attempts or 0 }} attempts</small></div>
   <div class="stat-card"><span>Class Mean</span><strong>{{ '%.2f'|format(summary.avg_score) if summary.avg_score is not none else '—' }}</strong><small>automatic score</small></div>
 </div>
+
+{% set assessment_id = assessment.id %}{% include "_classroom_card.html" %}
 
 <div class="custom-builder-grid">
   <section class="content-card custom-delivery-card">
@@ -54,10 +58,32 @@
       <label>Question CSV<input type="file" name="question_csv" accept=".csv,text/csv" required></label>
       <label class="check-row"><input type="checkbox" name="replace_existing" value="1"><span>Replace existing questions <small>(only before any student attempts)</small></span></label>
       <button class="primary" type="submit">Import CSV</button>
-      <p class="micro">Required columns: <code>prompt, option_a, option_b, option_c, option_d, correct_option</code>. Optional: <code>item_number, topic, code, explanation, points</code>. <a href="{{ url_for('static', filename='samples/custom_assessment_template.csv') }}" download>Download CSV template</a>.</p>
+      <p class="micro">Required columns: <code>prompt, option_a, option_b, option_c, option_d, correct_option</code>. Optional: <code>item_number, topic, code, explanation, points, workbench_section</code>. <a href="{{ url_for('static', filename='samples/custom_assessment_template.csv') }}" download>Download CSV template</a>.</p>
     </form>
   </section>
 </div>
+
+<section class="content-card workbench-builder-card">
+  <div class="section-heading"><div><h2>Jupyter Workbench</h2><p class="subtle">Attach any Jupyter notebook to this assessment. Upload the notebook alone, or a ZIP containing the notebook and its relative images/data files.</p></div></div>
+  {% if workbench %}
+  <div class="workbench-upload-status">
+    <div><span>ACTIVE WORKBENCH · {{ 'DATABASE' if workbench.source == 'database' else 'GITHUB / STATIC' }}</span><strong>{{ workbench.filename }}</strong><small>{{ workbench.asset_count }} supporting file{{ '' if workbench.asset_count == 1 else 's' }} · {{ workbench.updated_at }}</small></div>
+    {% if workbench.source == 'database' %}
+    <form method="post" action="{{ url_for('nextgen.custom_workbench_delete', assessment_id=assessment.id) }}" data-confirm="Remove this uploaded notebook workbench? If a GitHub/static workbench exists for this assessment, it will become active again.">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="danger delete-action" type="submit">Remove Upload</button>
+    </form>
+    {% else %}
+    <small class="micro">Shipped with the application. A database upload below will override this GitHub/static workbench.</small>
+    {% endif %}
+  </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('nextgen.custom_workbench_upload', assessment_id=assessment.id) }}" enctype="multipart/form-data" class="stack-form workbench-upload-form">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <label>{{ 'Replace' if workbench else 'Upload' }} Workbench<input type="file" name="workbench_file" accept=".ipynb,.zip,application/zip,application/x-ipynb+json" required></label>
+    <button class="primary" type="submit">{{ 'Replace Workbench' if workbench else 'Attach Workbench' }}</button>
+    <p class="micro">For a portable package, put one <code>.ipynb</code> file and every relative image/data file it references into a ZIP. Database uploads work on local SQLite and deployed PostgreSQL. You may also ship a notebook through GitHub at <code>static/workbenches/&lt;assessment-slug&gt;/</code>. See <code>WORKBENCH_UPLOAD_GUIDE.md</code>.</p>
+  </form>
+</section>
 
 <section class="content-card">
   <div class="section-heading"><div><h2>Assessment Settings</h2><p class="subtle">Change delivery behavior without choosing a predefined exam template.</p></div></div>
@@ -65,7 +91,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Title<input name="title" value="{{ assessment.title }}" required></label>
     <label>Label<input name="display_type" value="{{ assessment.display_type or 'Custom Assessment' }}" placeholder="Quiz, Practice Test, Examination…"></label>
-    <label>Duration<input type="number" name="duration_minutes" min="1" max="480" value="{{ assessment.duration_minutes }}" required></label>
+    <label>Duration<input type="number" name="duration_minutes" min="1" max="10080" value="{{ assessment.duration_minutes }}" required></label>
     <label>Question limit<input type="number" name="question_limit" min="0" max="500" value="{{ assessment.question_limit or 0 }}"><small>0 = use every active question</small></label>
     <label>Security<select name="security_mode"><option value="practice" {% if assessment.security_mode=='practice' %}selected{% endif %}>Practice</option><option value="standard" {% if assessment.security_mode=='standard' %}selected{% endif %}>Standard</option><option value="strict" {% if assessment.security_mode=='strict' %}selected{% endif %}>Strict</option></select></label>
     <label>Opens at<input type="datetime-local" name="start_at" value="{{ assessment.start_at or '' }}"></label>
@@ -73,12 +99,13 @@
     <label class="wide-field">Description<textarea name="description" rows="2">{{ assessment.description or '' }}</textarea></label>
     {% set allowed = (assessment.allowed_sections or '').split(',') %}
     <fieldset class="custom-section-picker wide-field"><legend>Allowed sections <small>leave all unchecked to allow every recognized section</small></legend>
-      {% for code in ['ZT11','ZT12','ZT13','ZS11'] %}<label><input type="checkbox" name="section_{{ code }}" value="1" {% if code in allowed %}checked{% endif %}> {{ code }}</label>{% endfor %}
+      {% set section_codes = ['ZC32'] if assessment.subject_code == 'CSEC303' else ['ZT11','ZT12','ZT13','ZS11'] %}{% for code in section_codes %}<label><input type="checkbox" name="section_{{ code }}" value="1" {% if code in allowed %}checked{% endif %}> {{ code }}</label>{% endfor %}
     </fieldset>
     <div class="custom-create-options wide-field">
       <label class="check-row"><input type="checkbox" name="shuffle_questions" value="1" {% if assessment.shuffle_questions %}checked{% endif %}><span>Shuffle questions for each student</span></label>
       <label class="check-row"><input type="checkbox" name="shuffle_options" value="1" {% if assessment.shuffle_options %}checked{% endif %}><span>Shuffle answer choices</span></label>
       <label class="check-row"><input type="checkbox" name="reveal_score" value="1" {% if assessment.reveal_score %}checked{% endif %}><span>Reveal score after submission</span></label>
+      <label class="check-row"><input type="checkbox" name="reveal_answers" value="1" {% if assessment.reveal_answers %}checked{% endif %}><span>Reveal submitted answers, correct answers, and explanations after submission</span></label>
       <label class="check-row"><input type="checkbox" name="active" value="1" {% if assessment.active %}checked{% endif %}><span>Assessment is active</span></label>
     </div>
     <button class="primary wide-field" type="submit">Save Settings</button>
@@ -91,6 +118,7 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <label>Topic<input name="topic" value="General" required></label>
     <label>Points<input type="number" name="points" value="1" min="1" max="100" required></label>
+    <label>Workbench section<input name="workbench_section" placeholder="GUIDE, CASE00…" maxlength="32"><small>optional · auto-opens this notebook tab</small></label>
     <label class="wide-field">Question<textarea name="prompt" rows="3" required></textarea></label>
     <label class="wide-field">Code <span class="micro">optional</span><textarea name="code" rows="5" class="mono-input"></textarea></label>
     {% for letter in ['A','B','C','D'] %}<label>Option {{ letter }}<input name="option_{{ letter|lower }}" required></label>{% endfor %}
@@ -114,6 +142,7 @@
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <label>Topic<input name="topic" value="{{ q.topic }}" required></label>
         <label>Points<input type="number" name="points" value="{{ q.points or 1 }}" min="1" max="100" required></label>
+        <label>Workbench section<input name="workbench_section" value="{{ q.workbench_section or '' }}" placeholder="GUIDE, CASE00…" maxlength="32"><small>optional notebook tab</small></label>
         <label class="wide-field">Question<textarea name="prompt" rows="3" required>{{ q.prompt }}</textarea></label>
         <label class="wide-field">Code<textarea name="code" rows="5" class="mono-input">{{ q.code }}</textarea></label>
         {% for letter in ['A','B','C','D'] %}<label>Option {{ letter }}<input name="option_{{ letter|lower }}" value="{{ q['option_' ~ letter|lower] }}" required></label>{% endfor %}

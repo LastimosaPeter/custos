@@ -1,29 +1,80 @@
 {% extends "base.html" %}
 {% block title %}Custos - Exam Result{% endblock %}
 {% block content %}
-<div class="center-card result-card">
-  <div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST · SUBMITTED{% elif is_custom %}ASSESSMENT SUBMITTED{% else %}EXAM SUBMITTED{% endif %}</div>
-  <h1>Submission Received</h1>
-  <p>{{ ex.email }} · {{ ex.assessment_title or ex.batch_name }}</p>
-  {% if ex.reveal_score or ex.is_test %}
-  <div class="score-total">{{ display_total }}<span>/{{ max_total }}</span></div>
-  {% if is_custom %}
-    <div class="score-grid custom-score-grid"><div><span>Correct Answers</span><strong>{{ ex.part1_correct }}</strong><small>{{ display_total }} of {{ max_total }} points earned</small></div></div>
-  {% else %}
-    <div class="score-grid {% if is_midterm %}three-score-grid{% endif %}">
-      <div><span>Part I</span><strong>{{ display_p1 }}/30</strong><small>{{ ex.part1_correct }}/40 raw correct</small></div>
-      <div><span>Part II</span><strong>{{ display_p2 }}/20</strong><small>{{ ex.part2_correct }}/20 raw correct</small></div>
-      {% if is_midterm %}<div><span>Bonus</span><strong>+{{ display_bonus }}/5</strong><small>{{ ex.bonus_correct }}/5 correct</small></div>{% endif %}
+<div class="result-page-shell">
+  <div class="center-card result-card result-summary-card">
+    <div class="eyebrow">{% if ex.is_test %}INSTRUCTOR TEST · SUBMITTED{% elif is_custom %}ASSESSMENT SUBMITTED{% else %}EXAM SUBMITTED{% endif %}</div>
+    <h1>Submission Received</h1>
+    <p>{{ ex.email }} · {{ ex.assessment_title or ex.batch_name }}</p>
+    {% if ex.reveal_score or ex.is_test %}
+    <div class="score-total">{{ display_total }}<span>/{{ max_total }}</span></div>
+    {% if is_custom %}
+      <div class="score-grid custom-score-grid"><div><span>Correct Answers</span><strong>{{ ex.part1_correct }}</strong><small>{{ display_total }} of {{ max_total }} points earned</small></div></div>
+    {% else %}
+      <div class="score-grid {% if is_midterm %}three-score-grid{% endif %}">
+        <div><span>Part I</span><strong>{{ display_p1 }}/30</strong><small>{{ ex.part1_correct }}/40 raw correct</small></div>
+        <div><span>Part II</span><strong>{{ display_p2 }}/20</strong><small>{{ ex.part2_correct }}/20 raw correct</small></div>
+        {% if is_midterm %}<div><span>Bonus</span><strong>+{{ display_bonus }}/5</strong><small>{{ ex.bonus_correct }}/5 correct</small></div>{% endif %}
+      </div>
+    {% endif %}
+    {% else %}
+    <div class="warning-box">Your assessment has been scored. The instructor has disabled immediate score display for this delivery.</div>
+    {% endif %}
+    <p class="micro">Proctoring flags recorded: {{ ex.flagged_count }}. Flags are audit events and do not automatically change your score.</p>
+    <div class="result-actions">
+      {% if ex.is_test and session.get('admin_id') %}
+        <form method="post" action="{{ url_for('admin_testing_return') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Return to Instructor Testing</button></form>
+      {% else %}
+        <a href="{{ url_for('student_classroom') }}" class="primary button-link">Back to My Assessments</a>
+        <a href="{{ url_for('student_logout') }}" class="secondary button-link">Sign Out</a>
+      {% endif %}
     </div>
-  {% endif %}
-  {% else %}
-  <div class="warning-box">Your exam has been scored. The instructor has disabled immediate score display for this batch.</div>
-  {% endif %}
-  <p class="micro">Proctoring flags recorded: {{ ex.flagged_count }}. Flags are audit events and do not automatically change your score.</p>
-  <div class="result-actions">
-    {% if ex.is_test and session.get('admin_id') %}
-      <form method="post" action="{{ url_for('admin_testing_return') }}"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="primary" type="submit">Return to Instructor Testing</button></form>
-    {% else %}<a href="{{ url_for('student_logout') }}" class="secondary button-link">Finish</a>{% endif %}
   </div>
+
+  {% if can_review_answers %}
+  <section class="content-card result-review-card">
+    <div class="section-heading">
+      <div><div class="eyebrow">ANSWER REVIEW</div><h2>Review your responses</h2><p class="subtle">Your instructor has enabled response review. Green marks the correct answer; your selected answer is shown exactly as it appeared in your assessment.</p></div>
+      <div class="result-review-legend"><span class="correct">Correct</span><span class="incorrect">Your incorrect answer</span><span class="unanswered">Unanswered</span></div>
+    </div>
+    <div class="result-review-list">
+      {% for q in review_items %}
+      <article class="result-review-item {{ 'is-correct' if q.is_correct else ('is-unanswered' if not q.selected_origin else 'is-incorrect') }}">
+        <div class="result-review-question-head">
+          <span>Question {{ q.order }}</span>
+          <strong>{{ 'Correct' if q.is_correct else ('No answer' if not q.selected_origin else 'Incorrect') }}</strong>
+        </div>
+        <h3>{{ q.prompt }}</h3>
+        {% if q.code %}<pre class="result-review-code"><code>{{ q.code }}</code></pre>{% endif %}
+        <div class="result-review-options">
+          {% for opt in q.display_options %}
+          {% set selected = q.selected_origin == opt.origin %}
+          {% set correct = q.correct_origin == opt.origin %}
+          <div class="result-review-option {% if correct %}correct{% endif %} {% if selected %}selected{% endif %} {% if selected and not correct %}incorrect{% endif %}">
+            <span class="result-review-letter">{{ opt.letter }}</span>
+            <span class="result-review-option-text">{{ opt.text }}</span>
+            <span class="result-review-option-status">{% if correct %}✓ Correct answer{% elif selected %}Your answer{% endif %}</span>
+          </div>
+          {% endfor %}
+        </div>
+        {% if not q.selected_origin %}<div class="result-review-no-answer">You did not submit an answer for this question.</div>{% endif %}
+        {% if q.explanation %}<div class="result-review-explanation"><strong>Explanation</strong><p>{{ q.explanation }}</p></div>{% endif %}
+      </article>
+      {% endfor %}
+
+      {% for b in bonus_review %}
+      <article class="result-review-item bonus-review-item">
+        <div class="result-review-question-head"><span>Bonus · {{ b.topic }}</span><strong>Short answer</strong></div>
+        <h3>{{ b.prompt }}</h3>
+        <div class="result-short-answer-grid"><div><span>Your answer</span><strong>{{ b.answer_text or 'No answer' }}</strong></div><div><span>Accepted answer</span><strong>{{ b.accepted_answer }}</strong></div></div>
+      </article>
+      {% endfor %}
+    </div>
+  </section>
+  {% elif not ex.is_test %}
+  <section class="content-card result-review-locked">
+    <div><strong>Answer review is not available yet.</strong><p>Your instructor can enable response review when the class is ready to release the answer key.</p></div>
+  </section>
+  {% endif %}
 </div>
 {% endblock %}

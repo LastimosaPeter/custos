@@ -27,7 +27,7 @@ except ZoneInfoNotFoundError:
 
 SESSION_KEY_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
 QUESTION_BANK_VERSION = "private-import"
-DB_SCHEMA_VERSION = "1.0-goliathus-portable-r3"
+DB_SCHEMA_VERSION = "1.6.0-h-hercules-r24-workbench-template"
 
 # PostgreSQL connections are expensive when the database is on another host.
 # Keep a small per-process pool so repeated API polls and answer saves can reuse
@@ -87,6 +87,7 @@ CREATE TABLE IF NOT EXISTS batches (
     close_at TEXT,
     duration_minutes INTEGER NOT NULL DEFAULT 90,
     reveal_score INTEGER NOT NULL DEFAULT 1,
+    reveal_answers INTEGER NOT NULL DEFAULT 0,
     active INTEGER NOT NULL DEFAULT 1,
     assessment_type TEXT NOT NULL DEFAULT 'midterm'
 );
@@ -106,6 +107,7 @@ CREATE TABLE IF NOT EXISTS questions (
     explanation TEXT NOT NULL DEFAULT '',
     points INTEGER NOT NULL DEFAULT 1,
     position INTEGER,
+    workbench_section TEXT,
     active INTEGER NOT NULL DEFAULT 1,
     created_by TEXT NOT NULL DEFAULT 'builtin'
 );
@@ -148,6 +150,9 @@ CREATE TABLE IF NOT EXISTS exam_sessions (
     security_resume_required INTEGER NOT NULL DEFAULT 0,
     monitor_done INTEGER NOT NULL DEFAULT 0,
     last_question_index INTEGER NOT NULL DEFAULT 0,
+    scratch_note TEXT,
+    scratch_board_json TEXT,
+    lab_workbench_json TEXT,
     FOREIGN KEY(batch_id) REFERENCES batches(id)
 );
 
@@ -263,6 +268,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     max_attempts INTEGER NOT NULL DEFAULT 1,
     security_mode TEXT NOT NULL DEFAULT 'standard',
     reveal_score INTEGER NOT NULL DEFAULT 1,
+    reveal_answers INTEGER NOT NULL DEFAULT 0,
     shuffle_questions INTEGER NOT NULL DEFAULT 1,
     shuffle_options INTEGER NOT NULL DEFAULT 1,
     allowed_sections TEXT NOT NULL DEFAULT '',
@@ -274,6 +280,28 @@ CREATE TABLE IF NOT EXISTS assessments (
     FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
     FOREIGN KEY(created_by_instructor_id) REFERENCES instructors(id) ON DELETE SET NULL
 );
+
+CREATE TABLE IF NOT EXISTS assessment_notebooks (
+    assessment_id INTEGER PRIMARY KEY,
+    filename TEXT NOT NULL,
+    notebook_json TEXT NOT NULL,
+    package_name TEXT,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    updated_at TEXT NOT NULL,
+    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS assessment_notebook_assets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL,
+    asset_path TEXT NOT NULL,
+    mime_type TEXT NOT NULL DEFAULT 'application/octet-stream',
+    content_b64 TEXT NOT NULL,
+    UNIQUE(assessment_id, asset_path),
+    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_assessment_notebook_assets_assessment
+ON assessment_notebook_assets(assessment_id);
 
 CREATE TABLE IF NOT EXISTS programming_labs (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -377,6 +405,53 @@ CREATE TABLE IF NOT EXISTS coding_events (
     FOREIGN KEY(session_id) REFERENCES coding_sessions(id) ON DELETE CASCADE
 );
 CREATE INDEX IF NOT EXISTS idx_coding_events_session ON coding_events(session_id, id);
+
+CREATE TABLE IF NOT EXISTS classroom_rosters (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    assessment_id INTEGER NOT NULL,
+    course_id TEXT NOT NULL,
+    course_name TEXT NOT NULL DEFAULT '',
+    course_section TEXT NOT NULL DEFAULT '',
+    program TEXT NOT NULL,
+    class_section TEXT NOT NULL,
+    imported_by_admin_id INTEGER,
+    imported_at TEXT NOT NULL,
+    student_count INTEGER NOT NULL DEFAULT 0,
+    coursework_id TEXT,
+    coursework_title TEXT,
+    max_points REAL,
+    last_synced_at TEXT,
+    last_sync_summary TEXT,
+    UNIQUE(assessment_id, course_id),
+    FOREIGN KEY(assessment_id) REFERENCES assessments(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS classroom_roster_students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    roster_id INTEGER NOT NULL,
+    email TEXT NOT NULL,
+    first_name TEXT NOT NULL DEFAULT '',
+    last_name TEXT NOT NULL DEFAULT '',
+    google_user_id TEXT NOT NULL DEFAULT '',
+    UNIQUE(roster_id, email),
+    FOREIGN KEY(roster_id) REFERENCES classroom_rosters(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_classroom_roster_students_email ON classroom_roster_students(email);
+CREATE TABLE IF NOT EXISTS classroom_courses (
+    course_id TEXT PRIMARY KEY,
+    subject_id INTEGER NOT NULL,
+    course_name TEXT NOT NULL DEFAULT '',
+    program TEXT,
+    class_section TEXT,
+    updated_at TEXT NOT NULL,
+    manual INTEGER NOT NULL DEFAULT 0,
+    archived INTEGER NOT NULL DEFAULT 0,
+    FOREIGN KEY(subject_id) REFERENCES subjects(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS instructor_courses (
+    instructor_id INTEGER NOT NULL,
+    course_id TEXT NOT NULL,
+    PRIMARY KEY (instructor_id, course_id)
+);
 """
 
 # PostgreSQL uses SERIAL for auto-incrementing integer primary keys.
@@ -569,10 +644,38 @@ def migrate_schema(conn):
         "admin_bonus_score": "REAL",
         "last_question_index": "INTEGER NOT NULL DEFAULT 0",
         "assessment_id": "INTEGER",
+        "auth_method": "TEXT",
+        "google_sub": "TEXT",
+        "scratch_note": "TEXT",
+        "scratch_board_json": "TEXT",
+        "lab_workbench_json": "TEXT",
     }
     for name, definition in session_additions.items():
         if name not in session_cols:
             conn.execute(f"ALTER TABLE exam_sessions ADD COLUMN {name} {definition}")
+
+    subject_cols = _table_columns(conn, "subjects") if "subjects" in _table_names(conn) else set()
+    if subject_cols and "classroom_course_id" not in subject_cols:
+        conn.execute("ALTER TABLE subjects ADD COLUMN classroom_course_id TEXT")
+    if subject_cols:
+        conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_subjects_classroom_course ON subjects(classroom_course_id)")
+
+    course_cols = _table_columns(conn, "classroom_courses") if "classroom_courses" in _table_names(conn) else set()
+    if course_cols and "manual" not in course_cols:
+        conn.execute("ALTER TABLE classroom_courses ADD COLUMN manual INTEGER NOT NULL DEFAULT 0")
+    if course_cols and "archived" not in course_cols:
+        conn.execute("ALTER TABLE classroom_courses ADD COLUMN archived INTEGER NOT NULL DEFAULT 0")
+
+    roster_cols = _table_columns(conn, "classroom_rosters") if "classroom_rosters" in _table_names(conn) else set()
+    for name, definition in {
+        "coursework_id": "TEXT",
+        "coursework_title": "TEXT",
+        "max_points": "REAL",
+        "last_synced_at": "TEXT",
+        "last_sync_summary": "TEXT",
+    }.items():
+        if roster_cols and name not in roster_cols:
+            conn.execute(f"ALTER TABLE classroom_rosters ADD COLUMN {name} {definition}")
 
     coding_cols = _table_columns(conn, "coding_sessions") if "coding_sessions" in _table_names(conn) else set()
     for name, definition in {
@@ -616,11 +719,14 @@ def migrate_schema(conn):
         conn.execute("ALTER TABLE questions ADD COLUMN points INTEGER NOT NULL DEFAULT 1")
     if "position" not in question_cols:
         conn.execute("ALTER TABLE questions ADD COLUMN position INTEGER")
+    if "workbench_section" not in question_cols:
+        conn.execute("ALTER TABLE questions ADD COLUMN workbench_section TEXT")
 
     assessment_cols = _table_columns(conn, "assessments") if "assessments" in _table_names(conn) else set()
     for name, definition in {
         "display_type": "TEXT NOT NULL DEFAULT 'Assessment'",
         "reveal_score": "INTEGER NOT NULL DEFAULT 1",
+        "reveal_answers": "INTEGER NOT NULL DEFAULT 0",
         "shuffle_questions": "INTEGER NOT NULL DEFAULT 1",
         "shuffle_options": "INTEGER NOT NULL DEFAULT 1",
         "allowed_sections": "TEXT NOT NULL DEFAULT ''",
@@ -631,6 +737,8 @@ def migrate_schema(conn):
             conn.execute(f"ALTER TABLE assessments ADD COLUMN {name} {definition}")
 
     batch_cols = _table_columns(conn, "batches")
+    if "reveal_answers" not in batch_cols:
+        conn.execute("ALTER TABLE batches ADD COLUMN reveal_answers INTEGER NOT NULL DEFAULT 0")
     if "assessment_type" not in batch_cols:
         conn.execute("ALTER TABLE batches ADD COLUMN assessment_type TEXT NOT NULL DEFAULT 'midterm'")
     if "subject_id" not in batch_cols:
@@ -776,6 +884,11 @@ def _ensure_future_seed(conn, admin_username):
                ON CONFLICT(lab_id,position) DO NOTHING""",
             (lab["id"], task_starter, tests),
         )
+
+    # CSEC303 · Digital Image Processing. This seed is idempotent and does not
+    # replace question banks after real student attempts already exist.
+    from csec303_midterm_seed import ensure_csec303_midterm_seed
+    ensure_csec303_midterm_seed(conn)
 
 def init_db(admin_username="admin", admin_password="ChangeMe123!"):
     conn = connect()

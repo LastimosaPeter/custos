@@ -9,52 +9,68 @@
       <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
     </div>
 
-    <div class="eyebrow">CSDC101 · FUNDAMENTALS OF PROGRAMMING</div>
+    <div class="eyebrow">CSDC101 · CSEC303</div>
     <h1 id="custos-home-title">Custos</h1>
-    <h2>The Official Assessment Portal of CSDC101</h2>
-    <p class="custos-home-lead">A secure, proctored environment for CSDC101 assessments.</p>
+    <h2>The Official Assessment Portal of CSDC101 and CSEC303.</h2>
+    <p class="custos-home-lead">Custos brings quizzes, programming assessments, image-processing laboratories, saved progress, feedback, and class analytics into one place.</p>
     <div class="pwa-home-actions">
       <button type="button" class="secondary pwa-install-button" data-pwa-install hidden>Install Custos for Mobile Exam Mode</button>
       <span class="pwa-installed-note" data-pwa-installed hidden>Custos is running as an installed app.</span>
     </div>
+  </section>
 
-    <div class="custos-why">
-      <strong>Why Custos?</strong>
-      <p><em>Custos</em> comes from the Latin word for <strong>guardian</strong> or <strong>keeper</strong>. The name reflects the portal's purpose: to safeguard assessment integrity, protect each student's work, and give the instructor a clear and accountable view of every examination session.</p>
+  {% if google_student %}
+  <section class="custos-student-return-prompt">
+    <div><span>WELCOME BACK</span><strong>{{ google_student.name or google_student.email }}</strong><p>Continue saved assessments from your personal Custos classroom.</p></div>
+    <a class="primary button-link" href="{{ url_for('student_classroom') }}">Open My Assessments →</a>
+  </section>
+  {% endif %}
+
+  {% if not google_student %}
+  <section class="custos-student-signin-prompt" aria-label="Student sign in">
+    <div><span>STUDENT ACCESS</span><strong>Sign in first, then open My Assessments.</strong><p>Your Google account keeps your classroom assignments and saved attempts connected across devices.</p></div>
+    <a class="primary button-link" href="{{ url_for('student_login') }}">Student Sign In →</a>
+  </section>
+  {% endif %}
+
+  <section class="custos-subject-section" aria-labelledby="subject-question">
+    <div class="custos-role-heading">
+      <h2 id="subject-question">Which subject are you taking?</h2>
+      <p>Choose a subject when entering an instructor-issued key. Classroom-assigned work will appear automatically in My Assessments after sign-in.</p>
+    </div>
+    <div class="custos-subject-grid">
+      <a class="custos-subject-card csdc101" href="{{ url_for('student_login') }}">
+        <div class="custos-subject-logo-wrap"><img src="{{ url_for('static', filename='img/csdc101-logo.webp', v=app_asset_revision) }}" alt="CSDC101"></div>
+        <div><span>FUNDAMENTALS OF PROGRAMMING</span><h3>CSDC101</h3><p>Programming assessments, secure exam mode, calculator, and personal scratchpad.</p><strong>Continue to CSDC101 →</strong></div>
+      </a>
+      <a class="custos-subject-card csec303" href="{{ url_for('student_login') }}">
+        <div class="custos-subject-logo-wrap"><img src="{{ url_for('static', filename='img/csec303-logo.webp', v=app_asset_revision) }}" alt="CSEC303"></div>
+        <div><span>DIGITAL IMAGE PROCESSING</span><h3>CSEC303</h3><p>Image-processing assessments and open-tool laboratory investigations using Jupyter.</p><strong>Continue to CSEC303 →</strong></div>
+      </a>
     </div>
   </section>
 
-  <section class="custos-role-section" aria-labelledby="role-question">
-    <div class="custos-role-heading">
-      <span>CONTINUE TO CUSTOS</span>
-      <h2 id="role-question">Are you a Student or an Instructor?</h2>
-      <p>Choose your role to continue to the appropriate workspace.</p>
+  <section class="custos-instructor-prompt" aria-labelledby="instructor-question">
+    <div class="custos-instructor-prompt-copy">
+      <div>
+        <h2 id="instructor-question">Teaching with Custos?</h2>
+        <p>Manage assessments, monitor sessions, review analytics, and export scores for CSDC101 or CSEC303.</p>
+      </div>
     </div>
+    <a class="custos-instructor-button" href="{{ url_for('admin_login') }}">
+      <span>{{ 'Sign in with Google' if classroom_instructors else 'Instructor Sign In' }}</span>
+      <b aria-hidden="true">→</b>
+    </a>
+  </section>
 
-    <div class="custos-role-grid">
-      <a class="custos-role-card student" href="{{ url_for('student_login') }}">
-        <div class="custos-role-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><path d="M3 9.5 12 5l9 4.5-9 4.5-9-4.5Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M6.5 11.3v4.1c0 1.7 2.5 3.1 5.5 3.1s5.5-1.4 5.5-3.1v-4.1M21 9.5v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </div>
-        <div class="custos-role-copy">
-          <div class="custos-role-kicker">STUDENT</div>
-          <h3>Take an Assessment</h3>
-          <p>Enter your student information, ADNU email, and instructor-issued session key to begin.</p>
-          <span class="custos-role-action">Go to Student View <b>→</b></span>
-        </div>
-      </a>
-
-      <a class="custos-role-card instructor" href="{{ url_for('admin_login') }}">
-        <div class="custos-role-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24"><circle cx="9" cy="7.5" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M3.5 18.5v-1.6c0-2.5 2.2-4.5 5-4.5h1c2.8 0 5 2 5 4.5v1.6M16.5 8.5h4M18.5 6.5v4" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        </div>
-        <div class="custos-role-copy">
-          <div class="custos-role-kicker">INSTRUCTOR</div>
-          <h3>Manage Custos</h3>
-          <p>Configure assessments, monitor active sessions, review security events, and analyze results.</p>
-          <span class="custos-role-action">Go to Instructor View <b>→</b></span>
-        </div>
-      </a>
+  <section class="custos-info-grid" aria-label="About Custos and release trivia">
+    <div class="custos-info-card">
+      <strong>Why Custos?</strong>
+      <p><em>Custos</em> comes from the Latin word for <strong>guardian</strong> or <strong>keeper</strong>. The portal keeps assessments, progress, submissions, and course tools together in one place.</p>
+    </div>
+    <div class="custos-info-card release-fact">
+      <strong>Beetle fact · Hercules</strong>
+      <p><strong>Dynastes hercules</strong>, the Hercules beetle, is famous for the large horned males of the species. This release returns Custos to its beetle-themed version lineage.</p>
     </div>
   </section>
 </div>

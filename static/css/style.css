@@ -948,6 +948,28 @@ body:not(.exam-page) .page-shell{
   .code-line-text{padding-left:.85rem;padding-right:.9rem}
 }
 
+/* Normalize subject watermarks per theme and give CSEC303 more presence. */
+body.course-context .page-watermark,
+.exam-page .exam-page-watermark{
+  opacity:.09;
+}
+:root[data-theme="dark"] body.course-context .page-watermark,
+:root[data-theme="dark"] .exam-page .exam-page-watermark{
+  opacity:.08;
+}
+body[data-subject="CSEC303"].course-context .page-watermark,
+.exam-app[data-subject="CSEC303"] .exam-page-watermark{
+  width:360px;
+  max-width:40vw;
+}
+@media(max-width:800px){
+  body[data-subject="CSEC303"].course-context .page-watermark,
+  .exam-app[data-subject="CSEC303"] .exam-page-watermark{
+    width:250px;
+    max-width:50vw;
+  }
+}
+
 /* =========================================================
    Student identity fields
    ========================================================= */
@@ -1435,9 +1457,21 @@ body:not(.exam-page) .page-shell{
 /* =========================================================
    Theme-specific footer marks · compact institutional lockup
    ========================================================= */
+/* Light mode must always use the black watermark assets.
+   Dark mode must always use the white watermark assets. */
+.theme-image-light{display:block!important}
 .theme-image-dark{display:none!important}
 :root[data-theme="dark"] .theme-image-light{display:none!important}
 :root[data-theme="dark"] .theme-image-dark{display:block!important}
+
+.page-watermark.theme-image-light,
+.exam-page-watermark.theme-image-light{
+  filter:none!important;
+}
+.page-watermark.theme-image-dark,
+.exam-page-watermark.theme-image-dark{
+  filter:none!important;
+}
 
 /* Keep the three department marks visually subordinate to the course mark. */
 .institution-logos{
@@ -1470,9 +1504,9 @@ body:not(.exam-page) .page-shell{
 }
 
 /* White artwork supplied for dark mode; do not invert it. */
-:root[data-theme="dark"] .page-watermark.theme-image-dark{
+:root[data-theme="dark"] .page-watermark.theme-image-dark,
+:root[data-theme="dark"] .exam-page-watermark.theme-image-dark{
   filter:none!important;
-  opacity:1!important;
 }
 :root[data-theme="dark"] .institution-logos-dark{filter:none!important}
 
@@ -3920,6 +3954,39 @@ button,.button-link{ text-align:center; line-height:1.22; }
   .analysis-guide{grid-template-columns:1fr}
 }
 
+/* Google sign-in + Google Classroom roster (google_integration.py) */
+.google-signin-block{display:grid;justify-items:center;gap:10px;margin:22px 0 6px}
+.google-signin-block [data-google-button]{min-height:44px;width:100%;display:flex;justify-content:center}
+.google-error{margin:0;padding:10px 12px;border-radius:6px;border:1px solid #e3aaa5;background:#fff7f6;color:#7d1b13;font-size:14px}
+.google-identity{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;margin:18px 0 0;padding:12px 14px;border:1px solid var(--line);border-radius:8px;background:var(--soft);font-size:14px}
+.auth-divider{display:flex;align-items:center;gap:12px;margin:22px 0 0;color:var(--muted);font-size:13px}
+.auth-divider::before,.auth-divider::after{content:"";flex:1;border-top:1px solid var(--line)}
+.classroom-card table{margin:6px 0 14px}
+.classroom-steps{display:grid;gap:12px;justify-items:start}
+.classroom-import{display:flex;flex-wrap:wrap;align-items:end;gap:12px}
+.classroom-import label{display:grid;gap:6px;font-weight:700;font-size:14px}
+.classroom-import select{min-width:140px;padding:10px;border:1px solid #bfc8d2;border-radius:6px;font:inherit;background:#fff}
+.classroom-row-actions{display:flex;flex-wrap:wrap;gap:8px;align-items:end}
+.classroom-row-actions label{display:grid;gap:4px}
+.classroom-row-actions input{width:90px;padding:8px}
+.monitor-not-started{margin-top:18px}
+.monitor-not-started h3{margin:0 0 8px;font-size:16px}
+.monitor-not-started ul{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:6px}
+.monitor-not-started li{padding:8px 10px;border:1px solid var(--line);border-radius:6px;background:var(--panel);font-size:14px}
+.monitor-not-started li span{display:block;color:var(--muted);font-size:12px}
+.custos-role-grid.single{grid-template-columns:minmax(0,520px);justify-content:center}
+.link-button{background:none;border:0;padding:6px 0;color:var(--accent);font-weight:700;font-size:14px;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.teacher-link-block{display:grid;justify-items:center;gap:6px;margin:14px 0 4px}
+.instructor-take-exam{margin:18px 0 0;border:1px solid var(--line);border-radius:8px;padding:10px 14px}
+.instructor-take-exam summary{cursor:pointer;font-weight:700;color:var(--muted)}
+.classroom-class-list{display:grid;gap:12px}
+.classroom-class-row{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) auto;gap:10px;align-items:end;padding:12px;border:1px solid var(--line);border-radius:8px;background:var(--soft)}
+.classroom-class-row .classroom-class-name{grid-column:1/-1}
+.classroom-class-row label{display:grid;gap:4px;font-weight:700;font-size:13px}
+.classroom-class-row input,.classroom-class-row select{padding:9px 10px;border:1px solid #bfc8d2;border-radius:6px;font:inherit;background:#fff;min-width:0}
+@media (max-width:900px){.classroom-class-row{grid-template-columns:1fr 1fr}.classroom-class-row button{grid-column:1/-1}}
+.classroom-sync{justify-items:start;margin:0 0 14px}
+
 /* Custos 1.0 Goliathus · Analytics Dashboard refresh r6 */
 .analysis-page-heading{margin-bottom:8px}
 .analysis-card-head{align-items:flex-start}
@@ -3977,4 +4044,1157 @@ button,.button-link{ text-align:center; line-height:1.22; }
 @media (max-width: 560px){
   .analysis-histogram{grid-template-columns:repeat(3,minmax(0,1fr));row-gap:16px}
   .analysis-mini-stats-4up{grid-template-columns:1fr 1fr}
+}
+.classroom-filter-bar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px;margin:0 0 12px;font-size:14px;color:var(--muted)}
+.classroom-filter-links{display:flex;flex-wrap:wrap;gap:14px}
+.classroom-filter-links a{color:var(--accent);font-weight:700;text-decoration:none}
+.classroom-class-actions{display:flex;gap:8px;align-items:end}
+.classroom-add{margin-top:14px}
+.classroom-add summary{cursor:pointer;font-weight:700;color:var(--accent);margin-bottom:10px}
+.classroom-filter-bar label{display:grid;gap:4px;font-weight:700;font-size:13px;color:var(--ink)}
+.classroom-filter-bar select{padding:8px 10px;border:1px solid #bfc8d2;border-radius:6px;font:inherit;background:#fff}
+.classroom-filter-bar{justify-content:flex-start;align-items:end}
+.classroom-archived-toggle{display:flex!important;align-items:center;gap:6px;padding-bottom:8px}
+.classroom-archived-toggle input{width:auto}
+.classroom-filter-summary{flex-basis:100%}
+.classroom-pager{display:flex;align-items:center;justify-content:center;gap:14px;margin-top:14px}
+/* Owner "Show all" side toggle (templates/_owner_view_toggle.html) */
+.owner-view-toggle{position:fixed;right:0;top:50%;transform:translateY(-50%);z-index:60}
+.owner-view-toggle>button{writing-mode:vertical-rl;transform:rotate(180deg);border-radius:0 8px 8px 0;padding:14px 9px;box-shadow:0 4px 14px #0002}
+.owner-view-toggle.is-all{top:auto;bottom:74px;transform:none;right:14px}
+.owner-view-toggle.is-all form{display:flex;align-items:center;gap:10px;padding:8px 8px 8px 14px;background:#fff4d6;color:#6b4a00;border:1px solid #f0d58a;border-radius:10px;box-shadow:0 4px 14px #0002;font-size:14px}
+.owner-view-dialog{border:1px solid var(--line);border-radius:12px;padding:22px 24px;max-width:440px;width:calc(100% - 32px)}
+.owner-view-dialog::backdrop{background:#0006}
+.owner-view-dialog h2{margin:0 0 8px;font-size:20px}
+.owner-view-dialog p{color:var(--muted);line-height:1.5;margin:0 0 18px}
+.owner-view-dialog-actions{display:flex;justify-content:flex-end;gap:10px}
+
+/* =========================================================
+   Custos 1.0 · Goliathus r17 · CSDC101 + CSEC303 integration
+   ========================================================= */
+
+/* Course-aware surfaces -------------------------------------------------- */
+body[data-subject="CSEC303"]:not(.exam-page){
+  background-color:#f7f6fb;
+  background-image:url("../img/csec303-background.webp");
+  background-position:center center;
+  background-size:cover;
+  background-repeat:no-repeat;
+  background-attachment:fixed;
+}
+body[data-subject="CSEC303"]:not(.exam-page)::before{
+  background:linear-gradient(180deg,rgba(255,255,255,.09),rgba(250,248,255,.20));
+}
+:root[data-theme="dark"] body[data-subject="CSEC303"]:not(.exam-page)::before{
+  background:linear-gradient(180deg,rgba(10,12,18,.28),rgba(10,12,18,.46));
+}
+
+/* Home navbar carries both course marks, kept intentionally compact. */
+.brand-subject-pair{display:inline-flex;align-items:center;gap:8px;min-width:0;white-space:nowrap}
+.brand-course-divider{font-size:14px;font-weight:900;color:#8c98aa;line-height:1;flex:0 0 auto}
+.site-header .brand-subject-pair .nav-course-logo{width:92px!important;max-width:14vw!important;flex:0 1 92px!important;height:auto;object-fit:contain}
+.site-header .nav-course-logo.single{width:126px!important;max-width:24vw!important;flex:0 1 126px!important}
+
+/* Subject chooser -------------------------------------------------------- */
+.custos-subject-section{
+  background:rgba(255,255,255,.94);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:24px;
+  box-shadow:0 12px 34px rgba(35,52,82,.08);
+}
+.custos-subject-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.custos-subject-card{
+  position:relative;
+  display:grid;
+  grid-template-columns:150px minmax(0,1fr);
+  gap:18px;
+  align-items:center;
+  min-height:170px;
+  padding:20px;
+  border:1px solid var(--line);
+  border-radius:16px;
+  background:rgba(255,255,255,.96);
+  color:var(--ink);
+  text-decoration:none;
+  overflow:hidden;
+  transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;
+}
+.custos-subject-card::after{content:"";position:absolute;inset:auto 0 0;height:4px;background:var(--accent)}
+.custos-subject-card.csec303::after{background:linear-gradient(90deg,#cb46eb,#493bdb)}
+.custos-subject-card:hover{transform:translateY(-2px);border-color:#9ebde7;box-shadow:0 14px 30px rgba(36,65,108,.12)}
+.custos-subject-logo-wrap{display:grid;place-items:center;min-height:96px;padding:12px;border-radius:13px;background:#f7f9fd}
+.custos-subject-card.csec303 .custos-subject-logo-wrap{background:linear-gradient(135deg,#fbf4ff,#f4f1ff)}
+.custos-subject-logo-wrap img{display:block;width:100%;max-width:138px;height:auto;object-fit:contain}
+.custos-subject-card span{display:block;margin-bottom:5px;font-size:10px;letter-spacing:.08em;font-weight:850;color:var(--muted)}
+.custos-subject-card h3{margin:0 0 7px;font-size:24px;color:var(--ink)}
+.custos-subject-card p{margin:0 0 11px;color:var(--muted);font-size:12px;line-height:1.55}
+.custos-subject-card strong{font-size:12px;color:var(--accent)}
+.custos-subject-card.csec303 strong{color:#6736d9}
+
+/* Subject identity on student login ------------------------------------- */
+.student-subject-identity{display:flex;align-items:center;justify-content:center;gap:13px;margin:4px auto 12px;padding:10px 14px;width:min(390px,100%);border:1px solid var(--line);border-radius:12px;background:var(--soft)}
+.student-subject-identity img{width:118px;max-height:46px;object-fit:contain}
+.student-subject-identity div{display:grid;gap:2px;text-align:left}
+.student-subject-identity strong{font-size:13px;color:var(--ink)}
+.student-subject-identity span{font-size:10px;color:var(--muted)}
+.student-subject-switcher{display:grid;grid-template-columns:1fr 1fr;gap:7px;width:min(330px,100%);margin:0 auto 15px;padding:4px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.student-subject-switcher a{display:flex;align-items:center;justify-content:center;min-height:34px;border-radius:7px;text-decoration:none;color:var(--muted);font-size:11px;font-weight:800}
+.student-subject-switcher a.active{background:var(--panel);color:var(--accent);box-shadow:0 2px 8px rgba(30,50,80,.08)}
+
+/* CSEC303 examination identity ------------------------------------------ */
+.exam-app[data-subject="CSEC303"]{
+  --accent:#6b3bd4;
+  --accent-dark:#5128b6;
+  background-image:linear-gradient(rgba(255,255,255,.88),rgba(255,255,255,.88)),url("../img/csec303-background.webp");
+  background-position:center;
+  background-size:cover;
+}
+.exam-app[data-subject="CSEC303"] .exam-header{background:rgba(255,255,255,.96);color:var(--ink);border-bottom:1px solid #dcd7e8}
+.exam-app[data-subject="CSEC303"] .exam-custos-wordmark{color:var(--ink)}
+.exam-app[data-subject="CSEC303"] .exam-custos-wordmark span{color:var(--ink)}
+.exam-app[data-subject="CSEC303"] .exam-brand-divider{background:#dcd7e8}
+.exam-app[data-subject="CSEC303"] .question-stage{background:rgba(255,255,255,.96)}
+.exam-app[data-subject="CSEC303"] .question-nav{background:rgba(248,247,252,.97)}
+.exam-app[data-subject="CSEC303"] .exam-footer{background:rgba(251,250,253,.97)}
+.exam-app[data-subject="CSEC303"] .answer-choice:has(input:checked){background:#f4efff;border-color:#7b4dde;box-shadow:inset 3px 0 0 #6b3bd4}
+.exam-app[data-subject="CSEC303"] .qnav.current{outline-color:#6b3bd433;border-color:#6b3bd4}
+.lab-kit-mini{min-height:34px;padding:7px 11px!important;white-space:nowrap}
+.lab-case-media{max-width:900px;margin:20px 0 8px;border:1px solid var(--line);border-radius:13px;overflow:hidden;background:var(--soft)}
+.lab-case-media img{display:block;width:100%;max-height:350px;object-fit:contain;background:#111827}
+.lab-case-media figcaption{display:flex;justify-content:space-between;gap:12px;padding:10px 13px;font-size:11px;color:var(--muted)}
+.lab-case-media figcaption strong{color:var(--ink)}
+
+/* CSDC101 in-exam tool drawer ------------------------------------------- */
+.exam-tools-toggle{min-height:34px;padding:7px 12px!important;white-space:nowrap}
+.exam-tools-panel{
+  position:fixed;
+  top:68px;
+  right:12px;
+  bottom:72px;
+  width:min(430px,calc(100vw - 24px));
+  z-index:930;
+  display:flex;
+  flex-direction:column;
+  background:var(--panel);
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:0 22px 54px rgba(18,32,59,.22);
+  transform:translateX(calc(100% + 28px));
+  opacity:0;
+  pointer-events:none;
+  transition:transform .18s ease,opacity .18s ease;
+  overflow:hidden;
+}
+.exam-tools-panel.active{transform:translateX(0);opacity:1;pointer-events:auto}
+.exam-tools-backdrop{display:none;position:fixed;inset:0;z-index:920;border:0;padding:0;background:rgba(12,20,33,.28)}
+.exam-tools-backdrop.active{display:block}
+.exam-tools-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 15px;border-bottom:1px solid var(--line);background:var(--soft)}
+.exam-tools-header strong,.exam-tools-header small{display:block}.exam-tools-header small{margin-top:2px;color:var(--muted);font-size:10px}
+.exam-tools-scroll{flex:1;min-height:0;overflow:auto;padding:12px;display:grid;gap:12px;align-content:start}
+.exam-tool-card{border:1px solid var(--line);border-radius:12px;padding:13px;background:var(--panel)}
+.exam-tool-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:10px}
+.exam-tool-title span{font-size:13px;font-weight:850;color:var(--ink)}
+.exam-tool-title small{font-size:9px;color:var(--muted)}
+.calculator-display{height:48px;text-align:right;font-size:18px;font-weight:750;font-family:"JetBrains Mono",Consolas,monospace;margin-bottom:8px}
+.calculator-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.calculator-grid button{min-height:38px;padding:7px;border:1px solid var(--line);background:var(--soft);color:var(--ink);border-radius:8px;font-size:13px}
+.calculator-grid button:hover{border-color:#9fb8d8;background:#edf5ff}
+.scratch-tool textarea{min-height:128px;resize:vertical;line-height:1.5}
+.scratch-save-row{display:flex;justify-content:space-between;align-items:center;gap:9px;margin-top:8px}
+.jam-toolbar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:9px}.jam-toolbar button{padding:7px 9px;font-size:10px}
+.jam-toolbar button.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.jam-canvas-wrap{position:relative;width:100%;aspect-ratio:5/3;border:1px solid var(--line);border-radius:9px;overflow:hidden;background:#fff;touch-action:none}
+#jamCanvas{display:block;width:100%;height:100%;touch-action:none;cursor:crosshair}
+
+/* Dark theme additions --------------------------------------------------- */
+:root[data-theme="dark"] .custos-subject-section,
+:root[data-theme="dark"] .custos-subject-card,
+:root[data-theme="dark"] .student-subject-identity,
+:root[data-theme="dark"] .student-subject-switcher,
+:root[data-theme="dark"] .exam-tools-panel,
+:root[data-theme="dark"] .exam-tool-card{background:#131d29;border-color:#33465f}
+:root[data-theme="dark"] .custos-subject-logo-wrap{background:#182334}
+:root[data-theme="dark"] .custos-subject-card.csec303 .custos-subject-logo-wrap{background:#211b35}
+:root[data-theme="dark"] .student-subject-switcher a.active{background:#202d3e}
+:root[data-theme="dark"] .exam-tools-header{background:#172332}
+:root[data-theme="dark"] .calculator-grid button{background:#172332;border-color:#33465f;color:#edf3ff}
+:root[data-theme="dark"] .jam-canvas-wrap{background:#fff}
+:root[data-theme="dark"] .exam-app[data-subject="CSEC303"]{background-image:linear-gradient(rgba(13,17,25,.90),rgba(13,17,25,.90)),url("../img/csec303-background.webp")}
+:root[data-theme="dark"] .exam-app[data-subject="CSEC303"] .exam-header,
+:root[data-theme="dark"] .exam-app[data-subject="CSEC303"] .question-stage,
+:root[data-theme="dark"] .exam-app[data-subject="CSEC303"] .question-nav,
+:root[data-theme="dark"] .exam-app[data-subject="CSEC303"] .exam-footer{background:#111923;color:#eef3fb;border-color:#334258}
+:root[data-theme="dark"] .exam-app[data-subject="CSEC303"] .exam-custos-wordmark,
+:root[data-theme="dark"] .exam-app[data-subject="CSEC303"] .exam-custos-wordmark span{color:#eef3fb}
+
+@media(max-width:900px){
+  .custos-subject-grid{grid-template-columns:1fr}
+  .custos-subject-card{grid-template-columns:130px minmax(0,1fr)}
+  .site-header .brand-subject-pair .nav-course-logo{width:78px!important;max-width:15vw!important;flex-basis:78px!important}
+}
+@media(max-width:700px){
+  .site-header .brand-subject-pair{gap:4px;min-width:0;overflow:hidden}
+  .site-header .brand-subject-pair .nav-course-logo{width:62px!important;max-width:18vw!important;flex-basis:62px!important}
+  .site-header .nav-course-logo.single{width:88px!important;max-width:27vw!important;flex-basis:88px!important}
+  .brand-course-divider{font-size:11px}
+  .custos-subject-section{padding:15px 13px;border-radius:16px}
+  .custos-subject-card{grid-template-columns:1fr;gap:10px;padding:15px;min-height:0}
+  .custos-subject-logo-wrap{min-height:68px;padding:9px}
+  .custos-subject-logo-wrap img{max-width:118px}
+  .student-subject-identity{justify-content:flex-start}
+  .student-subject-identity img{width:98px}
+  .exam-tools-panel{top:68px;right:8px;bottom:72px;width:calc(100vw - 16px);border-radius:13px}
+  .lab-case-media figcaption{flex-direction:column;gap:3px}
+}
+@media(max-width:390px){
+  .site-header .brand-subject-pair .nav-course-logo{width:52px!important;max-width:16vw!important;flex-basis:52px!important}
+  .site-header .brand-course-divider{display:none}
+}
+/* CSEC303 uses its uploaded purple course identity throughout its assessment pages. */
+body[data-subject="CSEC303"]{--accent:#6938d3;--accent-dark:#5127b4}
+
+/* =========================================================
+   Custos 1.0 · Goliathus r18 · CSEC303 notebook workbench
+   ========================================================= */
+/* The exam shell stays fixed so the navigator/footer remain visible, while the
+   question and toolkit panes scroll independently. This removes the need to
+   zoom out on long laboratory questions. */
+.exam-page .question-stage{min-height:0;overflow:hidden}
+.exam-page .question-panel{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable;overscroll-behavior:contain}
+.exam-page .exam-footer{flex:0 0 66px}
+.exam-app[data-subject="CSEC303"] .question-panel{padding:28px 34px}
+.exam-app[data-subject="CSEC303"] .question-panel h1{max-width:100%;font-size:20px}
+.exam-app[data-subject="CSEC303"] .code-block,
+.exam-app[data-subject="CSEC303"] .answers,
+.exam-app[data-subject="CSEC303"] .lab-case-media{max-width:100%}
+.exam-app[data-subject="CSEC303"] .lab-case-media img{max-height:260px}
+
+/* Three-pane laboratory desktop: navigator | question | notebook. */
+.exam-app[data-lab-toolkit="1"] .exam-workspace{
+  grid-template-columns:230px minmax(460px,1fr) minmax(350px,390px);
+  min-height:0;
+  overflow:hidden;
+}
+.exam-app[data-lab-toolkit="1"] .question-nav{min-height:0}
+.lab-toolkit-panel{
+  min-width:0;
+  min-height:0;
+  display:flex;
+  flex-direction:column;
+  background:rgba(249,248,253,.98);
+  border-left:1px solid #d9d5e6;
+  overflow:hidden;
+  z-index:40;
+}
+.lab-toolkit-header{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;padding:13px 14px 11px;border-bottom:1px solid var(--line);background:rgba(255,255,255,.96)}
+.lab-toolkit-header>div{min-width:0}
+.lab-toolkit-kicker{display:block;font-size:9px;font-weight:900;letter-spacing:.09em;color:#6b3bd4;margin-bottom:3px}
+.lab-toolkit-header strong{display:block;color:var(--ink);font-size:14px;line-height:1.25}
+.lab-toolkit-header small{display:block;margin-top:3px;color:var(--muted);font-size:9px;line-height:1.35}
+.lab-toolkit-close{display:none}
+.lab-toolkit-toggle{display:none;min-height:34px;padding:7px 11px!important;white-space:nowrap}
+.lab-toolkit-tabs{display:grid;grid-template-columns:1.25fr repeat(5,.75fr);gap:5px;padding:8px 10px;border-bottom:1px solid var(--line);background:rgba(248,247,252,.98)}
+.lab-toolkit-tab{min-width:0;min-height:30px;padding:5px 6px;border:1px solid #d5d0e1;border-radius:7px;background:#fff;color:#596477;font-size:9px;font-weight:850;cursor:pointer}
+.lab-toolkit-tab:hover{border-color:#9d85d6;color:#5b34bb}
+.lab-toolkit-tab.active{background:#6b3bd4;border-color:#6b3bd4;color:#fff;box-shadow:0 5px 12px rgba(85,50,170,.18)}
+.lab-toolkit-scroll{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px;scrollbar-gutter:stable;overscroll-behavior:contain}
+.lab-notebook-section{display:grid;gap:10px}
+.lab-notebook-section-heading{display:grid;grid-template-columns:minmax(0,1fr) 96px;gap:10px;align-items:center;padding:10px;border:1px solid #ddd8e9;border-radius:10px;background:linear-gradient(135deg,#fff,#f5f1ff)}
+.lab-notebook-section-heading>div{min-width:0}
+.lab-notebook-section-heading span{display:block;font-size:8px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;color:#8261c5}
+.lab-notebook-section-heading h2{margin:3px 0 0;font-size:14px;line-height:1.25;color:var(--ink)}
+.lab-notebook-section-heading img{display:block;width:96px;height:66px;object-fit:cover;border-radius:7px;background:#111827}
+.lab-notebook-markdown{padding:10px 11px;border:1px solid var(--line);border-radius:9px;background:#fff;color:#354157;font-size:10.5px;line-height:1.55}
+.lab-notebook-markdown h2,.lab-notebook-markdown h3,.lab-notebook-markdown h4{margin:0 0 7px;color:var(--ink);line-height:1.3}
+.lab-notebook-markdown h2{font-size:14px}.lab-notebook-markdown h3{font-size:13px}.lab-notebook-markdown h4{font-size:12px}
+.lab-notebook-markdown p{margin:0 0 7px}.lab-notebook-markdown p:last-child{margin-bottom:0}
+.lab-notebook-markdown ul{margin:6px 0 8px;padding-left:18px}.lab-notebook-markdown li{margin:3px 0}
+.lab-notebook-markdown code{font-family:"JetBrains Mono",Consolas,monospace;font-size:.94em;background:#f1eef8;padding:1px 4px;border-radius:4px;color:#5b34bb}
+.lab-notebook-code{border:1px solid #27364a;border-radius:9px;overflow:hidden;background:#101827;color:#e9f0fa}
+.lab-notebook-code summary{cursor:pointer;padding:8px 10px;background:#172337;color:#bfcce0;font-size:9px;font-weight:850;letter-spacing:.04em;text-transform:uppercase}
+.lab-notebook-code pre{margin:0;padding:11px 12px;overflow:auto;max-height:290px;font:10.5px/1.5 "JetBrains Mono",Consolas,monospace;white-space:pre;tab-size:4}
+.lab-notebook-code code{color:#eef4ff}
+.lab-toolkit-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px;padding:9px 10px;border-top:1px solid var(--line);background:rgba(255,255,255,.98)}
+.lab-toolkit-actions .button-link{min-height:34px;padding:7px 8px;font-size:9px;text-align:center;justify-content:center}
+.lab-toolkit-backdrop{display:none}
+
+:root[data-theme="dark"] .lab-toolkit-panel{background:rgba(16,23,34,.99);border-color:#334258}
+:root[data-theme="dark"] .lab-toolkit-header,
+:root[data-theme="dark"] .lab-toolkit-actions{background:#111923;border-color:#334258}
+:root[data-theme="dark"] .lab-toolkit-tabs{background:#151e2b;border-color:#334258}
+:root[data-theme="dark"] .lab-toolkit-tab{background:#1b2635;border-color:#3b4b61;color:#bac5d5}
+:root[data-theme="dark"] .lab-toolkit-tab.active{background:#7144d9;border-color:#7144d9;color:#fff}
+:root[data-theme="dark"] .lab-notebook-section-heading{background:linear-gradient(135deg,#1b2635,#211b35);border-color:#3a4055}
+:root[data-theme="dark"] .lab-notebook-markdown{background:#141e2b;border-color:#334258;color:#c4cfde}
+:root[data-theme="dark"] .lab-notebook-markdown code{background:#29233b;color:#c9b7ff}
+
+/* On ordinary laptops/tablets the same toolkit becomes a drawer so the question
+   keeps a comfortable reading width. */
+@media(max-width:1280px){
+  .exam-app[data-lab-toolkit="1"] .exam-workspace{grid-template-columns:230px minmax(0,1fr)}
+  .lab-toolkit-toggle{display:inline-flex;align-items:center;justify-content:center}
+  .lab-toolkit-panel{position:fixed;top:68px;right:10px;bottom:72px;width:min(520px,calc(100vw - 20px));border:1px solid var(--line);border-radius:13px;box-shadow:0 22px 54px rgba(18,32,59,.25);transform:translateX(calc(100% + 28px));opacity:0;pointer-events:none;transition:transform .18s ease,opacity .18s ease;z-index:935}
+  .lab-toolkit-panel.drawer-open{transform:translateX(0);opacity:1;pointer-events:auto}
+  .lab-toolkit-close{display:inline-flex}
+  .lab-toolkit-backdrop{display:none;position:fixed;inset:0;z-index:930;border:0;padding:0;background:rgba(12,20,33,.30)}
+  .lab-toolkit-backdrop.active{display:block}
+}
+@media(max-width:800px){
+  .exam-app[data-lab-toolkit="1"] .exam-workspace{grid-template-columns:1fr}
+  .exam-app[data-subject="CSEC303"] .question-panel{padding:18px 16px 22px}
+  .exam-app[data-subject="CSEC303"] .lab-case-media img{max-height:220px}
+  .lab-toolkit-panel{top:62px;right:7px;bottom:68px;width:calc(100vw - 14px)}
+  .lab-toolkit-tabs{grid-template-columns:repeat(3,1fr)}
+  .lab-notebook-section-heading{grid-template-columns:1fr}
+  .lab-notebook-section-heading img{width:100%;height:120px}
+}
+
+/* Custos 1.5.1.e Canary · in-browser CSEC303 Python workbench */
+.lab-python-runtime{display:grid;gap:9px;padding:11px 12px;border-bottom:1px solid #ded9eb;background:linear-gradient(135deg,#fbf9ff,#f1ebff)}
+.lab-python-runtime-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start}
+.lab-python-runtime-top>div:first-child{min-width:0}
+.lab-python-runtime-kicker{display:block;font-size:8px;font-weight:900;letter-spacing:.09em;color:#7750c5}
+.lab-python-runtime-top strong{display:block;margin-top:3px;font-size:12px;color:var(--ink)}
+.lab-python-runtime-top small{display:block;margin-top:2px;font-size:9px;color:var(--muted);line-height:1.35}
+.lab-python-runtime-actions{display:flex;gap:6px;flex:0 0 auto}
+.lab-python-runtime-actions button{min-height:32px;padding:6px 9px;font-size:9px}
+.lab-python-runtime-status{display:flex;align-items:center;gap:7px;font-size:9px;line-height:1.4;color:#56637a}
+.lab-runtime-dot{width:8px;height:8px;border-radius:50%;background:#a8b0bd;box-shadow:0 0 0 3px rgba(168,176,189,.13);flex:0 0 auto}
+.lab-runtime-dot[data-state="loading"]{background:#e5a22c;box-shadow:0 0 0 3px rgba(229,162,44,.14);animation:labRuntimePulse 1s ease-in-out infinite}
+.lab-runtime-dot[data-state="ready"]{background:#25a269;box-shadow:0 0 0 3px rgba(37,162,105,.14)}
+.lab-runtime-dot[data-state="error"]{background:#c93a34;box-shadow:0 0 0 3px rgba(201,58,52,.14)}
+@keyframes labRuntimePulse{50%{opacity:.45}}
+.lab-python-progress{height:4px;border-radius:999px;overflow:hidden;background:#ddd5ef}
+.lab-python-progress>span{display:block;width:35%;height:100%;border-radius:inherit;background:linear-gradient(90deg,#a948ed,#6037dc);animation:labPythonLoading 1.2s linear infinite}
+@keyframes labPythonLoading{from{transform:translateX(-110%)}to{transform:translateX(320%)}}
+.lab-python-runtime-note{margin:0;font-size:8.5px;line-height:1.45;color:#7b6b92}
+.lab-python-cell{border:1px solid #2b3950;border-radius:10px;overflow:hidden;background:#0f1726;box-shadow:0 8px 18px rgba(18,27,42,.09)}
+.lab-python-cell-toolbar{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:7px 8px 7px 10px;background:#172338;border-bottom:1px solid #2b3950}
+.lab-python-cell-toolbar>div:first-child{min-width:0}
+.lab-python-cell-toolbar span{display:block;color:#dbe8fb;font-size:9px;font-weight:850;letter-spacing:.05em;text-transform:uppercase}
+.lab-python-cell-toolbar small{display:block;margin-top:2px;color:#8192ac;font-size:8px}
+.lab-python-cell-actions{display:flex;gap:5px;flex:0 0 auto}
+.lab-python-cell-actions button{min-height:28px;padding:4px 8px;font-size:8px;border-radius:6px}
+.lab-python-editor{display:block;width:100%;min-height:150px;max-height:430px;resize:vertical;margin:0;border:0;border-radius:0;padding:11px 12px;background:#101827;color:#edf4ff;font:10.5px/1.55 "JetBrains Mono",Consolas,monospace;tab-size:4;white-space:pre;overflow:auto;outline:none}
+.lab-python-editor:focus{box-shadow:inset 0 0 0 2px rgba(139,92,246,.55)}
+.lab-python-cell.running{border-color:#a873ef}
+.lab-python-cell.cell-success{border-color:#3a8768}
+.lab-python-cell.cell-error{border-color:#c95555}
+.lab-python-cell-output{border-top:1px solid #31425b;background:#09111e}
+.lab-python-output-label{display:flex;justify-content:space-between;align-items:center;padding:6px 9px;border-bottom:1px solid #26354a;color:#93a7c4;font-size:8px;font-weight:850;text-transform:uppercase;letter-spacing:.07em}
+.lab-python-clear-output{appearance:none;border:0;background:transparent;color:#93a7c4;font:inherit;cursor:pointer;padding:2px 4px}
+.lab-python-clear-output:hover{color:#fff}
+.lab-python-cell-output pre{margin:0;max-height:320px;overflow:auto;padding:10px 12px;color:#dce8f8;background:#09111e;font:9.5px/1.55 "JetBrains Mono",Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}
+.lab-python-cell-output pre.error{color:#ffb9b4}
+.lab-python-plots{display:grid;gap:8px;padding:0 9px 9px}
+.lab-python-plots:empty{display:none}
+.lab-python-plots figure{margin:0;padding:6px;border:1px solid #31425b;border-radius:8px;background:#fff}
+.lab-python-plots img{display:block;width:100%;height:auto;max-height:360px;object-fit:contain;border-radius:5px}
+:root[data-theme="dark"] .lab-python-runtime{background:linear-gradient(135deg,#1b1930,#201939);border-color:#3a4055}
+:root[data-theme="dark"] .lab-python-runtime-status{color:#b9c2d2}
+:root[data-theme="dark"] .lab-python-runtime-note{color:#aa9dbd}
+@media (min-width:1281px){
+  .exam-app[data-lab-toolkit="1"] .exam-workspace{grid-template-columns:230px minmax(460px,1fr) minmax(390px,470px)}
+}
+@media (max-width:760px){
+  .lab-python-runtime-top{display:grid}
+  .lab-python-runtime-actions{width:100%}
+  .lab-python-runtime-actions button{flex:1}
+  .lab-python-cell-toolbar{align-items:flex-start}
+  .lab-python-cell-actions{display:grid;grid-template-columns:1fr 1fr}
+  .lab-python-editor{min-height:210px;font-size:10px}
+}
+
+/* =========================================================
+   Custos 1.5.1.e Canary · CSEC303 Workbench Delivery r19
+   Navigator as drawer · equal split · focused workbench · image zoom
+   ========================================================= */
+.exam-app[data-lab-toolkit="1"]{--lab-header-height:66px;--lab-pane-gap:0px}
+.exam-app[data-lab-toolkit="1"] .exam-workspace{
+  position:relative;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;
+  gap:var(--lab-pane-gap);
+  overflow:hidden;
+}
+.exam-app[data-lab-toolkit="1"] .question-stage{grid-column:1;min-width:0;border-right:1px solid var(--line)}
+.exam-app[data-lab-toolkit="1"] .lab-toolkit-panel{grid-column:2;min-width:0;width:auto;position:relative;inset:auto;transform:none;opacity:1;pointer-events:auto;border-radius:0;box-shadow:none}
+
+/* Question Navigator is always an on-demand sidebar for CSEC303 labs. */
+.exam-app[data-lab-toolkit="1"] .question-nav{
+  display:block!important;
+  position:fixed;
+  left:0;
+  top:var(--lab-header-height);
+  bottom:0;
+  width:min(286px,86vw);
+  z-index:970;
+  transform:translateX(-104%);
+  transition:transform .18s ease;
+  box-shadow:18px 0 44px rgba(14,24,42,.18);
+  border-right:1px solid var(--line);
+  padding:18px;
+}
+.exam-app[data-lab-toolkit="1"] .question-nav.mobile-open{transform:translateX(0)}
+.exam-app[data-lab-toolkit="1"] .mobile-question-nav-header{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.exam-app[data-lab-toolkit="1"] .question-nav-close{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;padding:0;border-radius:8px}
+.exam-app[data-lab-toolkit="1"] .question-nav-backdrop{
+  display:none;
+  position:fixed;
+  inset:var(--lab-header-height) 0 0;
+  z-index:965;
+  border:0;
+  background:rgba(9,18,31,.34);
+  backdrop-filter:blur(2px);
+}
+.exam-app[data-lab-toolkit="1"] .question-nav-backdrop.active{display:block}
+
+/* Equal panes are the default. Question / Workbench focus modes are optional. */
+.exam-app[data-lab-toolkit="1"][data-lab-layout="split"] .question-stage,
+.exam-app[data-lab-toolkit="1"][data-lab-layout="split"] .lab-toolkit-panel{display:flex}
+
+.exam-app[data-lab-toolkit="1"][data-lab-layout="question"] .exam-workspace{grid-template-columns:minmax(0,1fr)!important}
+.exam-app[data-lab-toolkit="1"][data-lab-layout="question"] .question-stage{grid-column:1;border-right:0}
+.exam-app[data-lab-toolkit="1"][data-lab-layout="question"] .lab-toolkit-panel{
+  position:fixed;
+  top:calc(var(--lab-header-height) + 8px);
+  right:10px;
+  bottom:10px;
+  width:min(720px,calc(100vw - 20px));
+  z-index:940;
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:0 24px 60px rgba(13,25,44,.28);
+  transform:translateX(calc(100% + 28px));
+  opacity:0;
+  pointer-events:none;
+  transition:transform .18s ease,opacity .18s ease;
+}
+.exam-app[data-lab-toolkit="1"][data-lab-layout="question"] .lab-toolkit-panel.drawer-open{transform:translateX(0);opacity:1;pointer-events:auto}
+.exam-app[data-lab-toolkit="1"][data-lab-layout="question"] .lab-toolkit-toggle{display:inline-flex}
+.exam-app[data-lab-toolkit="1"][data-lab-layout="question"] .lab-toolkit-close{display:inline-flex}
+
+.exam-app[data-lab-toolkit="1"][data-lab-layout="workbench"] .exam-workspace{grid-template-columns:minmax(0,1fr)!important}
+.exam-app[data-lab-toolkit="1"][data-lab-layout="workbench"] .lab-toolkit-panel{grid-column:1;border-left:0}
+.exam-app[data-lab-toolkit="1"][data-lab-layout="workbench"] .question-stage{
+  position:fixed;
+  left:12px;
+  top:calc(var(--lab-header-height) + 10px);
+  bottom:10px;
+  width:min(680px,calc(100vw - 24px));
+  z-index:945;
+  border:1px solid var(--line);
+  border-radius:14px;
+  box-shadow:0 24px 60px rgba(13,25,44,.28);
+  transform:translateX(calc(-100% - 30px));
+  opacity:0;
+  pointer-events:none;
+  transition:transform .18s ease,opacity .18s ease;
+  overflow:hidden;
+}
+.exam-app[data-lab-toolkit="1"].lab-question-drawer-open .question-stage{transform:translateX(0);opacity:1;pointer-events:auto}
+.lab-question-peek{
+  display:none;
+  position:fixed;
+  left:12px;
+  top:calc(var(--lab-header-height) + 12px);
+  z-index:938;
+  align-items:center;
+  gap:7px;
+  min-height:36px;
+  padding:7px 11px;
+  border:1px solid #cabbee;
+  border-radius:9px;
+  background:#fff;
+  color:#5d36bc;
+  font-size:11px;
+  font-weight:850;
+  box-shadow:0 8px 22px rgba(62,34,128,.15);
+}
+.lab-question-peek.visible{display:inline-flex}
+.lab-question-backdrop{
+  display:none;
+  position:fixed;
+  inset:var(--lab-header-height) 0 0;
+  z-index:940;
+  border:0;
+  background:rgba(9,18,31,.28);
+  backdrop-filter:blur(2px);
+}
+.lab-question-backdrop.active{display:block}
+
+/* Consistent pane controls and hierarchy. */
+.lab-toolkit-header{padding:12px 14px}
+.lab-toolkit-header-actions{display:flex;align-items:center;gap:8px;flex:0 0 auto}
+.lab-layout-switcher{display:flex;align-items:center;gap:3px;padding:3px;border:1px solid #d7d1e4;border-radius:9px;background:#f5f2fb}
+.lab-layout-button{min-height:28px;padding:5px 8px;border:0;border-radius:6px;background:transparent;color:#626e80;font-size:9.5px;font-weight:850;cursor:pointer;white-space:nowrap}
+.lab-layout-button:hover{background:#fff;color:#5d36bc}
+.lab-layout-button.active{background:#fff;color:#5d36bc;box-shadow:0 2px 8px rgba(52,35,90,.12)}
+.lab-pane-action{min-height:30px!important;padding:5px 9px!important;font-size:10px!important;border-radius:7px!important}
+.lab-pane-action.active{border-color:#7653ce;color:#5d36bc;background:#f4efff}
+.exam-app[data-subject="CSEC303"] .stage-topline{min-height:48px;height:auto;padding:7px 16px;gap:10px}
+.exam-app[data-subject="CSEC303"] .stage-topline-actions{gap:7px}
+.exam-app[data-subject="CSEC303"] .stage-topline button{min-height:30px;font-size:10px;padding:5px 9px}
+.exam-app[data-subject="CSEC303"] .question-panel{padding:24px 28px 28px}
+.exam-app[data-subject="CSEC303"] .question-panel h1{font-size:20px;line-height:1.35;margin:12px 0 16px}
+.exam-app[data-subject="CSEC303"] .part-label{font-size:10px}
+.exam-app[data-subject="CSEC303"] .answer-choice{min-height:48px;padding:11px 13px;font-size:12px}
+.exam-app[data-subject="CSEC303"] .exam-footer button,
+.exam-app[data-subject="CSEC303"] .exam-header button{min-height:34px;font-size:10px;padding:7px 10px}
+.lab-toolkit-kicker,.lab-python-runtime-kicker{font-size:9px}
+.lab-toolkit-header strong{font-size:15px}
+.lab-toolkit-header small,.lab-python-runtime-top small{font-size:10px}
+.lab-python-runtime-top strong{font-size:13px}
+.lab-python-runtime-status,.lab-python-runtime-note{font-size:10px}
+.lab-python-runtime-actions button{min-height:32px;font-size:10px}
+.lab-toolkit-tab{min-height:32px;font-size:10px}
+.lab-notebook-markdown{font-size:11.5px;line-height:1.55}
+.lab-notebook-section-heading h2{font-size:15px}
+.lab-python-cell-toolbar span{font-size:10px}
+.lab-python-cell-toolbar small{font-size:9px}
+.lab-python-cell-actions button{min-height:30px;font-size:9.5px}
+.lab-python-editor{font-size:11px;line-height:1.55;min-height:180px}
+.lab-python-cell-output pre{font-size:10px}
+.lab-toolkit-actions .button-link{min-height:36px;font-size:10px}
+
+/* Any evidence, notebook preview, or runtime plot can be opened like an image-search preview. */
+.exam-zoomable-image,
+.exam-app[data-lab-toolkit="1"] .lab-case-media img,
+.exam-app[data-lab-toolkit="1"] .lab-notebook-section-heading img,
+.exam-app[data-lab-toolkit="1"] .lab-python-plots img,
+.exam-app[data-lab-toolkit="1"] .lab-notebook-markdown img{cursor:zoom-in}
+.exam-image-viewer{
+  display:none;
+  position:fixed;
+  inset:0;
+  z-index:1400;
+  background:rgba(7,13,23,.94);
+  color:#fff;
+  flex-direction:column;
+}
+.exam-image-viewer.active{display:flex}
+.exam-image-viewer-toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;min-height:62px;padding:10px 16px;border-bottom:1px solid rgba(255,255,255,.13);background:rgba(11,19,31,.96)}
+.exam-image-viewer-title{min-width:0}
+.exam-image-viewer-title strong{display:block;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:55vw}
+.exam-image-viewer-title small{display:block;margin-top:2px;font-size:10px;color:#9eabbc}
+.exam-image-viewer-controls{display:flex;align-items:center;gap:6px}
+.exam-image-viewer-controls button{min-width:38px;min-height:34px;padding:6px 10px;border-color:#52627a;background:#172337;color:#fff;font-size:11px}
+.exam-image-viewer-stage{flex:1;min-height:0;overflow:auto;display:grid;place-items:center;padding:28px;overscroll-behavior:contain}
+.exam-image-viewer-stage img{display:block;max-width:min(92vw,1600px);max-height:calc(100vh - 120px);width:auto;height:auto;object-fit:contain;transform-origin:center center;transition:transform .12s ease;box-shadow:0 18px 60px rgba(0,0,0,.38);border-radius:6px;background:#fff}
+body.exam-image-viewer-open{overflow:hidden}
+
+:root[data-theme="dark"] .lab-layout-switcher{background:#151e2b;border-color:#3b4657}
+:root[data-theme="dark"] .lab-layout-button{color:#b3bed0}
+:root[data-theme="dark"] .lab-layout-button:hover,
+:root[data-theme="dark"] .lab-layout-button.active{background:#222e3f;color:#d6c9ff}
+:root[data-theme="dark"] .lab-question-peek{background:#172337;border-color:#4b3d72;color:#d6c9ff}
+
+/* Tablets keep the two-pane split as long as there is enough room; phones use drawers. */
+@media(max-width:1100px) and (min-width:901px){
+  .exam-app[data-lab-toolkit="1"] .exam-workspace{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important}
+  .exam-app[data-subject="CSEC303"] .question-panel{padding:20px}
+  .lab-layout-button{padding:5px 6px;font-size:9px}
+}
+@media(max-width:900px){
+  .exam-app[data-lab-toolkit="1"] .exam-workspace{grid-template-columns:1fr!important}
+  .exam-app[data-lab-toolkit="1"] .question-stage{grid-column:1;position:relative;left:auto;top:auto;bottom:auto;width:auto;transform:none;opacity:1;pointer-events:auto;border:0;border-radius:0;box-shadow:none}
+  .exam-app[data-lab-toolkit="1"] .lab-toolkit-panel{
+    position:fixed!important;
+    top:calc(var(--lab-header-height) + 6px)!important;
+    right:7px!important;
+    bottom:7px!important;
+    width:calc(100vw - 14px)!important;
+    z-index:940!important;
+    border:1px solid var(--line)!important;
+    border-radius:13px!important;
+    box-shadow:0 22px 54px rgba(18,32,59,.25)!important;
+    transform:translateX(calc(100% + 24px))!important;
+    opacity:0!important;
+    pointer-events:none!important;
+  }
+  .exam-app[data-lab-toolkit="1"] .lab-toolkit-panel.drawer-open{transform:translateX(0)!important;opacity:1!important;pointer-events:auto!important}
+  .exam-app[data-lab-toolkit="1"] .lab-toolkit-toggle{display:inline-flex!important}
+  .exam-app[data-lab-toolkit="1"] .lab-toolkit-close{display:inline-flex!important}
+  .lab-layout-switcher{display:none}
+  .lab-question-peek{display:none!important}
+  .exam-app[data-subject="CSEC303"] .question-panel{padding:18px 16px 22px}
+  .exam-image-viewer-toolbar{align-items:flex-start;flex-direction:column}
+  .exam-image-viewer-controls{width:100%}
+  .exam-image-viewer-controls button{flex:1}
+  .exam-image-viewer-title strong{max-width:90vw}
+}
+@media(max-width:620px){
+  .lab-toolkit-header{display:grid;grid-template-columns:1fr auto}
+  .lab-python-runtime-top{display:grid}
+  .lab-toolkit-tabs{grid-template-columns:repeat(3,1fr)}
+  .exam-app[data-subject="CSEC303"] .stage-topline{grid-template-columns:1fr auto}
+  .exam-app[data-subject="CSEC303"] .current-part-indicator{display:none}
+  .exam-app[data-subject="CSEC303"] .question-panel h1{font-size:18px}
+}
+
+/* Custos 1.5.1.e Canary · r20 readability + compact instructor entry */
+.site-footer .footer-scientific{color:#65728a}
+:root[data-theme="dark"] .site-footer .footer-scientific{color:#a9b5c7}
+
+.custos-instructor-prompt{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:20px;
+  padding:15px 18px;
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(208,218,232,.96);
+  border-radius:15px;
+  box-shadow:0 8px 24px rgba(43,63,92,.07);
+  backdrop-filter:blur(12px);
+}
+.custos-instructor-prompt-copy{display:flex;align-items:center;gap:16px;min-width:0}
+.custos-instructor-prompt-copy>span{
+  flex:0 0 auto;
+  font-size:9px;
+  font-weight:900;
+  letter-spacing:.16em;
+  color:#6a42c9;
+  padding:6px 8px;
+  border-radius:999px;
+  background:#f1ebff;
+}
+.custos-instructor-prompt-copy h2{margin:0 0 3px;font-size:16px;line-height:1.25;color:#172541}
+.custos-instructor-prompt-copy p{margin:0;color:#6b7890;font-size:11.5px;line-height:1.45}
+.custos-instructor-button{
+  flex:0 0 auto;
+  min-height:38px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:9px;
+  padding:8px 12px;
+  border:1px solid #cdbef1;
+  border-radius:9px;
+  background:#fff;
+  color:#5d36bc;
+  font-size:11px;
+  font-weight:850;
+  text-decoration:none;
+  box-shadow:0 4px 12px rgba(88,55,173,.07);
+}
+.custos-instructor-button:hover{border-color:#9d83df;background:#faf8ff;transform:translateY(-1px)}
+.custos-instructor-button b{font-size:15px;line-height:1}
+:root[data-theme="dark"] .custos-instructor-prompt{background:rgba(18,27,39,.96);border-color:#33445a}
+:root[data-theme="dark"] .custos-instructor-prompt-copy h2{color:#eef4ff}
+:root[data-theme="dark"] .custos-instructor-prompt-copy p{color:#a9b5c8}
+:root[data-theme="dark"] .custos-instructor-prompt-copy>span{background:#2b2140;color:#cbb7ff}
+:root[data-theme="dark"] .custos-instructor-button{background:#172231;border-color:#4a3c6f;color:#d3c3ff}
+
+/* Browser-workbench font controls. One control changes editable Python and code snippets. */
+.exam-app[data-lab-toolkit="1"]{--lab-code-font-size:12px}
+.lab-font-control{
+  display:flex;
+  align-items:center;
+  gap:2px;
+  padding:3px;
+  border:1px solid #d7d1e4;
+  border-radius:9px;
+  background:#f5f2fb;
+}
+.lab-font-control button{
+  min-width:30px;
+  min-height:28px;
+  padding:4px 6px;
+  border:0;
+  border-radius:6px;
+  background:transparent;
+  color:#626e80;
+  font-size:9.5px;
+  font-weight:850;
+  cursor:pointer;
+}
+.lab-font-control button:hover{background:#fff;color:#5d36bc}
+.lab-font-control button:disabled{opacity:.38;cursor:not-allowed}
+.lab-font-readout{min-width:47px!important;font-variant-numeric:tabular-nums}
+.exam-app[data-lab-toolkit="1"] .lab-python-editor,
+.exam-app[data-lab-toolkit="1"] .code-block,
+.exam-app[data-lab-toolkit="1"] .lab-notebook-markdown pre,
+.exam-app[data-lab-toolkit="1"] .lab-notebook-markdown code,
+.exam-app[data-lab-toolkit="1"] .lab-python-cell-output pre{
+  font-size:var(--lab-code-font-size)!important;
+}
+:root[data-theme="dark"] .lab-font-control{background:#151e2b;border-color:#3b4657}
+:root[data-theme="dark"] .lab-font-control button{color:#b3bed0}
+:root[data-theme="dark"] .lab-font-control button:hover{background:#222e3f;color:#d6c9ff}
+
+/* Caudex editor font controls. */
+.ide-app{--ide-code-font-size:13px}
+.ide-editor-toolbar-right{display:flex;align-items:center;gap:10px;min-width:0}
+.ide-font-control{display:flex;align-items:center;gap:2px;padding:2px;border:1px solid #36455b;border-radius:7px;background:#111b2b}
+.ide-font-control button{min-width:27px;height:25px;padding:2px 5px;border:0;border-radius:5px;background:transparent;color:#aebbd0;font:700 9px/1 "JetBrains Mono",monospace;cursor:pointer}
+.ide-font-control button:hover{background:#223047;color:#fff}
+.ide-font-control button:disabled{opacity:.35;cursor:not-allowed}
+.ide-font-readout{min-width:43px!important;font-variant-numeric:tabular-nums}
+.ide-code-editor,.ide-line-numbers,.ide-stdin,.ide-output{font-size:var(--ide-code-font-size)!important}
+
+@media(max-width:760px){
+  .custos-instructor-prompt{align-items:stretch;flex-direction:column;gap:12px;padding:14px}
+  .custos-instructor-prompt-copy{align-items:flex-start}
+  .custos-instructor-button{width:100%}
+  .lab-font-control{margin-left:auto}
+}
+@media(max-width:620px){
+  .lab-font-readout{display:none}
+  .ide-editor-toolbar-right>span{display:none}
+  .ide-font-readout{display:none}
+}
+
+/* Custos 1.5.1.e Canary · Student Classroom + Response Review r21 */
+.student-classroom-shell{max-width:1180px;margin:0 auto 48px;display:grid;gap:24px}
+.student-classroom-hero{display:flex;justify-content:space-between;gap:24px;align-items:flex-end;padding:8px 0 2px}
+.student-classroom-hero h1{margin:4px 0 8px;font-size:clamp(32px,4vw,48px);letter-spacing:-.03em}
+.student-classroom-hero p{margin:0;max-width:760px;color:var(--muted);line-height:1.6}
+.student-classroom-hero-actions{display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end}
+.student-account-strip{display:flex;align-items:center;gap:12px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:13px 16px;box-shadow:0 8px 24px rgba(31,51,73,.05)}
+.student-account-avatar{width:42px;height:42px;display:grid;place-items:center;border-radius:50%;background:var(--soft);color:var(--accent);font-weight:900;font-size:18px}
+.student-account-strip>div:nth-child(2){display:grid;gap:2px;min-width:0}.student-account-strip strong{color:var(--ink)}.student-account-strip span{color:var(--muted);font-size:12px;overflow-wrap:anywhere}
+.student-verified-pill{margin-left:auto!important;background:#eaf7f0;color:var(--good)!important;border-radius:999px;padding:5px 9px;font-size:10px!important;font-weight:800;text-transform:uppercase;letter-spacing:.05em}
+.student-assessment-section{display:grid;gap:13px}.student-assessment-section .section-heading{margin:0}
+.student-assessment-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.student-assessment-card{position:relative;display:flex;flex-direction:column;gap:10px;min-width:0;padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:15px;box-shadow:0 10px 28px rgba(31,51,73,.06);overflow:hidden}
+.student-assessment-card::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:#aab6c6}
+.student-assessment-card.status-in_progress::before{background:var(--accent)}.student-assessment-card.status-submitted::before{background:var(--good)}.student-assessment-card.status-upcoming::before{background:#e3a21b}.student-assessment-card.status-closed::before{background:#9aa6b4}
+.student-assessment-card-top{display:flex;justify-content:space-between;align-items:center;gap:12px}
+.student-course-chip,.student-assessment-status{display:inline-flex;align-items:center;border-radius:999px;padding:5px 9px;font-size:10px;font-weight:900;letter-spacing:.04em;text-transform:uppercase}
+.student-course-chip{background:var(--soft);color:var(--accent)}.student-course-chip.csec303{background:#f3ecff;color:#6b36d9}.student-assessment-status{background:var(--soft);color:var(--muted)}
+.status-in_progress .student-assessment-status{background:#edf4ff;color:#2465d8}.status-submitted .student-assessment-status{background:#eaf7f0;color:var(--good)}
+.student-assessment-kind{font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-top:2px}
+.student-assessment-card h3{font-size:20px;line-height:1.25;margin:0;color:var(--ink)}.student-assessment-card>p{margin:0;color:var(--muted);line-height:1.5;font-size:13px;min-height:39px}
+.student-assessment-meta{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:2px}.student-assessment-meta span{display:grid;gap:2px;color:var(--muted);font-size:11px;line-height:1.35}.student-assessment-meta b{color:var(--ink);font-size:10px;text-transform:uppercase;letter-spacing:.05em}
+.student-assessment-card-footer{display:flex;align-items:center;gap:10px;justify-content:space-between;margin-top:auto;padding-top:5px}.student-assessment-card-footer small{color:var(--muted);font-size:10px;text-align:right;max-width:210px}
+.student-assessment-section-muted{opacity:.82}
+.student-classroom-empty{text-align:center;padding:50px 24px;border:1px dashed var(--line);border-radius:16px;background:var(--panel)}.student-classroom-empty-mark{width:58px;height:58px;margin:0 auto 14px;border-radius:16px;display:grid;place-items:center;background:var(--soft);font-size:24px;color:var(--accent)}.student-classroom-empty h2{margin:0 0 8px}.student-classroom-empty p{max-width:560px;margin:0 auto 18px;color:var(--muted);line-height:1.55}
+.custos-student-return-prompt{display:flex;justify-content:space-between;align-items:center;gap:18px;padding:15px 17px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 10px 25px rgba(31,51,73,.05)}.custos-student-return-prompt>div{display:grid;gap:2px}.custos-student-return-prompt span{font-size:9px;letter-spacing:.09em;font-weight:900;color:var(--accent)}.custos-student-return-prompt strong{font-size:16px}.custos-student-return-prompt p{margin:0;color:var(--muted);font-size:12px}
+.google-identity-actions{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.result-page-shell{max-width:1000px;margin:0 auto 48px;display:grid;gap:18px}.result-summary-card{margin:0 auto;width:min(100%,760px)}
+.result-review-card{padding:22px}.result-review-card .section-heading{align-items:flex-start}.result-review-legend{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}.result-review-legend span{padding:5px 8px;border-radius:999px;font-size:10px;font-weight:800}.result-review-legend .correct{background:#eaf7f0;color:#197144}.result-review-legend .incorrect{background:#fff0ef;color:#b32821}.result-review-legend .unanswered{background:var(--soft);color:var(--muted)}
+.result-review-list{display:grid;gap:14px}.result-review-item{position:relative;border:1px solid var(--line);border-left:5px solid #aeb9c7;border-radius:12px;padding:17px;background:var(--panel)}.result-review-item.is-correct{border-left-color:#2a9d62}.result-review-item.is-incorrect{border-left-color:#d7433c}.result-review-item.is-unanswered{border-left-color:#9aa6b4}.result-review-question-head{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:10px}.result-review-question-head span{font-size:10px;letter-spacing:.07em;text-transform:uppercase;font-weight:900;color:var(--muted)}.result-review-question-head strong{font-size:11px}.result-review-item.is-correct .result-review-question-head strong{color:#197144}.result-review-item.is-incorrect .result-review-question-head strong{color:#b32821}.result-review-item h3{margin:0 0 14px;font-size:17px;line-height:1.45}.result-review-code{margin:0 0 14px;background:#111827;color:#eef4ff;padding:13px;border-radius:9px;overflow:auto;font-family:var(--font-mono,monospace);font-size:12px;line-height:1.5}
+.result-review-options{display:grid;gap:8px}.result-review-option{display:grid;grid-template-columns:30px 1fr auto;gap:10px;align-items:center;border:1px solid var(--line);border-radius:9px;padding:10px 11px;background:var(--panel)}.result-review-option.correct{border-color:#8ac9a7;background:#f1faf5}.result-review-option.incorrect{border-color:#efaaa5;background:#fff6f5}.result-review-letter{width:28px;height:28px;display:grid;place-items:center;border:1px solid var(--line);border-radius:7px;font-weight:900;font-size:11px}.result-review-option-status{font-size:10px;font-weight:800;color:var(--muted)}.result-review-option.correct .result-review-option-status{color:#197144}.result-review-option.incorrect .result-review-option-status{color:#b32821}.result-review-no-answer{margin-top:10px;padding:9px 11px;border-radius:8px;background:var(--soft);color:var(--muted);font-size:11px}.result-review-explanation{margin-top:12px;padding:12px 13px;border-radius:9px;background:var(--soft)}.result-review-explanation strong{font-size:10px;text-transform:uppercase;letter-spacing:.06em}.result-review-explanation p{margin:5px 0 0;color:var(--muted);line-height:1.55;font-size:12px}.result-short-answer-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}.result-short-answer-grid>div{padding:11px;border:1px solid var(--line);border-radius:9px}.result-short-answer-grid span{display:block;color:var(--muted);font-size:10px;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}.result-review-locked{display:flex;justify-content:center;text-align:center;padding:18px}.result-review-locked p{margin:5px 0 0;color:var(--muted);font-size:12px}
+:root[data-theme="dark"] .student-course-chip.csec303{background:rgba(107,54,217,.2);color:#bea4ff}:root[data-theme="dark"] .result-review-option.correct{background:rgba(42,157,98,.12)}:root[data-theme="dark"] .result-review-option.incorrect{background:rgba(215,67,60,.1)}
+@media(max-width:820px){.student-classroom-hero{align-items:flex-start;flex-direction:column}.student-classroom-hero-actions{justify-content:flex-start}.student-assessment-grid{grid-template-columns:1fr}.result-review-card{padding:15px}.result-review-card .section-heading{flex-direction:column}.result-review-legend{justify-content:flex-start}.student-assessment-meta{grid-template-columns:1fr 1fr}}
+@media(max-width:560px){.student-assessment-meta,.result-short-answer-grid{grid-template-columns:1fr}.student-assessment-card-footer{align-items:stretch;flex-direction:column}.student-assessment-card-footer small{text-align:left;max-width:none}.student-classroom-hero-actions{display:grid;grid-template-columns:1fr 1fr;width:100%}.custos-student-return-prompt{align-items:stretch;flex-direction:column}.custos-student-return-prompt .button-link{width:100%}.result-review-option{grid-template-columns:28px 1fr}.result-review-option-status{grid-column:2}}
+
+/* Custos 1.5.1.e Canary · navigation + student/instructor clarity r22 */
+.brand-course-pair-text{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:900;letter-spacing:.035em;color:#33425d;white-space:nowrap}
+.brand-course-pair-text b{font-weight:700;color:#8b98aa}
+.header-role-chip,.exam-role-chip{display:inline-flex;align-items:center;justify-content:center;min-height:28px;padding:5px 9px;border-radius:999px;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;white-space:nowrap}
+.header-role-chip{margin-left:auto}
+.header-role-chip.student,.exam-role-chip.student{background:#edf4ff;color:#245fbd;border:1px solid #c9daf5}
+.header-role-chip.instructor,.exam-role-chip.instructor{background:#f4efff;color:#6530c5;border:1px solid #d9c9f5}
+.site-nav a.active{background:#eef5ff;color:var(--accent)}
+:root[data-theme="dark"] .brand-course-pair-text{color:#dce6f4}
+:root[data-theme="dark"] .header-role-chip.student,:root[data-theme="dark"] .exam-role-chip.student{background:#172944;color:#8fb9ff;border-color:#294568}
+:root[data-theme="dark"] .header-role-chip.instructor,:root[data-theme="dark"] .exam-role-chip.instructor{background:#2b2140;color:#cbb7ff;border-color:#49396f}
+
+/* Home: clear student flow + paired information cards. */
+.custos-student-signin-prompt{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:15px 17px;border:1px solid var(--line);border-radius:14px;background:var(--panel);box-shadow:0 10px 25px rgba(31,51,73,.05)}
+.custos-student-signin-prompt>div{display:grid;gap:3px;min-width:0}
+.custos-student-signin-prompt>div>span{font-size:9px;font-weight:900;letter-spacing:.1em;color:var(--accent)}
+.custos-student-signin-prompt strong{font-size:16px;color:var(--ink)}
+.custos-student-signin-prompt p{margin:0;color:var(--muted);font-size:12px;line-height:1.45}
+.custos-info-grid{max-width:980px;margin:20px auto 0;display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.custos-info-card{padding:16px 18px;background:#f6f9fd;border:1px solid #dce5f0;border-radius:13px;display:grid;gap:7px;text-align:left}
+.custos-info-card>strong{color:#162542;font-size:13px}
+.custos-info-card p{margin:0;color:#5b6982;font-size:12.5px;line-height:1.55}
+.custos-info-card.release-fact{background:linear-gradient(135deg,#fbf8ff,#f6f9fd);border-color:#ded4f3}
+:root[data-theme="dark"] .custos-student-signin-prompt,:root[data-theme="dark"] .custos-info-card{background:#151f2c;border-color:#35465c}
+:root[data-theme="dark"] .custos-info-card.release-fact{background:linear-gradient(135deg,#211b32,#151f2c);border-color:#493a68}
+:root[data-theme="dark"] .custos-info-card>strong{color:#eef4ff}:root[data-theme="dark"] .custos-info-card p{color:#a9b5c8}
+
+/* Student flow: Home > Sign In > My Assessments. */
+.student-flow-nav{max-width:1180px;margin:0 auto 14px;display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted)}
+.student-flow-nav a,.student-flow-nav strong{padding:5px 8px;border-radius:999px;text-decoration:none}
+.student-flow-nav a{color:var(--accent);background:var(--soft)}
+.student-flow-nav strong{color:var(--ink);background:#fff;border:1px solid var(--line)}
+.student-flow-nav a.disabled{pointer-events:none;opacity:.48;color:var(--muted)}
+:root[data-theme="dark"] .student-flow-nav strong{background:#172332}
+
+/* Integrity notice: complete perimeter emphasis rather than a left-only stripe. */
+.integrity-notice{border:2px solid var(--accent)!important;border-left-width:2px!important;box-shadow:0 8px 24px rgba(21,101,192,.07)}
+:root[data-theme="dark"] .integrity-notice{border-color:#68aaff!important;border-left-color:#68aaff!important}
+
+/* Exam-wide question code sizing. */
+.exam-app{--exam-code-font-size:15px}
+.code-block{font-size:var(--exam-code-font-size)!important}
+.exam-code-font-control{display:inline-flex;align-items:center;gap:2px;padding:2px;border:1px solid var(--line);border-radius:7px;background:var(--soft)}
+.exam-code-font-control button{min-width:28px;height:28px;padding:2px 6px;border:0;border-radius:5px;background:transparent;color:var(--ink);font-size:10px;font-weight:850;cursor:pointer}
+.exam-code-font-control button:hover{background:var(--panel)}
+.exam-code-font-control button:disabled{opacity:.35;cursor:not-allowed}
+.exam-code-font-readout{min-width:45px!important;font-variant-numeric:tabular-nums}
+
+/* CSDC101 Tools are a modal workbench. It remains open until explicitly closed. */
+.exam-tools-panel{top:50%!important;left:50%!important;right:auto!important;bottom:auto!important;width:min(980px,calc(100vw - 48px))!important;max-height:calc(100vh - 120px);height:auto;transform:translate(-50%,-48%) scale(.985)!important;opacity:0;pointer-events:none;border-radius:16px!important;box-shadow:0 28px 80px rgba(8,18,35,.35)!important}
+.exam-tools-panel.active{transform:translate(-50%,-50%) scale(1)!important;opacity:1;pointer-events:auto}
+.exam-tools-backdrop{background:rgba(9,16,28,.58)!important;backdrop-filter:blur(3px)}
+.exam-tools-scroll{grid-template-columns:minmax(250px,.72fr) minmax(300px,1.28fr);gap:14px;padding:14px}
+.exam-tools-scroll .jam-tool{grid-column:1/-1}
+.exam-tools-header{padding:14px 18px}
+
+/* Result actions should read as two distinct actions, not one joined control. */
+.result-actions{gap:14px!important;flex-wrap:wrap}
+
+@media(max-width:900px){
+  .header-role-chip{margin-left:auto}
+  .exam-tools-scroll{grid-template-columns:1fr}
+  .exam-tools-scroll .jam-tool{grid-column:auto}
+  .exam-tools-panel{width:calc(100vw - 24px)!important;max-height:calc(100vh - 92px)}
+}
+@media(max-width:760px){
+  .custos-info-grid{grid-template-columns:1fr}
+  .custos-student-signin-prompt{align-items:stretch;flex-direction:column}
+  .custos-student-signin-prompt .button-link{width:100%}
+  .brand-course-pair-text{font-size:10px}
+  .exam-code-font-readout{display:none}
+}
+@media(max-width:560px){
+  .student-flow-nav{gap:4px;font-size:10px;overflow:auto;white-space:nowrap}
+  .student-flow-nav a,.student-flow-nav strong{padding:5px 7px}
+  .header-role-chip{display:none}
+}
+
+/* =========================================================
+   Custos v1.5.1.e Canary r23 · neutral Custos backdrop + beetle footer mark
+   ========================================================= */
+/* Use the neutral Custos artwork as the primary shell background across
+   non-exam views. Course identity remains in logos/content, not the page art. */
+body:not(.exam-page),
+body[data-subject="CSEC303"]:not(.exam-page),
+body[data-subject="CSDC101"]:not(.exam-page){
+  background-color:#f6f8fb !important;
+  background-image:url("../img/custos-background.webp") !important;
+  background-position:center center !important;
+  background-size:cover !important;
+  background-repeat:no-repeat !important;
+  background-attachment:fixed !important;
+}
+body:not(.exam-page)::before,
+body[data-subject="CSEC303"]:not(.exam-page)::before,
+body[data-subject="CSDC101"]:not(.exam-page)::before{
+  background:linear-gradient(180deg,rgba(255,255,255,.06),rgba(247,249,252,.14)) !important;
+}
+:root[data-theme="dark"] body:not(.exam-page),
+:root[data-theme="dark"] body[data-subject="CSEC303"]:not(.exam-page),
+:root[data-theme="dark"] body[data-subject="CSDC101"]:not(.exam-page){
+  background-color:#101722 !important;
+  background-blend-mode:multiply !important;
+}
+:root[data-theme="dark"] body:not(.exam-page)::before,
+:root[data-theme="dark"] body[data-subject="CSEC303"]:not(.exam-page)::before,
+:root[data-theme="dark"] body[data-subject="CSDC101"]:not(.exam-page)::before{
+  background:rgba(6,10,16,.55) !important;
+}
+
+/* The release beetle occupies the old lower-left watermark position and
+   gently strolls along the footer edge. */
+.footer-beetle-link{
+  position:fixed;
+  left:max(15px, env(safe-area-inset-left, 0px));
+  bottom:calc(18px + env(safe-area-inset-bottom, 0px));
+  z-index:6;
+  width:42px;
+  height:42px;
+  display:grid;
+  place-items:center;
+  color:inherit;
+  text-decoration:none;
+  opacity:.82;
+  filter:drop-shadow(0 3px 5px rgba(24,34,52,.16));
+  transform-origin:50% 100%;
+  animation:custosBeetleWalk 4.8s ease-in-out infinite alternate;
+}
+.footer-beetle-link img{
+  display:block;
+  width:100%;
+  height:100%;
+  object-fit:contain;
+  pointer-events:none;
+}
+.footer-beetle-link:hover,
+.footer-beetle-link:focus-visible{
+  opacity:1;
+  outline:none;
+  filter:drop-shadow(0 5px 8px rgba(23,40,70,.24));
+}
+:root[data-theme="dark"] .footer-beetle-link img{filter:invert(1)}
+@keyframes custosBeetleWalk{
+  0%{transform:translateX(0) translateY(0) rotate(-1.4deg)}
+  35%{transform:translateX(5px) translateY(-1px) rotate(1deg)}
+  70%{transform:translateX(10px) translateY(0) rotate(-.6deg)}
+  100%{transform:translateX(14px) translateY(-1px) rotate(1.2deg)}
+}
+@media (prefers-reduced-motion:reduce){
+  .footer-beetle-link{animation:none}
+}
+@media(max-width:700px){
+  .footer-beetle-link{
+    left:max(9px, env(safe-area-inset-left, 0px));
+    bottom:calc(17px + env(safe-area-inset-bottom, 0px));
+    width:32px;
+    height:32px;
+  }
+}
+
+/* =========================================================
+   Custos v1.6.0.h · Hercules · r24
+   Course-aware shells, identity-first student entry, generic notebook workbench
+   ========================================================= */
+body.general-context:not(.exam-page){
+  background-color:#f6f8fb!important;
+  background-image:url("../img/custos-background.webp")!important;
+  background-position:center center!important;
+  background-size:cover!important;
+  background-repeat:no-repeat!important;
+  background-attachment:fixed!important;
+}
+body.course-context[data-subject="CSDC101"]:not(.exam-page){
+  background-image:url("../img/csdc101-background.webp")!important;
+  background-position:center center!important;
+  background-size:cover!important;
+  background-repeat:no-repeat!important;
+  background-attachment:fixed!important;
+}
+body.course-context[data-subject="CSEC303"]:not(.exam-page){
+  background-image:url("../img/csec303-background.webp")!important;
+  background-position:center center!important;
+  background-size:cover!important;
+  background-repeat:no-repeat!important;
+  background-attachment:fixed!important;
+}
+body.course-context:not(.exam-page)::before{background:rgba(255,255,255,.12)!important}
+:root[data-theme="dark"] body.course-context:not(.exam-page){background-blend-mode:multiply!important}
+:root[data-theme="dark"] body.course-context:not(.exam-page)::before{background:rgba(6,10,16,.52)!important}
+
+/* The Hercules beetle faces inward toward the application content. */
+.footer-beetle-link img{transform:scaleX(-1)}
+
+/* General header uses both real course marks. Course pages use one mark only. */
+.brand-subject-pair{display:inline-flex;align-items:center;gap:7px;min-width:0}
+.brand-subject-pair .nav-course-logo{height:27px;max-width:126px;width:auto;object-fit:contain}
+.brand-course-divider{font-size:13px;font-weight:900;color:var(--muted)}
+.nav-course-logo.single{height:28px;max-width:150px;width:auto;object-fit:contain}
+
+/* Course watermarks return only when a page belongs to one assessment/course. */
+body.course-context .page-watermark{display:block!important;pointer-events:none;z-index:2}
+body.general-context .page-watermark{display:none!important}
+
+/* Student identity first, then session-key entry inside My Assessments. */
+.student-signin-only-card{max-width:620px}
+.student-login-role-note{display:flex;align-items:center;justify-content:center;gap:8px;margin-top:16px;padding-top:14px;border-top:1px solid var(--line);font-size:12px;color:var(--muted)}
+.student-login-role-note a{font-weight:800;color:var(--accent)}
+.manual-student-signin{margin-top:14px;text-align:left;border:1px solid var(--line);border-radius:10px;padding:10px 12px;background:var(--soft)}
+.manual-student-signin summary{cursor:pointer;font-weight:800;color:var(--ink)}
+.manual-student-signin .form-grid{margin-top:12px}
+.student-key-entry-card{display:grid;grid-template-columns:minmax(220px,.72fr) minmax(0,1.28fr);gap:20px;align-items:center;margin:18px 0;padding:18px 20px;border:1px solid var(--line);border-radius:14px;background:rgba(255,255,255,.94);box-shadow:0 10px 26px rgba(31,51,73,.06)}
+.student-key-entry-copy h2{margin:4px 0 6px;font-size:20px;color:var(--ink)}
+.student-key-entry-copy p{margin:0;color:var(--muted);font-size:12px;line-height:1.55}
+.student-key-entry-form{display:grid;grid-template-columns:minmax(190px,.8fr) minmax(220px,1.2fr) auto;gap:10px;align-items:end}
+.student-key-entry-form label{display:grid;gap:5px;font-size:11px;font-weight:800;color:var(--ink)}
+.student-key-entry-form input,.student-key-entry-form select{width:100%}
+.student-key-entry-form>button{min-height:43px}
+.student-key-class-details{grid-column:1/-1;border-top:1px solid var(--line);padding-top:8px}
+.student-key-class-details summary{cursor:pointer;font-size:11px;font-weight:800;color:var(--muted)}
+.student-key-class-details summary small{font-weight:500}
+.student-key-class-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:9px}
+:root[data-theme="dark"] .student-key-entry-card{background:rgba(18,27,39,.96)}
+
+/* Generic assessment workbench uploader. */
+.workbench-builder-card{position:relative;overflow:hidden}
+.workbench-upload-status{display:flex;align-items:center;justify-content:space-between;gap:16px;margin:0 0 14px;padding:13px 14px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}
+.workbench-upload-status span,.workbench-upload-status strong,.workbench-upload-status small{display:block}
+.workbench-upload-status span{font-size:9px;font-weight:900;letter-spacing:.08em;color:var(--accent)}
+.workbench-upload-status strong{margin:3px 0;font-size:14px;color:var(--ink)}
+.workbench-upload-status small{font-size:10px;color:var(--muted)}
+.workbench-upload-form{max-width:760px}
+
+/* CodeMirror powers Python syntax color and lightweight IntelliSense. */
+.lab-python-cell .CodeMirror{
+  height:auto;
+  min-height:150px;
+  max-height:440px;
+  border:0;
+  border-top:1px solid #27364a;
+  background:#101827;
+  color:#eef4ff;
+  font:var(--lab-code-font-size,12px)/1.55 "JetBrains Mono",Consolas,monospace;
+}
+.lab-python-cell .CodeMirror-scroll{min-height:150px;max-height:440px}
+.lab-python-cell .CodeMirror-gutters{background:#0c1421;border-right:1px solid #26364c}
+.lab-python-cell .CodeMirror-linenumber{color:#65758b}
+.lab-python-cell .cm-s-default .cm-keyword{color:#c792ea;font-weight:700}
+.lab-python-cell .cm-s-default .cm-def{color:#82aaff}
+.lab-python-cell .cm-s-default .cm-variable{color:#eef4ff}
+.lab-python-cell .cm-s-default .cm-variable-2{color:#f78c6c}
+.lab-python-cell .cm-s-default .cm-property{color:#89ddff}
+.lab-python-cell .cm-s-default .cm-string{color:#c3e88d}
+.lab-python-cell .cm-s-default .cm-number{color:#f78c6c}
+.lab-python-cell .cm-s-default .cm-comment{color:#697d98;font-style:italic}
+.lab-python-cell .cm-s-default .cm-operator{color:#89ddff}
+.lab-python-cell .cm-s-default .cm-builtin{color:#ffcb6b}
+.lab-python-cell .CodeMirror-cursor{border-left-color:#fff}
+.CodeMirror-hints{z-index:10050!important;font:11px/1.45 "JetBrains Mono",Consolas,monospace;border-radius:8px;border:1px solid var(--line);box-shadow:0 12px 30px rgba(0,0,0,.18);overflow:hidden}
+.CodeMirror-hint{padding:5px 9px}
+li.CodeMirror-hint-active{background:#276ee8;color:#fff}
+
+/* Workbench remains readable while the question and IDE share the screen. */
+.exam-app[data-lab-toolkit="1"] .lab-python-editor{font-size:var(--lab-code-font-size,12px)}
+.exam-app[data-lab-toolkit="1"] .CodeMirror{font-size:var(--lab-code-font-size,12px)}
+.exam-page-watermark{pointer-events:none}
+
+@media(max-width:900px){
+  .student-key-entry-card{grid-template-columns:1fr}
+  .student-key-entry-form{grid-template-columns:1fr 1fr}
+  .student-key-entry-form>button{grid-column:1/-1}
+}
+@media(max-width:600px){
+  .brand-subject-pair .nav-course-logo{height:22px;max-width:96px}
+  .brand-course-divider{font-size:11px}
+  .student-key-entry-form,.student-key-class-grid{grid-template-columns:1fr}
+}
+
+/* r24 course-specific exam canvas. The working surfaces stay opaque for readability. */
+body.exam-page[data-subject="CSDC101"]{
+  background-color:#eef3f9!important;
+  background-image:url("../img/csdc101-background.webp")!important;
+  background-size:cover!important;
+  background-position:center!important;
+  background-attachment:fixed!important;
+}
+body.exam-page[data-subject="CSEC303"]{
+  background-color:#f5f2fb!important;
+  background-image:url("../img/csec303-background.webp")!important;
+  background-size:cover!important;
+  background-position:center!important;
+  background-attachment:fixed!important;
+}
+body.exam-page .exam-app{background:transparent!important}
+body.exam-page .exam-workspace{background:rgba(247,249,252,.88)}
+body.exam-page .question-stage,body.exam-page .lab-toolkit-panel,body.exam-page .question-nav{backdrop-filter:blur(2px)}
+:root[data-theme="dark"] body.exam-page .exam-workspace{background:rgba(10,16,25,.91)}
+
+/* =========================================================
+   Custos v1.6.0.h · Hercules · r25
+   Security/session separation + stable course theming
+   ========================================================= */
+
+/* Final watermark normalization. Older release rules intentionally used very
+   large widths and brightness filters; the final rule wins so both courses use
+   a compact, predictable footer mark without clipping or double-scaling. */
+body.course-context:not(.exam-page) .page-watermark{
+  display:block!important;
+  width:auto!important;
+  height:26px!important;
+  max-width:240px!important;
+  max-height:26px!important;
+  left:max(20px,env(safe-area-inset-left,0px))!important;
+  bottom:calc(38px + env(safe-area-inset-bottom,0px))!important;
+  opacity:1!important;
+  filter:none!important;
+  object-fit:contain!important;
+  object-position:left bottom!important;
+  transform:none!important;
+  z-index:5!important;
+}
+body.general-context:not(.exam-page) .page-watermark{display:none!important}
+
+/* Light mode uses black course marks. Dark mode uses white course marks. */
+:root:not([data-theme="dark"]) body.course-context .page-watermark.theme-image-light,
+:root:not([data-theme="dark"]) body.exam-page .exam-page-watermark.theme-image-light{display:block!important}
+:root:not([data-theme="dark"]) body.course-context .page-watermark.theme-image-dark,
+:root:not([data-theme="dark"]) body.exam-page .exam-page-watermark.theme-image-dark{display:none!important}
+:root[data-theme="dark"] body.course-context .page-watermark.theme-image-light,
+:root[data-theme="dark"] body.exam-page .exam-page-watermark.theme-image-light{display:none!important}
+:root[data-theme="dark"] body.course-context .page-watermark.theme-image-dark,
+:root[data-theme="dark"] body.exam-page .exam-page-watermark.theme-image-dark{display:block!important}
+
+/* CSEC303 artwork has a taller aspect ratio and needs a slightly larger
+   rendered height so it matches CSDC101 visually. */
+body.course-context[data-subject="CSDC101"] .page-watermark{
+  height:26px!important;
+  max-height:26px!important;
+}
+body.course-context[data-subject="CSEC303"] .page-watermark{
+  height:34px!important;
+  max-height:34px!important;
+  max-width:300px!important;
+}
+
+/* The dedicated exam watermark follows the same compact visual scale. */
+body.exam-page .exam-page-watermark{
+  width:auto!important;
+  height:26px!important;
+  max-width:240px!important;
+  max-height:26px!important;
+  left:max(16px,env(safe-area-inset-left,0px))!important;
+  bottom:calc(58px + env(safe-area-inset-bottom,0px))!important;
+  opacity:1!important;
+  filter:none!important;
+  object-fit:contain!important;
+  object-position:left bottom!important;
+  transform:none!important;
+  z-index:24!important;
+}
+body.exam-page[data-subject="CSEC303"] .exam-page-watermark,
+.exam-app[data-subject="CSEC303"] .exam-page-watermark{
+  height:34px!important;
+  max-height:34px!important;
+  max-width:300px!important;
+}
+
+/* Course identity must stay explicit on every assessment-specific surface. */
+body.course-context[data-subject="CSDC101"]:not(.exam-page){
+  background-color:#f5f8fc!important;
+  background-image:url("../img/csdc101-background.webp")!important;
+  background-size:cover!important;
+  background-position:center center!important;
+  background-repeat:no-repeat!important;
+  background-attachment:fixed!important;
+}
+body.course-context[data-subject="CSEC303"]:not(.exam-page){
+  background-color:#f7f4fb!important;
+  background-image:url("../img/csec303-background.webp")!important;
+  background-size:cover!important;
+  background-position:center center!important;
+  background-repeat:no-repeat!important;
+  background-attachment:fixed!important;
+}
+
+/* Manual session-key fallback: CSEC303 is currently one section only. */
+.student-key-entry-form input[readonly]{
+  background:var(--soft);
+  color:var(--ink);
+  cursor:not-allowed;
+}
+.custom-section-picker small{font-size:9px;color:var(--muted);font-weight:700}
+
+@media(max-width:700px){
+  body.course-context:not(.exam-page) .page-watermark{
+    height:22px!important;
+    max-height:22px!important;
+    max-width:180px!important;
+    left:max(12px,env(safe-area-inset-left,0px))!important;
+    bottom:calc(34px + env(safe-area-inset-bottom,0px))!important;
+  }
+  body.course-context[data-subject="CSEC303"] .page-watermark{
+    height:28px!important;
+    max-height:28px!important;
+    max-width:220px!important;
+  }
+  body.exam-page .exam-page-watermark{
+    height:22px!important;
+    max-height:22px!important;
+    max-width:180px!important;
+    left:max(10px,env(safe-area-inset-left,0px))!important;
+  }
+  body.exam-page[data-subject="CSEC303"] .exam-page-watermark,
+  .exam-app[data-subject="CSEC303"] .exam-page-watermark{
+    height:28px!important;
+    max-height:28px!important;
+    max-width:220px!important;
+  }
 }

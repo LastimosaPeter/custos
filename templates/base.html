@@ -1,4 +1,18 @@
 <!doctype html>
+{% set brand = namespace(subject='CSDC101', course_context=false) %}
+{% if page_subject_code is defined and page_subject_code %}{% set brand.subject = page_subject_code %}{% set brand.course_context = true %}{% endif %}
+{% if assessment is defined and assessment and assessment.subject_code is defined and assessment.subject_code %}{% set brand.subject = assessment.subject_code %}{% set brand.course_context = true %}{% endif %}
+{% if selected_assessment is defined and selected_assessment and selected_assessment.subject_code is defined and selected_assessment.subject_code %}{% set brand.subject = selected_assessment.subject_code %}{% set brand.course_context = true %}{% endif %}
+{% if lab is defined and lab and lab.subject_code is defined and lab.subject_code %}{% set brand.subject = lab.subject_code %}{% set brand.course_context = true %}{% endif %}
+{% if cs is defined and cs and cs.subject_code is defined and cs.subject_code %}{% set brand.subject = cs.subject_code %}{% set brand.course_context = true %}{% endif %}
+{% if ex is defined and ex and ex.subject_code is defined and ex.subject_code %}{% set brand.subject = ex.subject_code %}{% set brand.course_context = true %}{% endif %}
+{% if batch is defined and batch and batch.subject_code is defined and batch.subject_code %}{% set brand.subject = batch.subject_code %}{% set brand.course_context = true %}{% endif %}
+{% if assessment is defined and assessment is string and assessment in ['midterm','posttest'] %}{% set brand.subject = 'CSDC101' %}{% set brand.course_context = true %}{% endif %}
+{% set endpoint_name = request.endpoint or '' %}
+{% if subject_code is defined and subject_code and endpoint_name in ['exam','instructions','result','ide_result','nextgen.ide_workspace','nextgen.ide_instructions'] %}{% set brand.subject = subject_code %}{% set brand.course_context = true %}{% endif %}
+{% set brand.subject = brand.subject|upper %}
+{% set is_instructor_view = (session.get('admin_id') and session.get('admin_authenticated') is sameas true) or endpoint_name == 'admin_login' or endpoint_name.startswith('admin_') or endpoint_name.startswith('nextgen.admin') or endpoint_name.startswith('nextgen.custom') %}
+{% set is_student_view = google_student or session.get('student_identity') or endpoint_name in ['student_login','student_classroom','instructions','result'] %}
 <html lang="en" data-theme="{{ custos_theme }}">
 <head>
   <meta charset="utf-8">
@@ -24,7 +38,7 @@
   <script src="{{ url_for('static', filename='js/mobile_ui.js', v=app_asset_revision) }}" defer></script>
   <script src="{{ url_for('static', filename='js/ui_controls.js', v=app_asset_revision) }}" defer></script>
 </head>
-<body class="{% block body_class %}{% endblock %}">
+<body data-subject="{{ brand.subject }}" class="{{ 'course-context' if brand.course_context else 'general-context' }} subject-{{ brand.subject|lower }} {% block body_class %}{% endblock %}">
   {% block body %}
   <header class="site-header">
     <a class="brand-lockup" href="{{ url_for('index') }}" aria-label="Custos home">
@@ -33,13 +47,21 @@
         <span>Custos</span>
       </span>
       <span class="brand-divider" aria-hidden="true"></span>
-      <img class="brand-logo subject-brand-logo" src="{{ url_for('static', filename=subject_logo_filename|default('img/csdc101-logo.webp')) }}" alt="{{ subject_logo_alt|default('CSDC101') }}">
+      {% if brand.course_context %}
+      <img class="brand-logo subject-brand-logo nav-course-logo single" src="{{ url_for('static', filename=('img/csec303-logo.webp' if brand.subject == 'CSEC303' else 'img/csdc101-logo.webp'), v=app_asset_revision) }}" alt="{{ brand.subject }}">
+      {% else %}
+      <span class="brand-subject-pair" aria-label="CSDC101 and CSEC303">
+        <img class="brand-logo subject-brand-logo nav-course-logo" src="{{ url_for('static', filename='img/csdc101-logo.webp', v=app_asset_revision) }}" alt="CSDC101">
+        <span class="brand-course-divider" aria-hidden="true">+</span>
+        <img class="brand-logo subject-brand-logo nav-course-logo" src="{{ url_for('static', filename='img/csec303-logo.webp', v=app_asset_revision) }}" alt="CSEC303">
+      </span>
+      {% endif %}
     </a>
     <button class="mobile-nav-toggle" type="button" aria-expanded="false" aria-label="Open navigation" title="Menu"><span aria-hidden="true">☰</span></button>
     {% block header_right %}
     <nav class="site-nav" aria-label="Primary navigation">
-      <a href="{{ url_for('student_login') }}">Student View</a>
-      <a href="{{ url_for('admin_login') }}">Instructor View</a>
+      <a class="{{ 'active' if endpoint_name in ['student_login','student_classroom'] else '' }}" href="{{ url_for('student_classroom') if (google_student or session.get('student_identity')) else url_for('student_login') }}">Student View</a>
+      <a class="{{ 'active' if is_instructor_view else '' }}" href="{{ url_for('nextgen.workspace') if (session.get('admin_id') and session.get('admin_authenticated') is sameas true) else url_for('admin_login') }}">Instructor View</a>
       <span class="site-nav-divider" aria-hidden="true"></span>
       <a class="nav-coming-soon" href="{{ url_for('nextgen.ide_coming_soon') }}" data-tooltip="Coming soon" aria-label="IDE — coming soon">IDE</a>
     </nav>
@@ -62,8 +84,14 @@
     </div>
   </main>
   <div class="footer-fade" aria-hidden="true"></div>
-  <img class="page-watermark theme-image theme-image-light" decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/csdc101-watermark.png') }}" alt="" aria-hidden="true">
-  <img class="page-watermark theme-image theme-image-dark" decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/csdc101-watermark-dark.png') }}" alt="" aria-hidden="true">
+  {% if brand.course_context %}
+  <img class="page-watermark theme-image theme-image-light" src="{{ url_for('static', filename=('img/csec303-watermark.png' if brand.subject == 'CSEC303' else 'img/csdc101-watermark.png'), v=app_asset_revision) }}" alt="" aria-hidden="true">
+  <img class="page-watermark theme-image theme-image-dark" src="{{ url_for('static', filename=('img/csec303-watermark-dark.png' if brand.subject == 'CSEC303' else 'img/csdc101-watermark-dark.png'), v=app_asset_revision) }}" alt="" aria-hidden="true">
+  {% else %}
+  <a class="footer-beetle-link" href="https://www.beetlesofafrica.com/" target="_blank" rel="noopener noreferrer" aria-label="Visit Beetles of Africa" title="Visit Beetles of Africa">
+    <img src="{{ url_for('static', filename='img/hercules-beetle.svg', v=app_asset_revision) }}" alt="Hercules beetle">
+  </a>
+  {% endif %}
   <div class="institution-logos institution-logos-light" aria-label="Department logos">
     <img decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/dcs-logo-1.webp') }}" alt="Computer Studies">
     <img decoding="async" fetchpriority="low" src="{{ url_for('static', filename='img/dcs-logo-2.webp') }}" alt="Department of Computer Science">
@@ -75,8 +103,11 @@
     <span class="footer-separator">·</span>
     <span>v{{ app_version }}</span>
     <span class="footer-separator">·</span>
-    <span class="footer-species" title="{{ app_release_common_name }}"><em>{{ app_release_species }}</em></span>
+    <span class="footer-species" title="{{ app_release_common_name }}">{{ app_release_species }}</span>
+    <span class="footer-separator">·</span>
+    <span class="footer-scientific"><em>{{ app_release_scientific_name }}</em></span>
   </footer>
   {% endblock %}
+  {% include "_owner_view_toggle.html" %}
 </body>
 </html>

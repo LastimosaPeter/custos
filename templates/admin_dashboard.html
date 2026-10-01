@@ -4,11 +4,13 @@
 {% from "_admin_nav.html" import admin_nav %}
 {{ admin_nav(assessment) }}
 {% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
 <div class="dashboard-heading">
   <div><div class="eyebrow">INSTRUCTOR VIEW</div><h1>{{ 'Post-test' if assessment == 'posttest' else 'Midterm' }} Dashboard</h1><p class="subtle">Monitor student sessions, configure batch windows, review scores, and keep analytics separated by assessment.</p></div>
   <div class="button-row compact"><form method="post" action="{{ url_for('admin_student_preview') }}" class="inline-form"><input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><button class="secondary" type="submit">Open Student View</button></form><a class="secondary button-link" href="{{ url_for('admin_monitor') }}">Live Monitor</a><a class="secondary button-link" href="{{ url_for('export_session_keys', assessment=assessment) }}">Export Session Keys</a><a class="secondary button-link" href="{{ url_for('export_questions', assessment=assessment) }}">Export Question Bank</a><a class="primary button-link" href="{{ url_for('admin_testing', assessment=assessment) }}">Run Testing Session</a></div>
 </div>
+{% set assessment_id = assessment_id_for_type(assessment) %}{% include "_classroom_card.html" %}
 <div class="assessment-tabs" aria-label="Assessment selector">
   <a class="{% if assessment == 'posttest' %}active{% endif %}" href="{{ url_for('admin_dashboard', assessment='posttest') }}">Monday Post-test</a>
   <a class="{% if assessment == 'midterm' %}active{% endif %}" href="{{ url_for('admin_dashboard', assessment='midterm') }}">Midterm</a>

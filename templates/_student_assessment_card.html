@@ -1,0 +1,27 @@
+<article class="student-assessment-card status-{{ a.status }}">
+  <div class="student-assessment-card-top">
+    <span class="student-course-chip {{ a.subject_code|lower }}">{{ a.subject_code }}</span>
+    <span class="student-assessment-status">{{ a.status_label }}</span>
+  </div>
+  <div class="student-assessment-kind">{{ a.display_type or (a.assessment_type|replace('_',' ')|title) }}</div>
+  <h3>{{ a.title }}</h3>
+  <p>{{ a.description or 'No additional instructions were provided.' }}</p>
+  <div class="student-assessment-meta">
+    {% if a.course_name %}<span><b>Classroom</b>{{ a.course_name }}{% if a.course_section %} · {{ a.course_section }}{% endif %}</span>{% endif %}
+    <span><b>Duration</b>{{ a.duration_label }}</span>
+    {% if a.start_at %}<span><b>Opens</b>{{ a.start_at|replace('T',' ') }}</span>{% endif %}
+    {% if a.end_at %}<span><b>Due / closes</b>{{ a.end_at|replace('T',' ') }}</span>{% endif %}
+  </div>
+  <div class="student-assessment-card-footer">
+    {% if a.action in ['resume','result','open'] %}
+      <a class="{{ 'primary' if a.action != 'result' else 'secondary' }} button-link" href="{{ url_for('student_assessment_open', assessment_id=a.id) }}">
+        {{ 'Resume Assessment' if a.action == 'resume' else ('View Submission' if a.action == 'result' else 'Open Assessment') }}
+      </a>
+    {% elif a.action in ['coding_resume','coding_result'] %}
+      <a class="{{ 'primary' if a.action == 'coding_resume' else 'secondary' }} button-link" href="{{ url_for('nextgen.ide_login') }}">{{ 'Resume Programming Lab' if a.action == 'coding_resume' else 'Open Programming Lab' }}</a>
+    {% else %}
+      <button class="secondary" type="button" disabled>{{ a.status_label }}</button>
+    {% endif %}
+    {% if a.batch_count > 1 and not a.attempt %}<small>Multiple sets · your instructor's session key is required.</small>{% endif %}
+  </div>
+</article>

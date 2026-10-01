@@ -1,0 +1,30 @@
+{# Owners in Classroom mode: lists show only their own courses unless they choose "Show all". #}
+{% if classroom_instructors and session.get('admin_id') and session.get('admin_authenticated') is sameas true and session.get('admin_role') == 'owner' and request.path.startswith('/admin') %}
+<div class="owner-view-toggle{% if owner_view_all() %} is-all{% endif %}">
+  {% if owner_view_all() %}
+  <form method="post" action="{{ url_for('google.owner_view_all_toggle') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="mine">
+    <input type="hidden" name="back" value="{{ request.full_path }}">
+    <span>Showing <strong>everyone's</strong></span>
+    <button type="submit" class="primary">Back to mine</button>
+  </form>
+  {% else %}
+  <button type="button" class="secondary" data-owner-view-all-open title="Owner: show every teacher's subjects">Show all</button>
+  {% endif %}
+</div>
+{% if not owner_view_all() %}
+<dialog class="owner-view-dialog" data-owner-view-all-dialog>
+  <form method="post" action="{{ url_for('google.owner_view_all_toggle') }}">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}"><input type="hidden" name="mode" value="all">
+    <input type="hidden" name="confirm" value="oo"><input type="hidden" name="back" value="{{ request.full_path }}">
+    <h2>Sure ka dyan? Lalaki ang listahan.</h2>
+    <p>This shows <strong>every teacher's</strong> subjects, classes, assessments and results, not just yours. You can switch back to only yours anytime.</p>
+    <div class="owner-view-dialog-actions">
+      <button type="button" class="secondary" data-owner-view-all-cancel>Don't!</button>
+      <button type="submit" class="primary">G na</button>
+    </div>
+  </form>
+</dialog>
+{% endif %}
+<script src="{{ url_for('static', filename='js/owner_view.js', v=app_asset_revision) }}" defer></script>
+{% endif %}

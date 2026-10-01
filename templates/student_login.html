@@ -1,44 +1,46 @@
 {% extends "base.html" %}
-{% block title %}Custos - Student Login{% endblock %}
+{% block title %}Custos - Student Sign In{% endblock %}
 {% block breadcrumbs %}{% endblock %}
+{% block head_extra %}{% include "_google_scripts.html" %}{% endblock %}
 {% block content %}
-<div class="center-card auth-card branded-auth-card">
-  <div class="security-orb small custos-portal-mark" aria-hidden="true">
-    <img src="{{ url_for('static', filename='img/favicon.png') }}" alt="">
+<nav class="student-flow-nav" aria-label="Student assessment flow">
+  <a href="{{ url_for('index') }}">Home</a><span aria-hidden="true">›</span>
+  <strong>Sign In</strong><span aria-hidden="true">›</span>
+  <span class="disabled" aria-disabled="true">My Assessments</span>
+</nav>
+<div class="center-card auth-card branded-auth-card student-signin-only-card">
+  <div class="security-orb small custos-portal-mark" aria-hidden="true"><img src="{{ url_for('static', filename='img/favicon.png') }}" alt=""></div>
+  <div class="eyebrow">STUDENT VIEW</div>
+  <h1>Sign in to Custos</h1>
+  <p class="lead">Sign in first to open your classroom and continue saved assessments. Session keys are entered from <strong>My Assessments</strong>, not on this page.</p>
+
+  {% if google_enabled %}
+  <div class="google-signin-block" data-google-signin data-client-id="{{ google_client_id }}"
+       data-endpoint="{{ url_for('google.student_google_signin') }}" data-csrf="{{ csrf_token() }}">
+    <div data-google-button></div>
+    <p class="micro">Use your {% for d in google_allowed_domains %}@{{ d }}{% if not loop.last %} or {% endif %}{% endfor %} Google account.</p>
+    <p class="google-error" data-google-error hidden></p>
   </div>
-  <div class="eyebrow">STUDENT VIEW · CSDC101 ASSESSMENT</div>
-  <h1>Enter Exam Session</h1>
-  <p class="lead">Use your Ateneo de Naga University email address and the <strong>session key announced by your instructor</strong> for your assigned set.</p>
-  <form method="post" class="form-grid" data-student-identity-form>
-    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-    <div class="student-name-grid">
-      <label>First Name
-        <input type="text" name="first_name" placeholder="e.g., Juan" value="{{ request.form.get('first_name', '') }}" required maxlength="60" autocomplete="given-name">
-      </label>
-      <label>Last Name
-        <input type="text" name="last_name" placeholder="e.g., Dela Cruz" value="{{ request.form.get('last_name', '') }}" required maxlength="60" autocomplete="family-name">
-      </label>
-    </div>
-    <div class="student-class-grid">
-      <label>Program
-        <select name="program" required data-program-select>
-          <option value="ZT" {% if request.form.get('program', 'ZT') == 'ZT' %}selected{% endif %}>ZT</option>
-          <option value="ZS" {% if request.form.get('program') == 'ZS' %}selected{% endif %}>ZS</option>
-        </select>
-      </label>
-      <label>Section
-        <select name="class_section" required data-section-select data-selected-section="{{ request.form.get('class_section', '11') }}"></select>
-      </label>
-    </div>
-    <label>Email address
-      <input type="email" name="email" placeholder="student@{{ domain }}" value="{{ request.form.get('email', '') }}" required autocomplete="username">
-    </label>
-    <label>Session key
-      <input type="password" name="session_key" placeholder="Enter instructor-issued session key" required autocomplete="off" autocapitalize="characters" spellcheck="false">
-    </label>
-    <button class="primary wide" type="submit">Verify Key & Continue</button>
-  </form>
-  <p class="micro">The key identifies the exact assessment your instructor has opened for you. Keys may be changed by the instructor at any time.</p>
-  <div class="student-alt-path"><span>Programming activities</span><a class="secondary button-link disabled-feature-link" href="{{ url_for('nextgen.ide_coming_soon') }}" title="Coming soon">IDE · Coming Soon</a></div><a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
+  {% endif %}
+
+  {% if not google_enabled or not google_student_required %}
+  <details class="manual-student-signin" {% if not google_enabled %}open{% endif %}>
+    <summary>{{ 'Local / manual sign in' if google_enabled else 'Student details' }}</summary>
+    <form method="post" class="form-grid">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <div class="student-name-grid">
+        <label>First Name<input type="text" name="first_name" required maxlength="60" autocomplete="given-name"></label>
+        <label>Last Name<input type="text" name="last_name" required maxlength="60" autocomplete="family-name"></label>
+      </div>
+      <label>ADNU email<input type="email" name="email" placeholder="student@{{ domain }}" required autocomplete="username"></label>
+      <button class="primary wide" type="submit">Open My Assessments</button>
+    </form>
+  </details>
+  {% endif %}
+
+  <div class="student-login-role-note">
+    <span>Teaching a class?</span><a href="{{ url_for('admin_login') }}">Go to Instructor View</a>
+  </div>
+  <a class="back-link" href="{{ url_for('index') }}">◂ Back to Assessment Portal</a>
 </div>
 {% endblock %}

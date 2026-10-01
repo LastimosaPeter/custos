@@ -1,0 +1,7 @@
+{
+  "notebook": "CSEC303_Workbench_Dry_Run.ipynb",
+  "package": "CSEC303_Workbench_Dry_Run.zip",
+  "title": "CSEC303 Workbench Dry Run",
+  "subtitle": "Short browser-Python practice investigation",
+  "setup_cells": [2]
+}

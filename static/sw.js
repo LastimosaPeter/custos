@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'custos-static-v100-goliathus-portable-r6';
+const CACHE_NAME = 'custos-static-v160h-hercules-watermark-fix-r26';
 const STATIC_ASSETS = [
   '/static/css/style.css',
   '/static/js/pwa.js',
@@ -9,22 +9,41 @@ const STATIC_ASSETS = [
   '/static/js/student_form.js',
   '/static/js/ui_controls.js',
   '/static/js/exam.js',
+  '/static/js/exam_tools.js',
+  '/static/js/notebook_workbench.js',
   '/static/js/ide.js',
   '/static/img/favicon.png',
   '/static/img/apple-touch-icon.png',
   '/static/img/pwa-icon-192.png',
   '/static/img/pwa-icon-512.png',
   '/static/img/csdc101-logo.webp',
+  '/static/img/csec303-logo.webp',
+  '/static/img/custos-background.webp',
+  '/static/img/hercules-beetle.svg',
   '/static/img/caudex-logo.png',
   '/static/img/caudex-wordmark-light.png',
   '/static/img/caudex-wordmark-dark.png',
-  '/static/img/csdc101-background.webp'
+  '/static/img/csdc101-background.webp',
+  '/static/img/csec303-background.webp',
+  '/static/img/csec303-watermark.png',
+  '/static/img/csec303-watermark-dark.png'
 ];
 
 self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
-      .then(cache => cache.addAll(STATIC_ASSETS))
+      // Fetch each asset with a release-specific query and bypass every cache
+      // (browser HTTP cache and any CDN such as Cloudflare), then store it under
+      // the plain path. A plain cache.addAll(STATIC_ASSETS) could pre-cache a
+      // stale copy a CDN still held for the unversioned URL - and the fetch
+      // handler below would then serve that stale file for every ?v= request.
+      .then(cache => Promise.all(STATIC_ASSETS.map(path =>
+        fetch(new Request(`${path}?release=${encodeURIComponent(CACHE_NAME)}`, {cache: 'reload'}))
+          .then(response => {
+            if (!response.ok) throw new Error(`Pre-cache failed for ${path}`);
+            return cache.put(path, response);
+          })
+      )))
       .then(() => self.skipWaiting())
   );
 });
@@ -85,4 +104,4 @@ self.addEventListener('fetch', event => {
 
 // UI + assessment engine refresh: free-form custom assessments 2026-09-27
 
-// Custos 1.0 · Goliathus portable/performance cache refresh.
+// Custos 1.6.0.h · Hercules watermark fix cache refresh.

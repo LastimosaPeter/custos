@@ -10,10 +10,11 @@ import secrets
 from datetime import datetime, timedelta
 from functools import wraps
 
-from flask import Blueprint, abort, flash, jsonify, redirect, render_template, request, session, url_for
+from flask import Blueprint, abort, current_app, flash, jsonify, redirect, render_template, request, session, url_for
 from werkzeug.security import generate_password_hash
 
 from code_runner import grade_hidden_tests, run_cpp, runner_status
+from notebook_workbench import read_workbench_upload, remove_workbench, store_workbench
 from db import APP_TZ, connect, iso_now
 
 bp = Blueprint("nextgen", __name__)
@@ -29,7 +30,16 @@ SECURITY_DEDUPE_SECONDS = 3
 def admin_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if not session.get("admin_id"):
+        if not session.get("admin_id") or session.get("admin_authenticated") is not True:
+            return redirect(url_for("admin_login", next=request.full_path if request.query_string else request.path))
+        conn = connect()
+        try:
+            admin = conn.execute("SELECT id,active FROM admins WHERE id=?", (session.get("admin_id"),)).fetchone()
+        finally:
+            conn.close()
+        if not admin or ("active" in admin.keys() and not admin["active"]):
+            for key in ("admin_id", "admin_role", "admin_display_name", "admin_auth_method", "admin_authenticated", "admin_authenticated_at", "owner_view_all"):
+                session.pop(key, None)
             return redirect(url_for("admin_login"))
         return view(*args, **kwargs)
     return wrapped
@@ -39,9 +49,18 @@ def admin_required(view):
 def owner_required(view):
     @wraps(view)
     def wrapped(*args, **kwargs):
-        if not session.get("admin_id"):
+        if not session.get("admin_id") or session.get("admin_authenticated") is not True:
+            return redirect(url_for("admin_login", next=request.full_path if request.query_string else request.path))
+        conn = connect()
+        try:
+            admin = conn.execute("SELECT id,active,role FROM admins WHERE id=?", (session.get("admin_id"),)).fetchone()
+        finally:
+            conn.close()
+        if not admin or ("active" in admin.keys() and not admin["active"]):
+            for key in ("admin_id", "admin_role", "admin_display_name", "admin_auth_method", "admin_authenticated", "admin_authenticated_at", "owner_view_all"):
+                session.pop(key, None)
             return redirect(url_for("admin_login"))
-        if session.get("admin_role", "owner") != "owner":
+        if admin["role"] != "owner" or session.get("admin_role", "owner") != "owner":
             abort(403, "Owner access required.")
         return view(*args, **kwargs)
     return wrapped
@@ -194,10 +213,24 @@ def workspace():
            WHERE a.deleted_at IS NULL
            ORDER BY a.active DESC, s.code, a.created_at DESC"""
     ).fetchall()
+    import instructor_scope
+
+    subject_page, subject_filter = instructor_scope.subject_listing(conn, request.args)
+    classroom_classes, classroom_filter = ([], {})
+    if instructor_scope.active():
+        classroom_classes, classroom_filter = instructor_scope.class_listing(conn, request.args)
+    # Classroom mode: only the signed-in teacher's own subjects/assessments (owners
+    # too, unless they switched on "Show all"); instructors see only their own account.
+    subjects = instructor_scope.filter_rows(conn, subjects, kind="subject")
+    assessments = instructor_scope.filter_rows(conn, assessments)
+    if instructor_scope.scoped():
+        instructors = [i for i in instructors if i["admin_id"] == session.get("admin_id")]
     conn.close()
     return render_template(
         "admin_workspace.html", subjects=subjects, instructors=instructors,
-        assessments=assessments, runner=runner_status()
+        assessments=assessments, runner=runner_status(), classroom_classes=classroom_classes,
+        classroom_filter=classroom_filter, subject_page=subject_page, subject_filter=subject_filter,
+        term_labels=list(instructor_scope.TERM_LABELS.values())
     )
 
 
@@ -272,11 +305,31 @@ def instructor_add():
     email = request.form.get("email", "").strip().lower() or None
     password = request.form.get("temporary_password", "")
     subject_id = request.form.get("subject_id", "").strip()
-    if len(username) < 3 or len(display_name) < 2 or len(password) < 10:
-        flash("Use a username, display name, and a temporary password of at least 10 characters.", "error")
+    from google_integration import google_enabled
+
+    google_invite = google_enabled() and email and not username and not password
+    if google_invite:
+        # Invite by Google email: no password login at all - the account opens
+        # only through "Sign in with Google" with this exact email.
+        if not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", email) or len(display_name) < 2:
+            flash("Enter the instructor's Google email and a display name.", "error")
+            return redirect(url_for("nextgen.workspace"))
+        password = secrets.token_urlsafe(48)
+        base = re.sub(r"[^a-z0-9._-]", "", email.split("@", 1)[0].lower())[:40] or "instructor"
+        username = base
+    elif len(username) < 3 or len(display_name) < 2 or len(password) < 10:
+        flash("Use a username, display name, and a temporary password of at least 10 characters"
+              + (", or leave username and password blank to invite by Google email." if google_enabled() else "."), "error")
         return redirect(url_for("nextgen.workspace"))
     conn = connect()
     try:
+        if email and conn.execute("SELECT 1 FROM admins WHERE LOWER(COALESCE(email,''))=?", (email,)).fetchone():
+            raise ValueError(f"an account already uses {email}")
+        if google_invite:
+            suffix = 1
+            while conn.execute("SELECT 1 FROM admins WHERE username=?", (username,)).fetchone():
+                suffix += 1
+                username = f"{base}{suffix}"
         cur = conn.execute(
             """INSERT INTO admins(username,password_hash,display_name,email,role,active)
                VALUES(?,?,?,?, 'instructor',1) RETURNING id""",
@@ -296,7 +349,8 @@ def instructor_add():
                 (int(subject_id), instructor_id),
             )
         conn.commit()
-        flash(f"Instructor account {username} created.", "success")
+        flash(f"{display_name} can now sign in with Google as {email}." if google_invite
+              else f"Instructor account {username} created.", "success")
     except Exception as exc:
         conn.rollback()
         flash(f"Could not create instructor: {exc}", "error")
@@ -348,20 +402,20 @@ def _ensure_custom_batch(conn, assessment):
     batch = conn.execute("SELECT * FROM batches WHERE assessment_id=? ORDER BY id LIMIT 1", (assessment["id"],)).fetchone()
     if batch:
         conn.execute(
-            """UPDATE batches SET name=?,access_code=?,duration_minutes=?,reveal_score=?,active=?,
+            """UPDATE batches SET name=?,access_code=?,duration_minutes=?,reveal_score=?,reveal_answers=?,active=?,
                       open_at=?,close_at=?,assessment_type='custom',subject_id=? WHERE id=?""",
             (assessment["title"], assessment["access_code"], assessment["duration_minutes"],
-             assessment["reveal_score"], assessment["active"], assessment["start_at"], assessment["end_at"],
+             assessment["reveal_score"], assessment["reveal_answers"], assessment["active"], assessment["start_at"], assessment["end_at"],
              assessment["subject_id"], batch["id"]),
         )
         return conn.execute("SELECT * FROM batches WHERE id=?", (batch["id"],)).fetchone()
     slot = _next_custom_slot(conn)
     cur = conn.execute(
         """INSERT INTO batches(slot,section,batch_label,name,access_code,open_at,close_at,duration_minutes,
-                   reveal_score,active,assessment_type,subject_id,assessment_id)
-           VALUES(?, 'ALL', 'CUSTOM', ?, ?, ?, ?, ?, ?, ?, 'custom', ?, ?) RETURNING id""",
+                   reveal_score,reveal_answers,active,assessment_type,subject_id,assessment_id)
+           VALUES(?, 'ALL', 'CUSTOM', ?, ?, ?, ?, ?, ?, ?, ?, 'custom', ?, ?) RETURNING id""",
         (slot, assessment["title"], assessment["access_code"], assessment["start_at"], assessment["end_at"],
-         assessment["duration_minutes"], assessment["reveal_score"], assessment["active"],
+         assessment["duration_minutes"], assessment["reveal_score"], assessment["reveal_answers"], assessment["active"],
          assessment["subject_id"], assessment["id"]),
     )
     bid = cur.fetchone()[0]
@@ -369,7 +423,7 @@ def _ensure_custom_batch(conn, assessment):
 
 
 def _normalize_allowed_sections(form):
-    valid = ["ZT11", "ZT12", "ZT13", "ZS11"]
+    valid = ["ZT11", "ZT12", "ZT13", "ZS11", "ZC32"]
     selected = [code for code in valid if form.get(f"section_{code}") == "1"]
     return ",".join(selected)
 
@@ -389,7 +443,7 @@ def assessment_add():
     display_type = request.form.get("display_type", "").strip()[:40]
     description = request.form.get("description", "").strip()
     try:
-        duration = max(1, min(480, int(request.form.get("duration_minutes", "30") or 30)))
+        duration = max(1, min(10080, int(request.form.get("duration_minutes", "30") or 30)))
     except ValueError:
         duration = 30
     security_mode = request.form.get("security_mode", "strict").strip().lower()
@@ -405,6 +459,7 @@ def assessment_add():
         display_type = "Programming Lab" if is_lab else "Custom Assessment"
     allowed_sections = _normalize_allowed_sections(request.form)
     reveal_score = 1 if request.form.get("reveal_score") == "1" else 0
+    reveal_answers = 1 if request.form.get("reveal_answers") == "1" else 0
     shuffle_questions = 1 if request.form.get("shuffle_questions") == "1" else 0
     shuffle_options = 1 if request.form.get("shuffle_options") == "1" else 0
 
@@ -421,11 +476,11 @@ def assessment_add():
         access = _make_access_code("CPP" if is_lab else "TEST")
         cur = conn.execute(
             """INSERT INTO assessments(subject_id,title,slug,assessment_type,display_type,description,duration_minutes,
-                       access_code,max_attempts,security_mode,reveal_score,shuffle_questions,shuffle_options,
+                       access_code,max_attempts,security_mode,reveal_score,reveal_answers,shuffle_questions,shuffle_options,
                        allowed_sections,question_limit,active,created_by_instructor_id,created_at)
-               VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?,0,1,?,?) RETURNING id""",
+               VALUES(?,?,?,?,?,?,?,?,1,?,?,?,?,?,?,0,1,?,?) RETURNING id""",
             (int(subject_id), title, slug, assessment_type, display_type, description, duration, access,
-             security_mode, reveal_score, shuffle_questions, shuffle_options, allowed_sections,
+             security_mode, reveal_score, reveal_answers, shuffle_questions, shuffle_options, allowed_sections,
              instructor["id"] if instructor else None, iso_now()),
         )
         assessment_id = cur.fetchone()[0]
@@ -460,7 +515,7 @@ def assessment_edit(assessment_id):
     title = request.form.get("title", "").strip()
     description = request.form.get("description", "").strip()
     try:
-        duration = max(1, min(480, int(request.form.get("duration_minutes", "60") or 60)))
+        duration = max(1, min(10080, int(request.form.get("duration_minutes", "60") or 60)))
     except ValueError:
         duration = 60
     security_mode = request.form.get("security_mode", "standard").strip().lower()
@@ -560,12 +615,71 @@ def custom_assessment(assessment_id):
     ).fetchall()
     active_questions = [q for q in questions if q["active"]]
     max_score = sum(int(q["points"] or 1) for q in active_questions)
+    workbench = conn.execute(
+        """SELECT n.filename,n.package_name,n.updated_at,
+                  (SELECT COUNT(*) FROM assessment_notebook_assets x WHERE x.assessment_id=n.assessment_id) AS asset_count
+           FROM assessment_notebooks n WHERE n.assessment_id=?""", (assessment_id,)
+    ).fetchone()
+    if workbench:
+        workbench = dict(workbench)
+        workbench["source"] = "database"
+    else:
+        static_dir = os.path.join(current_app.static_folder, "workbenches", str(assessment["slug"] or ""))
+        manifest_path = os.path.join(static_dir, "custos-workbench.json")
+        if os.path.isfile(manifest_path):
+            try:
+                manifest = json.loads(open(manifest_path, "r", encoding="utf-8").read())
+                notebook_name = str(manifest.get("notebook") or "workbench.ipynb")
+                asset_count = sum(1 for root, _dirs, names in os.walk(static_dir) for name in names
+                                  if name not in {"custos-workbench.json", notebook_name} and not name.lower().endswith((".zip", ".md", ".txt", ".ipynb")))
+                workbench = {"filename": notebook_name, "package_name": manifest.get("package") or "GitHub/static",
+                             "updated_at": "deployed with application", "asset_count": asset_count, "source": "static"}
+            except Exception:
+                workbench = None
     conn.close()
     return render_template(
         "admin_custom_assessment.html", assessment=assessment, batch=batch, questions=questions,
         summary=summary, sessions=sessions, active_count=len(active_questions), max_score=max_score,
-        assessment_label=assessment["display_type"] or "Custom Assessment",
+        assessment_label=assessment["display_type"] or "Custom Assessment", workbench=workbench,
     )
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/workbench/upload")
+@admin_required
+def custom_workbench_upload(assessment_id):
+    require_csrf()
+    conn = connect()
+    assessment = _custom_assessment_or_404(conn, assessment_id)
+    upload = request.files.get("workbench_file")
+    if not upload or not upload.filename:
+        conn.close(); flash("Choose a Jupyter .ipynb or workbench ZIP first.", "error")
+        return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
+    try:
+        payload = upload.read()
+        package = read_workbench_upload(upload.filename, payload)
+        store_workbench(conn, assessment_id, package)
+        conn.commit()
+        flash(f"Workbench uploaded: {package['filename']} with {len(package.get('assets') or [])} supporting file(s).", "success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not upload workbench: {exc}", "error")
+    finally:
+        conn.close()
+    return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
+
+
+@bp.post("/admin/assessment/<int:assessment_id>/workbench/delete")
+@admin_required
+def custom_workbench_delete(assessment_id):
+    require_csrf()
+    conn = connect(); _custom_assessment_or_404(conn, assessment_id)
+    try:
+        remove_workbench(conn, assessment_id)
+        conn.commit(); flash("Notebook workbench removed from this assessment.", "success")
+    except Exception as exc:
+        conn.rollback(); flash(f"Could not remove workbench: {exc}", "error")
+    finally:
+        conn.close()
+    return redirect(url_for("nextgen.custom_assessment", assessment_id=assessment_id))
 
 
 @bp.post("/admin/assessment/<int:assessment_id>/settings")
@@ -578,7 +692,7 @@ def custom_assessment_settings(assessment_id):
     display_type = request.form.get("display_type", "Custom Assessment").strip()[:40] or "Custom Assessment"
     description = request.form.get("description", "").strip()
     try:
-        duration = max(1, min(480, int(request.form.get("duration_minutes", "30") or 30)))
+        duration = max(1, min(10080, int(request.form.get("duration_minutes", "30") or 30)))
         question_limit = max(0, min(500, int(request.form.get("question_limit", "0") or 0)))
     except ValueError:
         conn.close(); flash("Duration and question limit must be numbers.", "error")
@@ -586,6 +700,7 @@ def custom_assessment_settings(assessment_id):
     security_mode = request.form.get("security_mode", "strict")
     if security_mode not in {"standard", "strict", "practice"}: security_mode = "strict"
     reveal_score = 1 if request.form.get("reveal_score") == "1" else 0
+    reveal_answers = 1 if request.form.get("reveal_answers") == "1" else 0
     shuffle_questions = 1 if request.form.get("shuffle_questions") == "1" else 0
     shuffle_options = 1 if request.form.get("shuffle_options") == "1" else 0
     active = 1 if request.form.get("active") == "1" else 0
@@ -598,9 +713,9 @@ def custom_assessment_settings(assessment_id):
     try:
         conn.execute(
             """UPDATE assessments SET title=?,display_type=?,description=?,duration_minutes=?,security_mode=?,
-                      reveal_score=?,shuffle_questions=?,shuffle_options=?,allowed_sections=?,question_limit=?,
+                      reveal_score=?,reveal_answers=?,shuffle_questions=?,shuffle_options=?,allowed_sections=?,question_limit=?,
                       start_at=?,end_at=?,active=? WHERE id=?""",
-            (title, display_type, description, duration, security_mode, reveal_score, shuffle_questions,
+            (title, display_type, description, duration, security_mode, reveal_score, reveal_answers, shuffle_questions,
              shuffle_options, allowed_sections, question_limit, start_at, end_at, active, assessment_id),
         )
         updated = conn.execute("SELECT * FROM assessments WHERE id=?", (assessment_id,)).fetchone()
@@ -639,6 +754,7 @@ def _custom_question_values(form):
     options = {letter: form.get(f"option_{letter.lower()}", "").strip()[:1200] for letter in "ABCD"}
     correct = form.get("correct_option", "").strip().upper()
     explanation = form.get("explanation", "").strip()[:2500]
+    workbench_section = re.sub(r"[^A-Za-z0-9_\-]", "", form.get("workbench_section", "").strip().upper())[:32]
     try: points = max(1, min(100, int(form.get("points", "1") or 1)))
     except ValueError: points = 1
     if not prompt or any(not value for value in options.values()):
@@ -647,7 +763,7 @@ def _custom_question_values(form):
         raise ValueError("All four answer choices must be different.")
     if correct not in {"A", "B", "C", "D"}:
         raise ValueError("Choose the correct answer.")
-    return topic,prompt,code,options,correct,explanation,points
+    return topic,prompt,code,options,correct,explanation,points,workbench_section
 
 
 @bp.post("/admin/assessment/<int:assessment_id>/question/add")
@@ -655,16 +771,16 @@ def _custom_question_values(form):
 def custom_question_add(assessment_id):
     require_csrf(); conn=connect(); assessment=_custom_assessment_or_404(conn,assessment_id)
     try:
-        topic,prompt,code,options,correct,explanation,points=_custom_question_values(request.form)
+        topic,prompt,code,options,correct,explanation,points,workbench_section=_custom_question_values(request.form)
         batch=_ensure_custom_batch(conn,assessment)
         row=conn.execute("SELECT COALESCE(MAX(position),0)+1 AS next_pos FROM questions WHERE assessment_id=?",(assessment_id,)).fetchone()
         position=int(row["next_pos"] or 1)
         conn.execute(
             """INSERT INTO questions(part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,
-                       correct_option,explanation,points,position,active,created_by,subject_id,assessment_id)
-               VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,1,'instructor',?,?)""",
+                       correct_option,explanation,points,position,workbench_section,active,created_by,subject_id,assessment_id)
+               VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'instructor',?,?)""",
             (batch["slot"],topic,prompt,code,options["A"],options["B"],options["C"],options["D"],correct,
-             explanation,points,position,assessment["subject_id"],assessment_id),
+             explanation,points,position,workbench_section or None,assessment["subject_id"],assessment_id),
         )
         conn.commit(); flash("Question added.","success")
     except Exception as exc:
@@ -680,12 +796,12 @@ def custom_question_edit(assessment_id,question_id):
     row=conn.execute("SELECT * FROM questions WHERE id=? AND assessment_id=?",(question_id,assessment_id)).fetchone()
     if not row: conn.close(); abort(404)
     try:
-        topic,prompt,code,options,correct,explanation,points=_custom_question_values(request.form)
+        topic,prompt,code,options,correct,explanation,points,workbench_section=_custom_question_values(request.form)
         active=1 if request.form.get("active")=="1" else 0
         conn.execute(
             """UPDATE questions SET topic=?,prompt=?,code=?,option_a=?,option_b=?,option_c=?,option_d=?,
-                      correct_option=?,explanation=?,points=?,active=? WHERE id=?""",
-            (topic,prompt,code,options["A"],options["B"],options["C"],options["D"],correct,explanation,points,active,question_id),
+                      correct_option=?,explanation=?,points=?,workbench_section=?,active=? WHERE id=?""",
+            (topic,prompt,code,options["A"],options["B"],options["C"],options["D"],correct,explanation,points,workbench_section or None,active,question_id),
         )
         conn.commit(); flash("Question updated.","success")
     except Exception as exc:
@@ -743,6 +859,7 @@ def custom_questions_import(assessment_id):
             options={L:form.get(f"option_{L.lower()}","").strip()[:1200] for L in "ABCD"}
             correct=form.get("correct_option","").strip().upper()
             explanation=form.get("explanation","").strip()[:2500]
+            workbench_section=re.sub(r"[^A-Za-z0-9_\-]","",form.get("workbench_section","").strip().upper())[:32]
             try: points=max(1,min(100,int(form.get("points","1") or 1)))
             except ValueError: points=1
             if not prompt or any(not v for v in options.values()) or len({v.casefold() for v in options.values()})!=4 or correct not in {"A","B","C","D"}:
@@ -751,10 +868,10 @@ def custom_questions_import(assessment_id):
             except ValueError: position=start+offset
             conn.execute(
                 """INSERT INTO questions(part,batch_slot,topic,prompt,code,option_a,option_b,option_c,option_d,
-                           correct_option,explanation,points,position,active,created_by,subject_id,assessment_id)
-                   VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,1,'csv-import',?,?)""",
+                           correct_option,explanation,points,position,workbench_section,active,created_by,subject_id,assessment_id)
+                   VALUES(1,?,?,?,?,?,?,?,?,?,?,?,?,?,1,'csv-import',?,?)""",
                 (batch["slot"],topic,prompt,code,options["A"],options["B"],options["C"],options["D"],correct,
-                 explanation,points,position,assessment["subject_id"],assessment_id),
+                 explanation,points,position,workbench_section or None,assessment["subject_id"],assessment_id),
             )
             imported+=1
         conn.commit(); flash(f"Imported {imported} questions.","success")
@@ -802,7 +919,7 @@ def admin_ide_lab(lab_id):
         require_csrf()
         title = request.form.get("title", "").strip()
         instructions = request.form.get("instructions", "").strip()
-        duration = max(1, min(480, int(request.form.get("duration_minutes", "90") or 90)))
+        duration = max(1, min(10080, int(request.form.get("duration_minutes", "90") or 90)))
         access_code = request.form.get("access_code", "").strip().upper()
         conn.execute("UPDATE programming_labs SET title=?, instructions=? WHERE id=?", (title, instructions, lab_id))
         conn.execute("UPDATE assessments SET title=?,duration_minutes=?,access_code=? WHERE id=?", (title, duration, access_code, lab["assessment_id"]))

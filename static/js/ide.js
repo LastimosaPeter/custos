@@ -31,6 +31,33 @@
   const resumeSecure = document.getElementById('ideResumeSecure');
   const inactiveOverlay = document.getElementById('ideInactiveOverlay');
   const stillHere = document.getElementById('ideStillHere');
+  const ideFontButtons = [...document.querySelectorAll('[data-ide-font-delta]')];
+  const ideFontResets = [...document.querySelectorAll('[data-ide-font-reset]')];
+
+  const IDE_FONT_DEFAULT = 13;
+  const IDE_FONT_MIN = 11;
+  const IDE_FONT_MAX = 22;
+  let ideFontSize = IDE_FONT_DEFAULT;
+
+  function setIdeFontSize(value, persist = true) {
+    const next = Math.max(IDE_FONT_MIN, Math.min(IDE_FONT_MAX, Number(value) || IDE_FONT_DEFAULT));
+    ideFontSize = next;
+    app.style.setProperty('--ide-code-font-size', `${next}px`);
+    ideFontResets.forEach(btn => { btn.textContent = `${next} px`; });
+    ideFontButtons.forEach(btn => {
+      const delta = Number(btn.dataset.ideFontDelta || 0);
+      btn.disabled = (delta < 0 && next <= IDE_FONT_MIN) || (delta > 0 && next >= IDE_FONT_MAX);
+    });
+    if (persist) {
+      try { localStorage.setItem('custos-caudex-code-font-size', String(next)); } catch (_) {}
+    }
+  }
+
+  ideFontButtons.forEach(btn => btn.addEventListener('click', () => setIdeFontSize(ideFontSize + Number(btn.dataset.ideFontDelta || 0))));
+  ideFontResets.forEach(btn => btn.addEventListener('click', () => setIdeFontSize(IDE_FONT_DEFAULT)));
+  let savedIdeFont = IDE_FONT_DEFAULT;
+  try { savedIdeFont = Number(localStorage.getItem('custos-caudex-code-font-size') || IDE_FONT_DEFAULT); } catch (_) {}
+  setIdeFontSize(savedIdeFont, false);
 
   let current = 0;
   let secureEntered = false;

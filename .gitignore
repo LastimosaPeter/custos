@@ -1,12 +1,25 @@
-.venv/
-__pycache__/
-*.pyc
+# Environment / secrets
 .env
+.env.*
+!.env.example
+
+# Local databases
 exam.db
 *.db
 *.db-journal
+*.sqlite
+*.sqlite3
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
 .pytest_cache/
+
+# OS / editor
 .DS_Store
+Thumbs.db
 
 # Never commit private assessment content
 private_banks/
@@ -19,8 +32,10 @@ all_question_banks*.csv
 *test_set*.csv
 *test_sets*.zip
 
-# Private build artifacts
-private_banks/
-*.db
-*.sqlite
-*.sqlite3
+# CSEC303 Midterm private materials
+private_banks/csec303_midterm/
+*csec303*midterm*answer*.csv
+*csec303*midterm*answer*.json
+*csec303*midterm*question_bank*.json
+*CSEC303*Midterm*Answer*.csv
+*CSEC303*Midterm*Answer*.json

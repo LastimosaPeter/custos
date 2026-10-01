@@ -1,6 +1,6 @@
-# Custos 1.0 — Goliathus
+# Custos 1.6.0.h — Hercules
 
-**Custos** is a PostgreSQL-ready secure assessment platform designed around **Instructors → Subjects → Assessments → Attempts**. The current CSDC101 objective-exam workflow remains supported while the Workspace provides the foundation for additional subjects, assessment types, instructors, and a future secure C++ Programming Lab.
+**Custos** is a PostgreSQL-ready multi-subject assessment platform designed around **Instructors → Subjects → Assessments → Attempts**. This build supports both **CSDC101 · Fundamentals of Programming** and **CSEC303 · Digital Image Processing**, while preserving the existing Workspace, Google Classroom integration, objective-exam workflow, and future programming-lab foundation.
 
 ## Instructor information architecture
 
@@ -114,7 +114,7 @@ Never commit `.env`, databases, or private question banks. `.gitignore` excludes
 
 ## Current release
 
-Custos v1.0 · **Goliathus**
+Custos v1.6.0.h · **Hercules** · *Dynastes hercules*
 
 ## September 27 layout refinement
 
@@ -178,7 +178,7 @@ Deleting an assessment from Dashboard or Workspace soft-deletes it: delivery is 
 
 ## Portable / performance build
 
-This Goliathus package is optimized to run from the same source tree on a classroom Windows/Linux laptop, Render, a generic Gunicorn/WSGI host, Docker, or a serverless Flask host backed by PostgreSQL.
+This Hercules package is optimized to run from the same source tree on a classroom Windows/Linux laptop, Render, a generic Gunicorn/WSGI host, Docker, or a serverless Flask host backed by PostgreSQL.
 
 Performance changes in this build:
 
@@ -201,3 +201,8 @@ For Render or another long-running PostgreSQL host, use `DATABASE_URL` and keep 
 For Vercel/serverless deployment, use a real PostgreSQL `DATABASE_URL`; do not rely on local `exam.db` because serverless filesystems are not a persistent shared database. App-side PostgreSQL pooling defaults off when the `VERCEL` environment variable is present. If your database provider offers a pooled/serverless connection string, prefer that connection string.
 
 `AUTO_INIT_DB=1` keeps new deployments self-initializing. A full migration is performed only when the schema marker changes. To deliberately rerun the migration/seed path once, set `FORCE_DB_INIT=1` for a deployment or run `python init_db.py`, then return `FORCE_DB_INIT` to `0`.
+
+
+## Hercules browser Python workbench
+
+CSEC303 PHANTOM-303 can run its editable notebook cells directly inside the exam toolkit using Pyodide. The runtime is lazy-loaded from the official jsDelivr Pyodide distribution on first use, so the first Python run is intentionally heavier than ordinary Custos pages.

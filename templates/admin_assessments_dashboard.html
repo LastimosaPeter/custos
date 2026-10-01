@@ -33,8 +33,8 @@
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
     <input type="hidden" name="assessment_type" value="custom">
     <label>Subject
-      <select name="subject_id" required>
-        {% for s in subjects %}<option value="{{ s.id }}">{{ s.code }} · {{ s.name }}</option>{% endfor %}
+      <select name="subject_id" required data-assessment-subject-select>
+        {% for s in subjects %}<option value="{{ s.id }}" data-subject-code="{{ s.code }}">{{ s.code }} · {{ s.name }}</option>{% endfor %}
       </select>
     </label>
     <label>Assessment name
@@ -44,7 +44,7 @@
       <input name="display_type" value="Practice Test" placeholder="Quiz, Practice Test, Examination…">
     </label>
     <label>Duration
-      <div class="input-with-suffix"><input type="number" name="duration_minutes" value="15" min="1" max="480" required><span>minutes</span></div>
+      <div class="input-with-suffix"><input type="number" name="duration_minutes" value="15" min="1" max="10080" required><span>minutes</span></div>
     </label>
     <label>Security
       <select name="security_mode"><option value="practice">Practice</option><option value="standard">Standard</option><option value="strict" selected>Strict</option></select>
@@ -54,15 +54,17 @@
     </label>
     <fieldset class="custom-section-picker wide-field">
       <legend>Sections allowed to use this assessment</legend>
-      <label><input type="checkbox" name="section_ZT11" value="1" checked> ZT11</label>
-      <label><input type="checkbox" name="section_ZT12" value="1" checked> ZT12</label>
-      <label><input type="checkbox" name="section_ZT13" value="1" checked> ZT13</label>
-      <label><input type="checkbox" name="section_ZS11" value="1" checked> ZS11</label>
+      <label data-section-subject="CSDC101"><input type="checkbox" name="section_ZT11" value="1" checked> ZT11</label>
+      <label data-section-subject="CSDC101"><input type="checkbox" name="section_ZT12" value="1" checked> ZT12</label>
+      <label data-section-subject="CSDC101"><input type="checkbox" name="section_ZT13" value="1" checked> ZT13</label>
+      <label data-section-subject="CSDC101"><input type="checkbox" name="section_ZS11" value="1" checked> ZS11</label>
+      <label data-section-subject="CSEC303"><input type="checkbox" name="section_ZC32" value="1" checked> ZC32</label>
     </fieldset>
     <div class="custom-create-options wide-field">
       <label class="check-row"><input type="checkbox" name="shuffle_questions" value="1" checked><span>Shuffle question order</span></label>
       <label class="check-row"><input type="checkbox" name="shuffle_options" value="1" checked><span>Shuffle answer choices</span></label>
       <label class="check-row"><input type="checkbox" name="reveal_score" value="1" checked><span>Show score after submission</span></label>
+      <label class="check-row"><input type="checkbox" name="reveal_answers" value="1"><span>Show submitted answers and answer key after submission</span></label>
     </div>
     <button class="primary wide-field" type="submit">Create Blank Assessment →</button>
   </form>
@@ -103,6 +105,7 @@
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
                 <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
+                <a href="{{ url_for('admin_export_scores_csv', assessment_id=a.id) }}">Export Scores (.csv)</a>
               </div>
             </details>
           {% elif a.assessment_type in ['midterm','posttest'] %}
@@ -115,6 +118,7 @@
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
                 <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
+                <a href="{{ url_for('admin_export_scores_csv', assessment_id=a.id) }}">Export Scores (.csv)</a>
               </div>
             </details>
           {% elif a.assessment_type == 'dryrun' %}
@@ -131,6 +135,7 @@
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
                 <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
+                <a href="{{ url_for('admin_export_scores_csv', assessment_id=a.id) }}">Export Scores (.csv)</a>
               </div>
             </details>
           {% elif a.assessment_type == 'programming_lab' %}
@@ -141,6 +146,7 @@
                 <a href="{{ url_for('admin_analysis', assessment_id=a.id) }}">Analytics</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
                 <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
+                <a href="{{ url_for('admin_export_scores_csv', assessment_id=a.id) }}">Export Scores (.csv)</a>
               </div>
             </details>
           {% else %}
@@ -152,6 +158,7 @@
                 <a href="{{ url_for('admin_monitor', assessment_id=a.id) }}">Live Monitor</a>
                 <a href="{{ url_for('admin_testing', assessment_id=a.id) }}">Testing</a>
                 <a href="{{ url_for('admin_export_scores', assessment_id=a.id) }}">Export Scores (.xlsx)</a>
+                <a href="{{ url_for('admin_export_scores_csv', assessment_id=a.id) }}">Export Scores (.csv)</a>
               </div>
             </details>
           {% endif %}

@@ -1,0 +1,45 @@
+{# Google Classroom roster + score sync card. Include with `assessment_id` set. #}
+{% if google_enabled and assessment_id %}
+{% set rosters = classroom_rosters(assessment_id) %}
+<section class="content-card classroom-card" data-classroom
+         data-client-id="{{ google_client_id }}" data-scopes="{{ classroom_scopes }}" data-csrf="{{ csrf_token() }}"
+         data-courses-url="{{ url_for('google.classroom_courses', assessment_id=assessment_id) }}"
+         data-import-url="{{ url_for('google.classroom_import', assessment_id=assessment_id) }}"
+         data-sections='{{ student_sections|tojson }}'>
+  <div class="section-heading"><div><h2>Google Classroom</h2>
+    <p class="subtle">{% if rosters %}Only students on these class lists can start this assessment; their name and section come from Google Classroom. Use <strong>Send scores</strong> to put finished scores into a Classroom assignment that Custos creates.{% else %}Link a Google Classroom course to limit this assessment to its students and to send scores back to Classroom. Until then, anyone with the session key can start it.{% endif %}</p></div></div>
+  {% if rosters %}
+  <div class="table-wrap"><table>
+    <thead><tr><th>Course</th><th>Section</th><th>Students</th><th>Classroom assignment</th><th></th></tr></thead>
+    <tbody>
+    {% for r in rosters %}
+      {% set last = (r.last_sync_summary|from_json) if r.last_sync_summary else None %}
+      <tr>
+        <td>{{ r.course_name }}{% if r.course_section %} · {{ r.course_section }}{% endif %}<br><span class="micro">imported {{ r.imported_at[:16]|replace('T', ' ') }}</span></td>
+        <td>{{ r.program }}{{ r.class_section }}</td>
+        <td>{{ r.student_count }}</td>
+        <td>{% if r.coursework_id %}{{ r.coursework_title or 'Custos assignment' }} · {{ '%g'|format(r.max_points or 0) }} pts
+              {% if last %}<br><span class="micro">last sent {{ r.last_synced_at[:16]|replace('T', ' ') }}: {{ last.sent }} sent, {{ last.unchanged }} unchanged, {{ last.not_submitted }} not submitted{% if last.not_in_classroom %}, {{ last.not_in_classroom }} not in Classroom{% endif %}{% if last.failed %}, {{ last.failed }} failed{% endif %}</span>{% endif %}
+            {% else %}<span class="micro">Not created yet</span>{% endif %}</td>
+        <td class="classroom-row-actions">
+          <label class="micro">Max points <input type="number" min="1" max="1000" step="0.5" value="{{ '%g'|format(r.max_points or classroom_default_max(assessment_id)) }}" data-max-points></label>
+          <button type="button" class="primary" data-grade-sync="{{ url_for('google.classroom_sync_grades', assessment_id=assessment_id, roster_id=r.id) }}">{% if r.coursework_id %}Send scores{% else %}Create assignment &amp; send scores{% endif %}</button>
+          <button type="button" class="danger-ghost" data-roster-delete="{{ url_for('google.classroom_roster_delete', assessment_id=assessment_id, roster_id=r.id) }}">Remove</button>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table></div>
+  {% endif %}
+  <div class="classroom-steps">
+    <button type="button" class="{% if rosters %}secondary{% else %}primary{% endif %}" data-classroom-connect>{% if rosters %}Import or refresh a course{% else %}Connect Google Classroom{% endif %}</button>
+    <div class="classroom-import" data-classroom-import hidden>
+      <label>Course <select data-course-select></select></label>
+      <label>Program <select data-program-select></select></label>
+      <label>Section <select data-section-select></select></label>
+      <button type="button" class="primary" data-classroom-do-import>Import students</button>
+    </div>
+    <p class="micro" data-classroom-status></p>
+  </div>
+</section>
+{% endif %}
