@@ -185,6 +185,14 @@
 
   function updateReviewFlagUI() {
     if (!reviewFlagBtn || !panels[current]) return;
+    const isBonus = panels[current].dataset.part === '3' || Boolean(panels[current].dataset.bonusQuestionId);
+    reviewFlagBtn.classList.toggle('hidden', isBonus);
+    reviewFlagBtn.disabled = isBonus;
+    if (isBonus) {
+      reviewFlagBtn.classList.remove('active');
+      reviewFlagBtn.setAttribute('aria-pressed', 'false');
+      return;
+    }
     const flagged = panels[current].dataset.reviewFlagged === '1';
     reviewFlagBtn.classList.toggle('active', flagged);
     reviewFlagBtn.setAttribute('aria-pressed', flagged ? 'true' : 'false');
@@ -204,6 +212,7 @@
     });
     const scroll = labToolkitPanel.querySelector('.lab-toolkit-scroll');
     if (scroll) scroll.scrollTop = 0;
+    window.dispatchEvent(new CustomEvent('custos:workbench-layoutchange', {detail: {section: activeKey}}));
   }
 
   function syncLabToolkitToQuestion() {
@@ -262,6 +271,7 @@
     if (persist) {
       try { localStorage.setItem('custos-csec303-lab-layout', next); } catch (_) {}
     }
+    window.dispatchEvent(new CustomEvent('custos:workbench-layoutchange', {detail: {layout: next}}));
   }
 
   labToolkitToggle?.addEventListener('click', () => setLabToolkitOpen(!labToolkitPanel?.classList.contains('drawer-open')));
@@ -517,7 +527,7 @@
         applySecurityState(data);
         throw new Error('security locked');
       }
-      if (!res.ok) throw new Error('save failed');
+      if (!res.ok || !data.ok) throw new Error('save failed');
       saveStatus.textContent = 'Saved';
       saveStatus.className = 'save-status saved';
     } catch (_) {

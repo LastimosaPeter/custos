@@ -14,7 +14,7 @@
 {% endif %}
 {% endblock %}
 {% block body %}
-<div id="examApp" class="exam-app" data-subject="{{ subject_code|default('CSDC101') }}" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ questions|length }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-security-resume-required="{{ 1 if security.resume_required else 0 }}" data-custom="{{ 1 if is_custom else 0 }}" data-security-mode="{{ security_mode|default('strict') }}" data-lab-toolkit="{{ 1 if lab_toolkit_sections else 0 }}" data-lab-layout="split">
+<div id="examApp" class="exam-app" data-subject="{{ subject_code|default('CSDC101') }}" data-resume-index="{{ resume_index|default(0) }}" data-remaining="{{ remaining if remaining is not none else '' }}" data-total="{{ total_count|default(questions|length) }}" data-test="{{ 1 if exam_session.is_test else 0 }}" data-untimed="{{ 1 if exam_session.untimed else 0 }}" data-violation-count="{{ security.violation_count }}" data-security-locked="{{ 1 if security.permanent else 0 }}" data-temp-lock-remaining="{{ security.temp_remaining }}" data-pending-blackout="{{ 1 if security.pending else 0 }}" data-security-resume-required="{{ 1 if security.resume_required else 0 }}" data-custom="{{ 1 if is_custom else 0 }}" data-security-mode="{{ security_mode|default('strict') }}" data-lab-toolkit="{{ 1 if lab_toolkit_sections else 0 }}" data-lab-layout="split">
   <header class="exam-header">
     <div class="exam-brand">
       <div class="exam-brand-lockup" aria-label="Custos {{ subject_code|default('CSDC101') }}">
@@ -77,6 +77,21 @@
           {% endfor %}
         </div>
       </section>
+
+      {% if bonus_questions %}
+      <section class="question-part-block part-three" aria-label="Bonus questions">
+        <div class="question-part-heading">
+          <strong>Bonus</strong>
+          <span>Short Answer · 5 points</span>
+        </div>
+        <div class="question-grid bonus-question-grid" id="questionGridBonus">
+          {% for b in bonus_questions %}
+            {% set bonus_index = questions|length + loop.index0 %}
+            <button type="button" class="qnav bonus-qnav {% if b.answer_text %}answered{% endif %} {% if bonus_index == resume_index %}current{% endif %}" data-index="{{ bonus_index }}" title="Bonus {{ loop.index }}">B{{ loop.index }}</button>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
       {% endif %}
     </aside>
     <button type="button" id="questionNavBackdrop" class="question-nav-backdrop" aria-label="Close question navigator" tabindex="-1"></button>
@@ -119,11 +134,34 @@
       </section>
       {% endfor %}
 
+      {% if bonus_questions %}
+      {% for b in bonus_questions %}
+      {% set bonus_index = questions|length + loop.index0 %}
+      <section class="question-panel bonus-question-panel {% if bonus_index != resume_index %}hidden{% endif %}" data-index="{{ bonus_index }}" data-bonus-question-id="{{ b.bonus_question_id }}" data-part="3" data-review-flagged="0" data-case-key="GUIDE">
+        <div class="part-label bonus-part-label">
+          <span>Part III · Bonus {{ loop.index }} of {{ bonus_questions|length }} · 1 point</span>
+        </div>
+        <div class="bonus-question-heading">
+          <div class="bonus-question-badge">BONUS</div>
+          <div>
+            <small>{{ b.topic or 'General Knowledge' }}</small>
+            <h1>{{ b.prompt }}</h1>
+          </div>
+        </div>
+        <div class="bonus-answer-card">
+          <label for="bonusAnswer{{ b.bonus_question_id }}">Your answer</label>
+          <input id="bonusAnswer{{ b.bonus_question_id }}" class="bonus-answer-input" type="text" maxlength="120" value="{{ b.answer_text or '' }}" autocomplete="off" spellcheck="false" placeholder="Type a short answer">
+          <p>Capitalization, spaces, dashes, and punctuation are ignored when your answer is checked.</p>
+        </div>
+      </section>
+      {% endfor %}
+      {% endif %}
+
       <footer class="exam-footer">
         <div class="exam-footer-status" aria-live="polite">
-          <span><strong>Answered</strong> <span id="answeredStatus">0/{{ questions|length }}</span></span>
+          <span><strong>Answered</strong> <span id="answeredStatus">0/{{ total_count|default(questions|length) }}</span></span>
           <span class="footer-status-separator">·</span>
-          <span><strong>Unanswered</strong> <span id="unansweredStatus">{{ questions|length }}</span></span>
+          <span><strong>Unanswered</strong> <span id="unansweredStatus">{{ total_count|default(questions|length) }}</span></span>
           <span class="footer-status-separator">·</span>
           <span><strong>Flagged</strong> <span id="flaggedStatus">0</span></span>
           <span class="footer-status-separator">·</span>

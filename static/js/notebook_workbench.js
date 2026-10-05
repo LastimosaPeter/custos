@@ -53,6 +53,17 @@
     return {list: list.slice(0, 80), from, to: cur};
   }
 
+  function refreshCodeEditors() {
+    // CodeMirror cannot measure its gutter correctly while a notebook section
+    // is display:none. Refresh editors after tabs/layout changes so line numbers
+    // keep their own gutter instead of overlapping Python source text.
+    window.requestAnimationFrame(() => {
+      cmByCell.forEach((cm, cell) => {
+        if (cell && cell.offsetParent !== null) cm.refresh();
+      });
+    });
+  }
+
   function initCodeEditors() {
     if (!window.CodeMirror) return;
     cells.forEach((cell) => {
@@ -61,6 +72,7 @@
       const cm = window.CodeMirror.fromTextArea(textarea, {
         mode: {name: 'python', version: 3},
         lineNumbers: true,
+        gutters: ['CodeMirror-linenumbers'],
         indentUnit: 4,
         tabSize: 4,
         indentWithTabs: false,
@@ -90,6 +102,7 @@
       cm.on('blur', () => saveWorkbenchState());
       cmByCell.set(cell, cm);
     });
+    refreshCodeEditors();
   }
 
   function editorValue(cell) {
@@ -348,6 +361,18 @@ def _custos_reset():
 
   initCodeEditors();
   workbenchLoadPromise = loadWorkbenchState();
+
+  // Recalculate editor geometry when a hidden case becomes visible, when the
+  // split/question/workbench layout changes, and after JetBrains Mono loads.
+  window.addEventListener('custos:workbench-layoutchange', refreshCodeEditors);
+  let workbenchResizeTimer = null;
+  window.addEventListener('resize', () => {
+    clearTimeout(workbenchResizeTimer);
+    workbenchResizeTimer = setTimeout(refreshCodeEditors, 80);
+  });
+  if (document.fonts && document.fonts.ready) {
+    document.fonts.ready.then(refreshCodeEditors).catch(() => {});
+  }
   startBtn?.addEventListener('click', () => ensureRuntime().catch(() => {}));
   resetBtn?.addEventListener('click', () => resetRuntime());
 
