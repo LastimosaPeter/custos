@@ -185,6 +185,14 @@
 
   function updateReviewFlagUI() {
     if (!reviewFlagBtn || !panels[current]) return;
+    const isBonus = panels[current].dataset.part === '3' || Boolean(panels[current].dataset.bonusQuestionId);
+    reviewFlagBtn.classList.toggle('hidden', isBonus);
+    reviewFlagBtn.disabled = isBonus;
+    if (isBonus) {
+      reviewFlagBtn.classList.remove('active');
+      reviewFlagBtn.setAttribute('aria-pressed', 'false');
+      return;
+    }
     const flagged = panels[current].dataset.reviewFlagged === '1';
     reviewFlagBtn.classList.toggle('active', flagged);
     reviewFlagBtn.setAttribute('aria-pressed', flagged ? 'true' : 'false');
@@ -519,7 +527,7 @@
         applySecurityState(data);
         throw new Error('security locked');
       }
-      if (!res.ok) throw new Error('save failed');
+      if (!res.ok || !data.ok) throw new Error('save failed');
       saveStatus.textContent = 'Saved';
       saveStatus.className = 'save-status saved';
     } catch (_) {

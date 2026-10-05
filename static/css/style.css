@@ -5376,3 +5376,144 @@ body.exam-page .exam-page-watermark,
 .lab-python-cell .CodeMirror-lines{
   padding-left:4px!important;
 }
+
+/* =========================================================
+   Custos 1.6.0.h · Hercules r33 · Midterm bonus exam panels
+   ========================================================= */
+.question-part-block.part-three{
+  margin-top:14px;
+  border-color:#d7c6ff;
+  background:linear-gradient(180deg,rgba(248,244,255,.82),rgba(255,255,255,.72));
+}
+.question-part-block.part-three .question-part-heading strong{color:#6541b8}
+.question-part-block.part-three .question-part-heading span{color:#75698d}
+.bonus-question-grid .qnav{
+  min-width:36px;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.02em;
+}
+.bonus-question-grid .qnav.answered{
+  background:#eee6ff;
+  border-color:#aa8bdf;
+  color:#56369d;
+}
+.bonus-question-grid .qnav.current{
+  background:#6f49c7;
+  border-color:#6f49c7;
+  color:#fff;
+  outline-color:rgba(111,73,199,.18);
+}
+.bonus-question-panel{
+  max-width:940px;
+}
+.bonus-part-label span{
+  background:#f0e9ff!important;
+  border-color:#d8c9f4!important;
+  color:#6843ae!important;
+}
+.bonus-question-heading{
+  display:grid;
+  grid-template-columns:auto minmax(0,1fr);
+  align-items:start;
+  gap:16px;
+  max-width:900px;
+  margin:12px 0 20px;
+}
+.bonus-question-heading h1{
+  margin:3px 0 0;
+  max-width:none;
+}
+.bonus-question-heading small{
+  display:block;
+  color:var(--muted);
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.bonus-question-badge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:72px;
+  min-height:32px;
+  padding:0 11px;
+  border:1px solid #cfbaf4;
+  border-radius:999px;
+  background:#f1eaff;
+  color:#6541b8;
+  font-size:10px;
+  font-weight:900;
+  letter-spacing:.12em;
+}
+.bonus-answer-card{
+  max-width:720px;
+  padding:18px;
+  border:1px solid #d9e1eb;
+  border-radius:12px;
+  background:rgba(248,250,253,.94);
+}
+.bonus-answer-card label{
+  display:block;
+  margin-bottom:8px;
+  color:var(--ink);
+  font-size:12px;
+  font-weight:900;
+}
+.bonus-answer-input{
+  width:100%;
+  min-height:50px;
+  padding:12px 14px;
+  border:1px solid #bcc9da;
+  border-radius:9px;
+  background:#fff;
+  color:var(--ink);
+  font:600 16px/1.35 "Gotham","Montserrat","Segoe UI",Arial,sans-serif;
+}
+.bonus-answer-input:focus{
+  border-color:#7653c5;
+  outline:3px solid rgba(118,83,197,.13);
+}
+.bonus-answer-card p{
+  margin:9px 0 0;
+  color:var(--muted);
+  font-size:11px;
+  line-height:1.45;
+}
+:root[data-theme="dark"] .question-part-block.part-three{
+  border-color:#4f3e72;
+  background:rgba(37,29,55,.58);
+}
+:root[data-theme="dark"] .question-part-block.part-three .question-part-heading strong{color:#ccb9ff}
+:root[data-theme="dark"] .question-part-block.part-three .question-part-heading span{color:#ad9fc9}
+:root[data-theme="dark"] .bonus-question-grid .qnav.answered{
+  background:#35264f;
+  border-color:#755aa6;
+  color:#d8c7ff;
+}
+:root[data-theme="dark"] .bonus-question-grid .qnav.current{
+  background:#8159dc;
+  border-color:#9d7ce8;
+  color:#fff;
+}
+:root[data-theme="dark"] .bonus-part-label span,
+:root[data-theme="dark"] .bonus-question-badge{
+  background:#2d2342!important;
+  border-color:#554270!important;
+  color:#d5c2ff!important;
+}
+:root[data-theme="dark"] .bonus-answer-card{
+  background:#151f2c;
+  border-color:#344459;
+}
+:root[data-theme="dark"] .bonus-answer-input{
+  background:#111923;
+  border-color:#465871;
+  color:#eef3fb;
+}
+@media(max-width:700px){
+  .bonus-question-heading{grid-template-columns:1fr;gap:9px}
+  .bonus-question-badge{justify-self:start}
+  .bonus-answer-card{padding:14px}
+}
